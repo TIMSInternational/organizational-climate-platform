@@ -1,20 +1,24 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router'
-import { Check, CircleAlert, Clock, Lock, LogOut } from 'lucide-react'
-import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, ErrorState, Input, LoadingRegion, SkeletonText, Table } from '../../../components/ui'
+import { Check, CircleAlert, Clock, Lock, LogOut, TriangleAlert } from 'lucide-react'
+import { PageHeader } from '../../../components/layout'
+import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingRegion, LoadingState, Note, Table } from '../../../components/ui'
 import { LOCALES, isLocale, useTranslation, type TranslateFn } from '../../../i18n'
 import { setAdminThemeMode } from '../../../theme/adminTheme'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
-import { CanvasChip, CanvasSelect, Field, Panel } from '../../org-structure/next/super/parts'
+import { CanvasSelect, Field, Panel } from '../../org-structure/next/super/parts'
 import { roleText } from '../../org-structure/next/super/labels'
 import { PROFILE_THEMES, type Profile, type ProfileActivityEntry, type ProfileDisplayPreferences, type ProfileTheme } from '../api/profile'
 import AccountTabs from './AccountTabs'
 import { useProfileModel } from './useProfileModel'
 import { useRespondentShell } from '../../../navigation/useRespondentShell'
 
-const TH = 'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+// The `.tbl th` of `occ.css`: 12px semibold in the secondary ink, sentence case — 11px uppercase
+// is for eyebrows only.
+const TH = 'border-b border-line-default bg-transparent px-4 pb-2 pt-1 text-left text-xs font-semibold whitespace-nowrap text-fg-secondary'
+// The `.card` of `occ.css` over the shared panel: the panel hairline, no shadow.
+const CARD = 'border-line-panel shadow-none py-4.5'
 
 /** Each language by its own name, as the artboard's picker and note write it: «English», «Español». */
 const LANGUAGE_NAME: Readonly<Record<string, string>> = {
@@ -100,16 +104,15 @@ export default function ProfileNextPage() {
 
   return (
     <div className="flex flex-col gap-section">
-      <div className="-mb-6">
-        <PageTopBar eyebrow={t('profile.eyebrow')} title={t('profile.title')} description={t('profile.next.description')} />
-      </div>
+      {/* One title for the three account pages; the tab strip below names this one. */}
+      <PageHeader className="mb-0" title={t('profile.next.tabs.label')} description={t('profile.next.description')} />
       <AccountTabs />
       {state.status === 'error' ? (
         <ErrorState title={t('profile.loadError')} description={state.error || undefined} />
       ) : (
         <LoadingRegion loading={state.status === 'loading'} label={t('common.loading')}>
           {state.profile === null ? (
-            <SkeletonText lines={6} />
+            <LoadingState rows={6} />
           ) : (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
@@ -138,9 +141,10 @@ function Heading({ id, children }: { id: string; children: ReactNode }) {
 
 function Fact({ term, children, mono = false, muted = false }: { term: string; children: ReactNode; mono?: boolean; muted?: boolean }) {
   return (
-    <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-baseline gap-3 py-1">
-      <dt className="text-sm text-fg-tertiary">{term}</dt>
-      <dd className={cn('m-0 min-w-0 truncate text-sm', mono && 'font-mono tabular-nums', muted ? 'text-fg-tertiary' : 'text-fg-primary')}>
+    // Under 640px the term sits over its value, so an address or a date is never cut short.
+    <div className="grid grid-cols-1 items-baseline gap-x-3 gap-y-0.5 py-1 sm:grid-cols-[10rem_minmax(0,1fr)]">
+      <dt className="text-ui text-fg-tertiary">{term}</dt>
+      <dd className={cn('m-0 min-w-0 break-words text-ui sm:truncate', mono && 'tabular-nums', muted ? 'text-fg-tertiary' : 'text-fg-primary')}>
         {children}
       </dd>
     </div>
@@ -178,7 +182,7 @@ function DetailsCard({ profile, onSave }: { profile: Profile; onSave: (name: str
   }
 
   return (
-    <Panel labelledBy="profile-details" heading={<Heading id="profile-details">{t('profile.accountTitle')}</Heading>} meta={t('profile.next.details.meta')}>
+    <Panel className={CARD} labelledBy="profile-details" heading={<Heading id="profile-details">{t('profile.accountTitle')}</Heading>} meta={t('profile.next.details.meta')}>
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3.5" noValidate>
         {error && (
           <Alert variant="destructive" role="alert">
@@ -186,7 +190,9 @@ function DetailsCard({ profile, onSave }: { profile: Profile; onSave: (name: str
           </Alert>
         )}
         {saved && (
-          <Alert variant="success">
+          // A confirmation, not a result: the neutral alert with a tick (green is Fortaleza).
+          <Alert data-slot="saved-alert">
+            <Check aria-hidden="true" />
             <AlertDescription>{t('profile.detailsSaved')}</AlertDescription>
           </Alert>
         )}
@@ -194,7 +200,7 @@ function DetailsCard({ profile, onSave }: { profile: Profile; onSave: (name: str
           <Input id={nameId} value={name} onChange={(event) => setName(event.target.value)} className="w-full" />
         </Field>
         <div className="grid grid-cols-1 items-center gap-3 rounded-lg border border-line-light bg-surface-icon-box p-3 sm:grid-cols-[minmax(0,1fr)_15.5rem]">
-          <p className="m-0 text-xs leading-normal text-fg-secondary">{t('profile.next.details.preview')}</p>
+          <p className="m-0 text-sm leading-normal text-fg-secondary">{t('profile.next.details.preview')}</p>
           <div data-slot="sidebar-preview" aria-hidden="true" className="flex items-center gap-2.5 rounded-md bg-surface-shell px-3 py-2.5">
             <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-fg-on-accent/15 text-2xs font-semibold text-fg-on-accent">
               {shown.charAt(0).toUpperCase()}
@@ -228,7 +234,7 @@ function DetailsCard({ profile, onSave }: { profile: Profile; onSave: (name: str
           )}
         </dl>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-3">
-          <span className="text-xs text-fg-tertiary">{t('profile.adminManagedNote')}</span>
+          <span className="text-sm text-fg-tertiary">{t('profile.adminManagedNote')}</span>
           <Button type="submit" variant="outline" disabled={saving}>
             <Check aria-hidden="true" />
             {t('profile.next.save')}
@@ -281,7 +287,7 @@ function PreferencesCard({
   }
 
   return (
-    <Panel labelledBy="profile-preferences" heading={<Heading id="profile-preferences">{t('profile.preferencesTitle')}</Heading>} meta={t('profile.next.preferences.meta')}>
+    <Panel className={CARD} labelledBy="profile-preferences" heading={<Heading id="profile-preferences">{t('profile.preferencesTitle')}</Heading>} meta={t('profile.next.preferences.meta')}>
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3.5">
         {error && (
           <Alert variant="destructive" role="alert">
@@ -289,7 +295,9 @@ function PreferencesCard({
           </Alert>
         )}
         {saved && (
-          <Alert variant="success">
+          // A confirmation, not a result: the neutral alert with a tick (green is Fortaleza).
+          <Alert data-slot="saved-alert">
+            <Check aria-hidden="true" />
             <AlertDescription>{t('profile.preferencesSaved')}</AlertDescription>
           </Alert>
         )}
@@ -317,17 +325,19 @@ function PreferencesCard({
           </Field>
         </div>
         {preferences.language !== locale && (
-          <div data-slot="stored-preferences" className="flex items-start gap-2.5 rounded-lg bg-accent-amber-soft px-3.5 py-3 text-xs leading-normal text-fg-secondary">
-            <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-amber-ink" />
+          // A warning, not help text: the person's emails go out in another language. The
+          // neutral fill (amber is the Oportunidad area, never a caution), told apart from a
+          // plain note by the warning glyph and the consequence as its bold lead-in.
+          <Note data-slot="stored-preferences" data-severity="warning" icon={<TriangleAlert />} className="text-sm text-fg-secondary">
             <span>
               <b className="font-semibold text-fg-primary">
-                {t('profile.next.preferences.storedLead', { language: storedName, timezone: preferences.timezone })}
+                {t('profile.next.preferences.storedDiffers', { screen: screenNoun, language: storedNoun })}
               </b>{' '}
-              {t('profile.next.preferences.storedDiffers', { screen: screenNoun, language: storedNoun })}
+              {t('profile.next.preferences.storedLead', { language: storedName, timezone: preferences.timezone })}
             </span>
-          </div>
+          </Note>
         )}
-        <p className="m-0 text-xs text-fg-secondary">
+        <p className="m-0 text-sm text-fg-secondary">
           <Link to="/settings/notifications" className={PROSE_LINK}>
             {t('profile.notificationPreferencesLink')}
           </Link>{' '}
@@ -378,7 +388,7 @@ function PasswordCard({ onSave }: { onSave: (currentPassword: string, newPasswor
   }
 
   return (
-    <Panel labelledBy="profile-password" heading={<Heading id="profile-password">{t('profile.passwordTitle')}</Heading>} meta={t('profile.next.password.meta')}>
+    <Panel className={CARD} labelledBy="profile-password" heading={<Heading id="profile-password">{t('profile.passwordTitle')}</Heading>} meta={t('profile.next.password.meta')}>
       <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3.5">
         {error && (
           <Alert variant="destructive" role="alert">
@@ -386,7 +396,9 @@ function PasswordCard({ onSave }: { onSave: (currentPassword: string, newPasswor
           </Alert>
         )}
         {saved && (
-          <Alert variant="success">
+          // A confirmation, not a result: the neutral alert with a tick (green is Fortaleza).
+          <Alert data-slot="saved-alert">
+            <Check aria-hidden="true" />
             <AlertDescription>{t('profile.passwordSaved')}</AlertDescription>
           </Alert>
         )}
@@ -402,7 +414,7 @@ function PasswordCard({ onSave }: { onSave: (currentPassword: string, newPasswor
           </Field>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-3">
-          <span className="inline-flex items-center gap-2 text-xs text-fg-secondary">
+          <span className="inline-flex items-center gap-2 text-sm text-fg-secondary">
             <LogOut aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
             {t('profile.next.password.signsOut')}
           </span>
@@ -424,13 +436,13 @@ function eventLabel(t: TranslateFn, entry: ProfileActivityEntry): string {
 function ActivityCard({ entries }: { entries: readonly ProfileActivityEntry[] }) {
   const { t, locale } = useTranslation()
   return (
-    <section aria-labelledby="profile-activity" className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 pt-4 pb-2">
+    <section aria-labelledby="profile-activity" className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-panel bg-surface-card">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-5 pt-4.5 pb-3">
         <Heading id="profile-activity">{t('profile.activityTitle')}</Heading>
-        <span className="text-xs text-fg-tertiary">{t('profile.next.activity.meta')}</span>
+        <span className="text-sm text-fg-tertiary">{t('profile.next.activity.meta')}</span>
       </div>
       <div className="overflow-x-auto">
-        <Table aria-label={t('profile.activityTitle')}>
+        <Table zebra aria-label={t('profile.activityTitle')}>
           <thead>
             <tr>
               <th className={cn(TH, 'w-56')}>{t('profile.activityWhen')}</th>
@@ -441,7 +453,7 @@ function ActivityCard({ entries }: { entries: readonly ProfileActivityEntry[] })
           <tbody>
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-3 py-3">
+                <td colSpan={3} className="px-4 py-3">
                   <span className="flex items-start gap-2 text-sm text-fg-secondary">
                     <Clock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-fg-tertiary" />
                     {t('profile.next.activity.empty')}
@@ -451,13 +463,16 @@ function ActivityCard({ entries }: { entries: readonly ProfileActivityEntry[] })
             ) : (
               entries.map((entry) => (
                 <tr key={entry.id}>
-                  <td className="min-w-0 px-3 py-2.5 font-mono text-xs tabular-nums text-fg-secondary">{stamp(entry.timestamp, locale, true)}</td>
-                  <td className="px-3 py-2.5 text-sm text-fg-primary">{eventLabel(t, entry)}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <CanvasChip
-                      tone={entry.success ? 'good' : 'critical'}
-                      label={entry.success ? t('profile.activitySucceeded') : t('profile.activityFailed')}
-                    />
+                  <td className="min-w-0 px-4 py-2.5 text-sm tabular-nums text-fg-secondary">{stamp(entry.timestamp, locale, true)}</td>
+                  <td className="px-4 py-2.5 text-ui text-fg-primary">{eventLabel(t, entry)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    {/* Applied or not is an outcome of an operation, not a result area: gray with a
+                        tick, or the danger ink with a warning mark — never colour alone. */}
+                    {entry.success ? (
+                      <Chip tone="neutral" icon={<Check />} label={t('profile.activitySucceeded')} />
+                    ) : (
+                      <Chip tone="neutral" className="text-accent-red-ink" icon={<CircleAlert />} label={t('profile.activityFailed')} />
+                    )}
                   </td>
                 </tr>
               ))

@@ -121,6 +121,13 @@ export interface SurveyInvitationSummary {
    * withdrawn (`CreateInvitationsAsync`). Optional because an API older than it does not send it.
    */
   withCode?: number
+  /**
+   * Reminders sent on this survey's current keys (`survey_credentials.reminder_count`, summed) --
+   * `per_survey` only; 0 on a `shared` survey. The invitations' own `reminderCount` never moves
+   * on a per-survey survey, which is why the survey page said "Ningún recordatorio" after
+   * reminders went out. Optional because an API older than it does not send it.
+   */
+  keyReminders?: number
 }
 
 export interface SurveyDistributionDetail {

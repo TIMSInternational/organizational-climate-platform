@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Check, Info, Link2, Lock, Mail, Search, Shield, Upload, UserPlus } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { KpiTile } from '../../../../components/charts'
 import {
   Alert,
@@ -30,8 +30,11 @@ import { updateUser, type User, type UserEmailChange } from '../../api/users'
 import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
 import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
+import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
+import AddPersonForm from './AddPersonForm'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
 import { roleText } from '../super/labels'
@@ -52,14 +55,14 @@ import {
 import { useAdminUsersModel } from './useAdminUsersModel'
 
 const TH =
-  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+  'border-b border-line-default bg-transparent px-3 pb-2 pt-2 text-xs font-semibold whitespace-nowrap text-fg-secondary'
 const EYEBROW = 'm-0 text-2xs font-bold uppercase tracking-label text-fg-tertiary'
 
 /** The query parameters: `?departamento=<id|none>` filters the roster, `?editar=<userId>` opens a person. */
 export const GROUP_PARAM = 'departamento'
 export const EDIT_PARAM = 'editar'
 
-type OpenPanel = 'none' | 'invite' | 'import'
+type OpenPanel = 'none' | 'invite' | 'import' | 'add'
 
 /** What saving a corrected address did, for the person it was saved on. */
 interface EmailOutcome {
@@ -140,22 +143,22 @@ export default function AdminUsersView() {
     state.reload()
   }
 
-  // The UsersList board sets the breadcrumb 14px over the header (its glyphs at y=76, the
-  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: `tightBreadcrumb`.
+  // One header rule for the sidebar's destinations (fix round 1): the eyebrow is the sidebar
+  // section the page sits in, and no breadcrumb — «Personas» is a top-level row of
+  // Organización, so a crumb over it would name a parent the rail does not have.
   const header = (
     <div className="-mb-6">
-      <PageTopBar
-        eyebrow={companyName ?? t('navigation.companyAdministration')}
+      <PageHeader
+        eyebrow={t('navigation.sectionOrganization')}
         title={t('navigation.users')}
-        tightBreadcrumb
         description={t('users.next.description')}
-        breadcrumbs={[
-          { label: t('navigation.companyAdministration'), href: `/admin/companies/${companyId}` },
-          { label: t('navigation.users') },
-        ]}
         actions={
           allowed ? (
             <>
+              <Button type="button" variant="outline" onClick={() => setOpen(open === 'add' ? 'none' : 'add')}>
+                <UserPlus aria-hidden="true" />
+                {t('users.next.add.action')}
+              </Button>
               <Button type="button" variant="outline" onClick={() => setOpen(open === 'import' ? 'none' : 'import')}>
                 <Upload aria-hidden="true" />
                 {t('users.next.bulkImport')}
@@ -203,6 +206,25 @@ export default function AdminUsersView() {
         </DialogContent>
       </Dialog>
 
+      {/* One person, typed. The importer's own route commits it, so the account is shaped
+          exactly as an imported one -- see `AddPersonForm`. */}
+      <Dialog open={open === 'add'} onOpenChange={(next) => setOpen(next ? 'add' : 'none')}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto" closeLabel={t('users.next.panel.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('users.next.add.action')}</DialogTitle>
+            <DialogDescription>{t('users.next.add.meta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && (
+            <AddPersonForm
+              baseUrl={baseUrl}
+              companyId={companyId}
+              departments={state.departments}
+              onAdded={state.reload}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={open === 'import'} onOpenChange={(next) => setOpen(next ? 'import' : 'none')}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto" closeLabel={t('users.next.panel.close')}>
           <DialogHeader>
@@ -240,6 +262,8 @@ export default function AdminUsersView() {
                     <EditPerson
                       key={editing.id}
                       user={editing}
+                      people={state.users}
+                      companyId={companyId}
                       departments={state.departments ?? []}
                       canAssignRoles={capabilities.canAssignRoles}
                       onClose={() => {
@@ -331,7 +355,7 @@ function Tiles({ tally, invitations }: { tally: ReturnType<typeof rosterTally>; 
           tally.never === 0 ? (
             <span>{t('users.next.tiles.neverNone')}</span>
           ) : tally.leadersNever > 0 ? (
-            <span data-tone="warning" className="text-accent-amber-ink">
+            <span data-tone="warning" className="text-fg-secondary">
               {t('users.next.tiles.neverLeaders', { never: tally.leadersNever, leaders: tally.leaders })}
             </span>
           ) : (
@@ -374,7 +398,7 @@ function Avatar({ name, strong = false }: { name: string; strong?: boolean }) {
     <span
       aria-hidden="true"
       className={cn(
-        'inline-flex size-7 shrink-0 items-center justify-center rounded-full text-2xs font-semibold',
+        'inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
         strong ? 'bg-surface-shell text-fg-on-accent' : 'border border-line-default bg-surface-icon-box text-fg-secondary',
       )}
     >
@@ -395,7 +419,7 @@ function Names({ people }: { people: readonly User[] }) {
           {!hasSignedIn(person) && (
             <>
               {' · '}
-              <span className="text-accent-amber-ink">{t('users.next.rail.neverEntered')}</span>
+              <span className="text-fg-secondary">{t('users.next.rail.neverEntered')}</span>
             </>
           )}
         </span>
@@ -463,18 +487,18 @@ function RailItem({
         onClick={onSelect}
         className={cn(
           'flex h-auto w-full flex-col items-stretch gap-1 whitespace-normal rounded-md border-0 border-l-[3px] px-3 py-2 text-left font-normal',
-          selected ? 'border-l-fg-primary bg-surface-icon-box hover:not-disabled:bg-surface-icon-box' : 'border-l-transparent',
+          selected ? 'border-l-accent-blue bg-surface-icon-box hover:not-disabled:bg-surface-icon-box' : 'border-l-transparent',
         )}
       >
         <span className="flex items-baseline justify-between gap-2">
           <span className="text-sm font-semibold text-fg-primary">{name}</span>
-          <span className="font-mono text-xs tabular-nums text-fg-primary">{people}</span>
+          <span className="text-xs tabular-nums text-fg-primary">{people}</span>
         </span>
-        <span className="flex items-center gap-2 text-2xs text-fg-tertiary">
+        <span className="flex items-center gap-2 text-xs text-fg-tertiary">
           <MiniBar percent={people === 0 ? 0 : (signedIn / people) * 100} />
           {t('users.next.rail.signedIn', { signedIn, total: people })}
         </span>
-        <span className="text-2xs leading-snug text-fg-tertiary">{sub}</span>
+        <span className="text-xs leading-snug text-fg-tertiary">{sub}</span>
       </Button>
     </li>
   )
@@ -506,11 +530,11 @@ function DepartmentRail({
   return (
     <nav
       aria-label={t('users.next.rail.heading')}
-      className="flex min-w-0 flex-col gap-1 rounded-xl border border-line-default bg-surface-card px-2 py-3 shadow-sm"
+      className="flex min-w-0 flex-col gap-1 rounded-xl border border-line-panel bg-surface-card px-2 py-3"
     >
       <div className="flex items-baseline justify-between gap-2 px-3 pb-1">
         <p className={EYEBROW}>{t('users.next.rail.heading')}</p>
-        <span className="text-2xs text-fg-tertiary">{t('users.next.rail.meta')}</span>
+        <span className="text-xs text-fg-tertiary">{t('users.next.rail.meta')}</span>
       </div>
       <ul className="m-0 flex list-none flex-col gap-1 p-0">
         <RailItem
@@ -580,7 +604,7 @@ function Roster({
   return (
     <section
       aria-labelledby="users-roster"
-      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm"
+      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-panel bg-surface-card"
     >
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 pb-3">
         <div className="flex min-w-0 flex-col gap-0.5">
@@ -588,14 +612,14 @@ function Roster({
             <h2 id="users-roster" className="m-0 text-2xl">
               {heading}
             </h2>
-            <span className="font-mono text-xs tabular-nums text-fg-tertiary">{people.length}</span>
+            <span className="text-xs tabular-nums text-fg-tertiary">{people.length}</span>
           </div>
           <span className="text-xs text-fg-tertiary">
             {never === 0 ? t('users.next.roster.subNone') : t('users.next.roster.sub', { never })}
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-2.5">
-          <label htmlFor={searchId} className="relative m-0 min-w-0 flex-1 sm:w-60 sm:flex-none">
+          <label htmlFor={searchId} className="relative m-0 min-w-0 flex-1 sm:w-72 sm:flex-none">
             <span className="sr-only">{t('users.next.roster.search')}</span>
             <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-fg-tertiary" />
             <Input
@@ -607,7 +631,7 @@ function Roster({
               className="w-full pl-8"
             />
           </label>
-          <span className="whitespace-nowrap font-mono text-xs tabular-nums text-fg-tertiary">
+          <span className="whitespace-nowrap text-xs tabular-nums text-fg-tertiary">
             {t('users.next.roster.shown', { shown: visible.length, total })}
           </span>
         </div>
@@ -650,7 +674,7 @@ function Roster({
                             <span className="truncate font-semibold text-fg-primary">{user.name}</span>
                             {!user.isActive && <CanvasChip tone="neutral" label={t('users.next.roster.deactivated')} />}
                           </span>
-                          <span className="truncate font-mono text-2xs text-fg-tertiary">{user.email}</span>
+                          <span className="truncate text-xs text-fg-tertiary">{user.email}</span>
                           {/* The generated sign-in name, under the email, for the launch-day phone call: on
                               a mass invite the person on the line knows their email and not the `usuario`
                               the platform chose for them, and the password is unrecoverable by design -- so
@@ -666,7 +690,7 @@ function Roster({
                               after it. Null or absent, the row is unchanged -- which is every account
                               whose holder chose their own password. */}
                           {user.username ? (
-                            <span className="truncate text-2xs text-fg-tertiary">
+                            <span className="truncate text-xs text-fg-tertiary">
                               {t('users.next.roster.username')}{' '}
                               <span className="font-mono text-fg-secondary">{user.username}</span>
                             </span>
@@ -686,11 +710,11 @@ function Roster({
                     </td>
                     <td className="px-3 py-2.5">
                       {user.lastLoginAt ? (
-                        <span className="font-mono text-xs tabular-nums text-fg-primary">
+                        <span className="text-xs tabular-nums text-fg-primary">
                           {calendarDay(Date.parse(user.lastLoginAt), locale)}
                         </span>
                       ) : (
-                        <span className="text-xs text-accent-amber-ink">{t('users.next.roster.never')}</span>
+                        <span className="text-xs text-fg-secondary">{t('users.next.roster.never')}</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-right">
@@ -726,6 +750,8 @@ function Roster({
 
 function EditPerson({
   user,
+  people,
+  companyId,
   departments,
   canAssignRoles,
   onClose,
@@ -734,6 +760,8 @@ function EditPerson({
   onEmailChanged,
 }: {
   user: User
+  people: readonly User[]
+  companyId: string | undefined
   departments: readonly Department[]
   canAssignRoles: boolean
   onClose: () => void
@@ -749,6 +777,8 @@ function EditPerson({
   const [email, setEmail] = useState(user.email)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDeactivation, setConfirmingDeactivation] = useState(false)
+  const details = usePersonDetails(baseUrl, user, companyId)
   // Set when a save changed the address: the panel then stays open to say what the change did
   // NOT do (send anything) and what is left (codes mailed to the old address).
   const emailChange = emailOutcome
@@ -756,12 +786,27 @@ function EditPerson({
   // Deactivating an administrator is the super administrator's alone (`UserEndpoints.cs:147-149`):
   // the server refuses even an unchanged `isActive` for one, so it is only ever sent when changed.
   const accountLocked = isAdminRole(user.role) && !canAssignRoles
-  // The API can move a person to a department but not out of one (`UpdateUserInput` carries a
-  // department only when set), so "none" is offered only to someone who has none.
+  // "Sin departamento" is offered to everyone: choosing it on someone who has one sends
+  // `clearDepartment` (`UpdateUserRequest.ClearDepartment`), the explicit unset a null cannot say.
   const options = departments.filter((unit) => unit.isActive || unit.id === user.departmentId)
   const created = calendarDay(Date.parse(user.createdAt), locale)
 
+  // Deactivating is confirmed first, in a dialog that says what happens to their codes (G5).
+  function requestSave() {
+    if (isActive !== user.isActive && !isActive) setConfirmingDeactivation(true)
+    else void save()
+  }
+
   async function save() {
+    const extra = details.changes()
+    if (extra.missing) {
+      setError(t('users.next.edit.demographicRequired', { field: extra.missing }))
+      return
+    }
+    if (extra.invalid) {
+      setError(t('users.next.edit.demographicNumber', { field: extra.invalid }))
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -770,8 +815,9 @@ function EditPerson({
       const updated = await updateUser(baseUrl, user.id, {
         name: name.trim(),
         ...(isActive !== user.isActive ? { isActive } : {}),
-        ...(departmentId && departmentId !== user.departmentId ? { departmentId } : {}),
+        ...departmentChange(user, departmentId),
         ...(nextEmail.toLowerCase() !== user.email.toLowerCase() ? { email: nextEmail } : {}),
+        ...extra.input,
       })
       if (updated.emailChange) {
         onEmailChanged({ userId: user.id, change: updated.emailChange, current: updated.email })
@@ -783,7 +829,7 @@ function EditPerson({
     } catch (err) {
       // No reload on a refusal: the API applied nothing, and a reload swaps the page for its
       // skeleton, which unmounts this panel and takes the error -- and what was typed -- with it.
-      setError(updateErrorText(t, err, t('users.next.edit.saveFailed')))
+      setError(updateErrorText(t, err, 'users.next.edit.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -841,7 +887,7 @@ function EditPerson({
         </Field>
         <Field fieldLabel={t('users.next.edit.department')} htmlFor={ids.department} helper={t('users.next.edit.departmentHelper')}>
           <CanvasSelect id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-            {!user.departmentId && <option value="">{t('users.next.rail.none')}</option>}
+            <option value="">{t('users.next.rail.none')}</option>
             {options.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
@@ -869,18 +915,28 @@ function EditPerson({
               checked={isActive}
               disabled={accountLocked}
               onCheckedChange={setIsActive}
-              className="data-[state=checked]:bg-accent-green"
+              
             />
             <span>{isActive ? t('users.next.edit.active') : t('users.next.edit.inactive')}</span>
           </span>
         </Field>
       </div>
+      <PersonDetailsFields user={user} people={people} state={details} />
       <ResendCredentials user={user} baseUrl={baseUrl} />
+      {/* An administrator's password is the super administrator's to reset: the API refuses a
+          company administrator one (`AuthEndpoints.ResetCredentialsAsync`), as it does their email. */}
+      <ResetPassword user={user} baseUrl={baseUrl} allowed={!accountLocked} details={details} />
+      <DeactivationConfirm
+        open={confirmingDeactivation}
+        name={user.name}
+        onOpenChange={setConfirmingDeactivation}
+        onConfirm={save}
+      />
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-light pt-3">
         <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
           {emailChange ? t('users.next.edit.done') : t('common.cancel')}
         </Button>
-        <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim() || !email.trim()}>
+        <Button type="button" variant="outline" onClick={requestSave} disabled={saving || !name.trim() || !email.trim()}>
           <Check aria-hidden="true" />
           {t('users.next.edit.save')}
         </Button>
@@ -902,14 +958,14 @@ function PendingInvitations({
   return (
     <section
       aria-labelledby="users-invitations"
-      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm"
+      className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-panel bg-surface-card"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 pt-4 pb-2">
         <div className="flex items-baseline gap-2.5">
           <h2 id="users-invitations" className="m-0 text-2xl">
             {t('users.next.invitations.heading')}
           </h2>
-          {rows !== null && <span className="font-mono text-xs tabular-nums text-fg-tertiary">{rows.length}</span>}
+          {rows !== null && <span className="text-xs tabular-nums text-fg-tertiary">{rows.length}</span>}
         </div>
         <span className="text-xs text-fg-tertiary">{t('users.next.invitations.meta')}</span>
       </div>
@@ -949,21 +1005,21 @@ function PendingInvitations({
               ) : (
                 rows.map((invitation) => (
                   <tr key={invitation.id}>
-                    <td className="truncate px-3 py-2.5 font-mono text-xs text-fg-primary">
+                    <td className="truncate px-3 py-2.5 text-xs tabular-nums text-fg-primary">
                       {invitation.email ?? t('users.next.invitations.link')}
                     </td>
                     <td className="px-3 py-2.5">
                       <CanvasChip tone="neutral" label={roleText(t, invitation.role)} />
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-fg-secondary">
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-fg-secondary">
                       {invitation.sentAt ? calendarDay(Date.parse(invitation.sentAt), locale) : '—'}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-fg-secondary">
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-fg-secondary">
                       {calendarDay(Date.parse(invitation.expiresAt), locale)}
                     </td>
                     <td className="px-3 py-2.5">
                       <span className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-xs tabular-nums text-fg-secondary">{invitation.reminderCount}</span>
+                        <span className="text-xs tabular-nums text-fg-secondary">{invitation.reminderCount}</span>
                         {invitation.email && (
                           <Button
                             type="button"

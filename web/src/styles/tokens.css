@@ -8,22 +8,30 @@
  * are in the stylesheet, so they are correct on the very first paint and there
  * is no flash of unstyled/mis-themed content and no JS on the critical path.
  *
- * Colour values STARTED as Twenty-CRM's admin palette (dark from theme-dark.css,
- * light from theme-light.css), byte-for-byte. They are no longer: the neutrals —
- * every surface, every line and every ink — were revalued when the shell went
- * navy, so that the light greys are blue-biased and belong under it rather than
- * reading as a second product's chrome. See "The shell" and "The light neutrals"
- * below for the values and the reasoning; `employee-screens.html` design note 08
- * is where the decision was taken. The accents, the status chips and the whole
- * chart palette are untouched — the ask was the shell and the ground, not the
- * brand.
+ * APPLE DESIGN (2026-11-11). The values below are the "OCC Clima — Apple Design"
+ * canvas (`project/occ.css`, approved by the user on 11 Nov) translated into this
+ * layer. The token NAMES are the ones the pages already use wherever the role is
+ * the same, so every page moves with the values; names were added only for roles
+ * the app did not have (the box radius, the shell's sunken well, the control
+ * fills, the zebra, the blue text ink, the three result areas, the display serif).
+ * The user's rulings that shape it:
+ *   - The frame stays the app's own: navy rail + navy top bar + a rounded white
+ *     box with side margins. Apple HIG applies INSIDE the box.
+ *   - One colour, one meaning. Blue = action / selection / live. Green, amber and
+ *     red = the three result areas (Fortaleza, Oportunidad, Crítica) and nothing
+ *     else, always with glyph and name. OCC red #FB1724 is the mark only and is
+ *     not a token here (see `layout/OccLogo.tsx`).
+ *   - Type: the system UI stack for everything; a serif only for page titles,
+ *     card/section titles and the respondent's question. Body 15px, secondary
+ *     13px, minimum 11px (uppercase tracked labels only).
+ * Where a canvas value could not be carried over without failing a contrast
+ * guard, the value moved and the guard did not; each such deviation is named in
+ * the block that carries it, with the measured ratio.
  *
- * Every non-colour value below cites the legacy declaration it came from.
- * `../README.md` § "Provenance" is the same table in one place, and
- * `./tokens.test.ts` asserts these values so a later edit that drifts fails the
- * build rather than the eye. That test still names the legacy hexes, which is
- * how this recolour announced itself; it is the one place the new values have to
- * be re-pinned by hand.
+ * Every non-colour value that is NOT from the canvas still cites the legacy
+ * declaration it came from. `../README.md` § "Provenance" is the same table in
+ * one place, and `./tokens.test.ts` asserts these values so a later edit that
+ * drifts fails the build rather than the eye.
  *
  * THEMING
  *   Light is the default, matching the legacy default mode.
@@ -36,7 +44,7 @@
  *
  * NAMING
  *   --admin-<group>-<role>[-<variant>]
- *   groups: bg | border | font | accent | accent-bg | accent-border
+ *   groups: bg | border | font | accent | accent-bg | accent-border | band
  *           space | radius | text | leading | weight | tracking
  *           size | shadow | duration | ease | z
  *
@@ -44,38 +52,58 @@
  * ========================================================================= */
 
 :root {
-  /* -- Typeface ---------------------------------------------------------- */
-  /* 'Poppins Fallback' (see ./fonts.css) sits directly behind Poppins so the
-     swap is metrically identical. Everything after it is the legacy stack
-     (globals.css `.admin-shell`). */
+  /* -- Typeface ----------------------------------------------------------
+     The canvas's UI stack (`--sf`): the platform's own UI face everywhere —
+     San Francisco on Apple devices, Segoe UI on Windows, Roboto on Android.
+     'SF Pro Text' is named for the rare desktop that has it installed but not as
+     the system face. The canvas also lists "Inter"; it is left out because it is
+     not shipped, so naming it would make the face depend on what a visitor
+     happens to have installed. */
   --admin-font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui,
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
+    system-ui, sans-serif;
   --admin-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* The display serif (`--ny` on the canvas), for page titles (h1), card and
+     section titles (h2) and the respondent's question — nowhere else (user
+     ruling, 11 Nov). New York first: `ui-serif` is how Safari exposes it, and the
+     name is tried for any browser that resolves it. Every other browser gets
+     Source Serif 4, self-hosted at 600/700 by ./fonts.css, behind its
+     metric-matched Georgia fallback so the swap costs no layout shift. */
+  --admin-font-display:
+    ui-serif, 'New York', 'Source Serif 4', 'Source Serif 4 Fallback', Georgia,
+    serif;
 
   /* -- Type scale --------------------------------------------------------
-     13px is the admin base, not 16px: legacy AppShell.tsx and Sidebar.tsx both
-     set `fontSize: 13` on the shell, and ui/button.tsx, ui/input.tsx,
-     ui/select.tsx and ui/table.tsx all hardcode `text-[13px]`.
+     The canvas's scale (user ruling, 11 Nov): BODY 15px, SECONDARY 13px, and
+     11px as the floor, which only uppercase tracked labels sit at. Steps keep
+     their legacy names so every `text-*` call site moves with them; what each
+     step is FOR is the comment, and the old 13px console base is gone.
 
      Expressed in `rem`, like the legacy scale (globals.css uses 0.75rem /
      0.875rem / 1.125rem …), and the root font size is deliberately NOT
      overridden — a user who raises their browser's default font size scales the
      whole app with it (WCAG 1.4.4). The px comments are the rendered size at a
      16px default. */
-  --admin-text-2xs: 0.625rem; /* 10px — section labels, all-caps eyebrows */
-  --admin-text-xs: 0.6875rem; /* 11px — badge/meta */
-  --admin-text-sm: 0.75rem; /* 12px — help text, <th> (globals .text-small) */
-  --admin-text-base: 0.8125rem; /* 13px — shell default */
-  --admin-text-lg: 0.875rem; /* 14px — labels, alerts, h5/h6 (globals label) */
-  --admin-text-xl: 1rem; /* 16px — h3/h4 (globals h6) */
-  --admin-text-2xl: 1.25rem; /* 20px — h2 (globals h4) */
-  --admin-text-3xl: 1.5rem; /* 24px — h1; legacy admin page titles are text-2xl */
-  /* The canvas's named steps (the 10 Sep artboards), so no primitive spells a size in px: */
-  --admin-text-3xs: 0.5625rem; /* 9px — column heads over a dense grid (the map, the trends table) */
+  --admin-text-2xs: 0.6875rem; /* 11px — the floor: uppercase tracked section labels and eyebrows (canvas `.sec-t`, `.eyebrow`, `.kpi .l`) */
+  --admin-text-xs: 0.75rem; /* 12px — chips, badges, key caps, legends (canvas `.chip`, `.legend`) */
+  --admin-text-sm: 0.8125rem; /* 13px — SECONDARY: metadata, table heads, help, breadcrumbs (canvas `.small`, `.crumb`, `.t2`) */
+  /* 14px — a ROW or a CONTROL that sits beside the 15px body: the rail's rows, a
+     button's label, a table's cells, a note (canvas `.item`, `.btn`, `.tbl`, `.note`).
+     Its own step rather than the body. (The rail itself stays at 13px until its
+     labels are regrouped: at 14px "Administración de Empresa" truncates in the 236px
+     rail — see `navigation/RoleBasedNav.tsx`.) */
+  --admin-text-ui: 0.875rem;
+  --admin-text-base: 0.9375rem; /* 15px — BODY (canvas `.app { font: 15px/1.45 }`) */
+  --admin-text-lg: 1rem; /* 16px — an emphasised value or a small heading in a row (canvas `.cb .val`, `.btn.lg`) */
+  --admin-text-xl: 1.0625rem; /* 17px — h3/h4: a sans heading one step over the body */
+  --admin-text-2xl: 1.25rem; /* 20px — h2: a card or section title (canvas `.h`) */
+  --admin-text-3xl: 1.875rem; /* 30px — h1: the page title (canvas `.lt`) */
+  /* Named steps from the 10 Sep canvas, re-set against the 11 Nov floor: */
+  --admin-text-3xs: 0.6875rem; /* 11px — column heads over a dense grid (the map, the trends table); was 9px, under the 11px floor */
   --admin-text-reading: 1.375rem; /* 22px — a reading on a card (sparkline cards, trend charts) */
   --admin-text-kpi-lg: 1.625rem; /* 26px — the KPI reading on Clima en el tiempo and SurveyResults */
-  --admin-text-kpi-hero: 1.75rem; /* 28px — the KPI reading on the Panel de Control */
+  --admin-text-kpi-hero: 1.875rem; /* 30px — the KPI reading on the Panel de Control (canvas `.kpi .v`) */
+  --admin-text-kpi-display: 2.5rem; /* 40px — the one large count on an action plan's deadline card */
   --admin-text-question: 1.0625rem; /* 17px — the question and its scale points on a respond card (RespondSurveyPhone, RespondMicroclimatePhone) */
   /* The respond surface is read by employees on their own phones and monitors, not by
      an operator in a dense console, so it does not take the admin scale. Measured on the
@@ -86,31 +114,31 @@
   --admin-text-respond-sm: 0.8125rem; /* 13px — the respond page's readings and meta: the position, the n/total chip, the foot */
   --admin-text-respond-lg: 1rem; /* 16px — the same, from `md` up */
   --admin-text-respond-question: 1.25rem; /* 20px — the question itself, from `md` up */
+  --admin-text-respond-display: 1.5rem; /* 24px — the Apple design's Respond board sets the question in the serif at this step; additive, no screen on this branch uses it yet */
 
   --admin-leading-tight: 1.2; /* headings — globals.css h1..h6 */
   --admin-leading-snug: 1.35; /* dense table/data rows */
-  --admin-leading-normal: 1.5; /* body copy — globals.css body */
+  --admin-leading-normal: 1.45; /* body copy — the canvas's `15px/1.45` (was globals.css 1.5) */
 
   --admin-weight-regular: 400;
   --admin-weight-medium: 500; /* nav, buttons, labels — globals.css */
-  --admin-weight-semibold: 600; /* headings — globals.css h1..h6 */
+  --admin-weight-semibold: 600; /* headings — globals.css h1..h6; the display serif's title weight */
   --admin-weight-bold: 700;
 
-  --admin-tracking-tight: -0.025em; /* headings — globals.css h1..h6 */
+  --admin-tracking-tight: -0.025em; /* sans headings — globals.css h1..h6 */
   --admin-tracking-normal: 0;
-  --admin-tracking-kpi: 0.12em; /* the KPI label on Clima en el tiempo and SurveyResults */
-  --admin-tracking-label: 0.06em; /* uppercase section labels — legacy
-                                     RoleBasedNav `tracking-[0.06em]` */
-  --admin-tracking-eyebrow: 0.2em; /* the page eyebrow over an <h1> — ForMaps
-                                      `dashboard/page.tsx` `tracking-[0.2em]`.
-                                      Deliberately much wider than the sidebar's
-                                      section label: at 10px over a 24px heading
-                                      the letter-spacing is what separates the two
-                                      lines, since the size difference alone reads
-                                      as a subtitle that lost its font. */
-  --admin-tracking-tile: 0.12em; /* a KPI tile's eyebrow — the Dashboard and
-                                    SurveyResults artboards (10 Sep) space it at
-                                    .12em, between the label and the page eyebrow */
+  /* The display serif's own tightening: the canvas sets the 30px page title at
+     -.015em and the 20px card title at -.01em. A serif at the sans headings'
+     -.025em closes its counters up, so it does not share that token. */
+  --admin-tracking-display: -0.015em; /* h1 — canvas `.lt` */
+  --admin-tracking-title: -0.01em; /* h2 — canvas `.h` */
+  --admin-tracking-kpi: 0.08em; /* the KPI label (canvas `.kpi .l` letter-spacing .08em; was .12em) */
+  --admin-tracking-label: 0.09em; /* uppercase section labels — canvas `.sec-t` .09em (was the legacy
+                                     RoleBasedNav `tracking-[0.06em]`) */
+  --admin-tracking-eyebrow: 0.1em; /* the page eyebrow over an <h1> — canvas `.eyebrow` .1em. It was .2em
+                                      under the 24px sans title; over a 30px serif title the change of face
+                                      already separates the two lines, so the tracking no longer has to. */
+  --admin-tracking-tile: 0.08em; /* a KPI tile's eyebrow — canvas `.kpi .l` .08em (was .12em) */
 
   /* -- Space scale -------------------------------------------------------
      ⚠ THE NUMBER IN THE NAME IS THE PIXEL COUNT, NOT A STEP INDEX.
@@ -148,6 +176,16 @@
   --admin-size-row-gap: var(--admin-space-2); /* 2px — nav rows (space-y-0.5) */
   --admin-size-inline-gap: var(--admin-space-8); /* 8px — icon-to-label (gap-2) */
   --admin-size-section-gap: var(--admin-space-24); /* 24px between sections */
+  /* The content BOX — the rounded white surface every page sits in, inside the
+     navy frame (user ruling: keep the app's frame; Apple applies inside the box).
+     Its outer margin is `--admin-size-shell-gutter` above (12px, right and bottom
+     against the rail, the canvas's `.page { margin: 0 12px 12px 0 }`); these are
+     its inner padding, the canvas's `.page { padding: 22px 28px 56px }`. Under
+     820px the canvas pads 18px 16px 40px, which the numeric utilities already
+     spell (`pt-4.5 px-4 pb-10`). Radius: `--admin-radius-box`. */
+  --admin-size-box-padding-x: 28px;
+  --admin-size-box-padding-top: 22px;
+  --admin-size-box-padding-bottom: 56px;
 
   /* Control heights are in `rem` for the same reason the type scale is: a
      control is a box around text, and it has to grow when the text does.
@@ -223,15 +261,16 @@
      The alternative, a media query, cannot work here: whether the two fit
      depends on how wide the caller's buttons are, which no breakpoint knows. */
   --admin-size-header-text-min: 20rem;
-
   /* -- Radii -------------------------------------------------------------
-     4px on controls and 8px on panels are the legacy literals: ui/button.tsx
-     and ui/input.tsx use `rounded-[4px]`, AppShell's <main> uses
-     `borderRadius: 8`. */
-  --admin-radius-sm: 2px; /* hairline joins, breadcrumb elbows */
-  --admin-radius-md: 4px; /* controls: buttons, inputs, nav rows */
-  --admin-radius-lg: 6px; /* badges, chips */
-  --admin-radius-xl: 8px; /* panels, cards, dialogs, alerts */
+     The canvas's radii (occ.css), by role. The legacy literals were 4px on
+     controls and 8px on panels (ui/button.tsx `rounded-[4px]`, AppShell's <main>
+     `borderRadius: 8`); the canvas rounds everything one Apple step further. */
+  --admin-radius-sm: 2px; /* hairline joins, breadcrumb elbows, the 14px checkbox */
+  --admin-radius-md: 8px; /* controls: buttons, inputs, selects, nav rows (canvas `.in` 8px, `.btn` 7px) */
+  --admin-radius-lg: 10px; /* chips, badges, small tiles — a 22px chip at 10px reads as the canvas's pill (`.chip` radius 11) */
+  --admin-radius-xl: 12px; /* cards, alerts, notes (canvas `.card`, `.note` 12px) */
+  --admin-radius-box: 14px; /* the content box inside the navy frame (canvas `.page` 14px) */
+  --admin-radius-sheet: 16px; /* a dialog or sheet (canvas `.sheet` 16px) */
   --admin-radius-full: 999px;
 
   /* -- Motion ------------------------------------------------------------ */
@@ -254,329 +293,271 @@
    * ====================================================================== */
   color-scheme: light;
 
-  --admin-bg-outer: #f5f8fc;
+  /* The page ground OUTSIDE the box: the sign-in screen (`AuthShell`), the
+     survey-answering screen (`RespondShell`) and the respondent's phone, which
+     the canvas draws with no navy frame (`.app.plain { background: var(--bg2) }`).
+     Apple's secondary system background. */
+  --admin-bg-outer: #f5f5f7;
 
-  /* -- The shell: rail, top strip and the gutter they sit in (UI-0) -------
-     The application chrome is NAVY and everything inside the frame is WHITE.
-     These are separate tokens rather than a change to `--admin-bg-outer`
-     because that token is also the ground of the sign-in screen (`AuthShell`)
-     and of the survey-answering screen (`RespondShell`), neither of which is
-     application chrome and neither of which should be recoloured just because
-     the admin rail was.
+  /* -- The frame: rail, top bar and the gutter they sit in ----------------
+     NAVY, as the app has always drawn it (user ruling, 11 Nov: "the box and the
+     edges on the side, the blue one"). The canvas's `--chrome` #0f1a33 in light
+     and #0a1122 in dark — the hue holds, only the depth moves, so the dark frame
+     is never the lighter of frame and page. A separate token from
+     `--admin-bg-outer`, which is the ground of screens that are not chrome.
 
-     THE SHELL NOW INVERTS, AND THAT IS A DECISION RATHER THAN A DRIFT. It was
-     `#1b1f24` in both themes and this block used to say so on purpose -- "the
-     one region whose colour does not invert". The employee redesign
-     (`employee-screens.html`, design note 08) replaces the ink slate with navy
-     `#122c4d`, and gives dark its own deeper `#0a1c31`: a single navy over a
-     `#0b111b` page would be the LIGHTER of the two surfaces there, so the frame
-     would read as content. The HUE is what stays constant across the themes and
-     only its depth moves, which is the constant-frame property the old comment
-     was really describing. `shellInkContrast.test.ts` holds that shape, and it
-     now derives the ink list from `.on-shell` in `index.css` instead of naming
-     three tokens, so a fourth shell ink cannot be added without being measured.
+     Three grounds, because three things print on the frame:
+       --admin-bg-shell          the rail and the bar
+       --admin-shell-bg-raised   the user menu, which opens INSIDE the rail and
+                                 lifts (1.19:1 in both themes) so it reads as above
+                                 the rail rather than as a hole in it
+       --admin-shell-bg-sunken   the company select in the bar — the canvas's
+                                 `--chrome2` (`.cosel`), a well set INTO the bar
 
-     Contrast, measured against these values (styles/shellInkContrast.test.ts
-     re-derives all of it and fails if any drifts):
-                                   light: shell / raised   dark: shell / raised
-       --admin-shell-font-strong        12.61 / 10.46          15.39 / 11.93
-       --admin-shell-font                9.70 /  8.05          11.84 /  9.18
-       --admin-shell-font-label          6.54 /  5.43           6.61 /  5.13
-     The label clears 4.5:1 on BOTH grounds and not merely on the rail, because
-     the user menu lifts to `--admin-shell-bg-raised` and prints the signed-in
-     person's role in that ink -- the lighter ground is the binding one. */
-  --admin-bg-shell: #0c1c3a;
-  /* The user menu, which opens INSIDE the rail. It lifts rather than staying
-     flush so the popover reads as above the rail rather than as a hole in it.
-     The redesign has no token for this surface, so it is the rail's own navy
-     lifted by 1.20:1 -- slightly more than `#262b31` lifted `#1b1f24` (1.16:1)
-     and no more than that, because two things are measured against it and both
-     get worse as it lightens: `--admin-shell-font-label`, which the user menu
-     prints the signed-in person's role in, and `--admin-focus-ring`. A lift to
-     `#1b3d64` looked right and put the ring at 2.95:1, under WCAG 1.4.11's 3:1
-     for a focus indicator, on the one surface in the product where a keyboard
-     user opens a menu. */
-  --admin-shell-bg-raised: #162b51;
-  --admin-shell-bg-hover: rgba(255, 255, 255, 0.08);
+     Measured (styles/shellInkContrast.test.ts re-derives every one):
+                                   light: shell / raised / sunken   dark: shell / raised / sunken
+       --admin-shell-font-strong        17.27 / 14.55 / 18.52            18.81 / 15.81 / 19.55
+       --admin-shell-font               14.32 / 12.06 / 15.36            15.60 / 13.11 / 16.21
+       --admin-shell-font-label          7.00 /  5.89 /  7.50             6.59 /  5.54 /  6.85
+       --admin-focus-ring                4.29 /  3.62                     7.40 /  6.22
+     The raised ground binds both the label and the ring, which is why it lifts
+     no further than 1.19:1. */
+  --admin-bg-shell: #0f1a33;
+  --admin-shell-bg-raised: #1a2849;
+  --admin-shell-bg-sunken: #0a1326;
+  /* The canvas's rail hover (`.item:hover`, white at 6%) and the pressed/active
+     step this palette already had. */
+  --admin-shell-bg-hover: rgba(255, 255, 255, 0.06);
   --admin-shell-bg-active: rgba(255, 255, 255, 0.14);
-  /* Three steps, because `.on-shell` re-points three ink roles at them. The
-     redesign has two (`--shell-ink #eef3f9`, `--shell-ink-2 #9db3cd`) and uses
-     the lighter one for both the brand and a hovered row; `--admin-shell-font`
-     is the step this palette keeps between them, so the rail's resting row text
-     stays distinct from its wordmark as it does today. */
-  --admin-shell-font-strong: #dbdfec;
-  --admin-shell-font: #b9c5dc;
-  --admin-shell-font-label: #93a1c6;
-  /* Left translucent rather than taking the redesign's opaque `--shell-line`
-     `#1f4270`: `.on-shell` points all three border roles here, and they are
-     drawn on the rail AND on the raised user menu, so a hairline that composites
-     against whatever is under it is correct on both grounds and one hex is not. */
+  /* The canvas's chrome inks: `#fff` for the signed-in name and the company in
+     the select, `--ctext` #e6eaf2 for the rows, `--ctext2` #9aa5bf for the
+     uppercase section titles, the row icons, the counts and the role line.
+     `.on-shell` (index.css) re-points the generic ink roles at these three. */
+  --admin-shell-font-strong: #ffffff;
+  --admin-shell-font: #e6eaf2;
+  --admin-shell-font-label: #9aa5bf;
+  /* The canvas's `--cline`. Translucent on purpose: `.on-shell` points all three
+     border roles here and they are drawn on the rail AND on the raised menu, so a
+     hairline that composites against whatever is under it is right on both. */
   --admin-shell-border: rgba(255, 255, 255, 0.12);
+
+  /* -- The box and what sits in it --------------------------------------
+     The canvas's `--bg` (the box), `--card`, `--inbg` and `--bg2`. Cards are
+     BORDERED, the app's way, and carry no shadow on the canvas (`--sh: none`). */
   --admin-bg-panel: #ffffff;
   --admin-bg-card: #ffffff;
-  --admin-bg-card-hover: #f7fafe;
+  --admin-bg-card-hover: #f7f7f8;
   --admin-bg-input: #ffffff;
-  --admin-bg-icon-box: #eff2fb;
+  /* The recessed surface: KPI tiles, code chips, a secondary button's fill. The
+     canvas's `--bg2`, so it is the same grey as the page ground outside the box. */
+  --admin-bg-icon-box: #f5f5f7;
   --admin-bg-overlay: rgba(255, 255, 255, 0.8);
-  /* The scrim behind a dialog: the canvas's `rgba(17,10,41,.45)` (ReportShare, 10 Sep) —
-     the ink at 45%, which dims the page so the dialog is the one thing to read. Its own
-     token rather than a new value for `--admin-bg-overlay`: `.on-shell` re-points that
-     one for the rail's popovers (`styles/inkContrast.test.ts`), which must stay light. */
-  --admin-bg-scrim: rgba(7, 15, 33, 0.45);
-  --admin-bg-hover: rgba(0, 0, 0, 0.04);
-  --admin-bg-active: rgba(0, 0, 0, 0.08);
+  /* The scrim behind a dialog: the canvas's `.scrim`, the frame's navy at 45%. Its
+     own token rather than a new value for `--admin-bg-overlay`: `.on-shell`
+     re-points that one for the rail's popovers, which must stay light. */
+  --admin-bg-scrim: rgba(6, 12, 25, 0.45);
+  /* State layers: Apple's system fill grey (118,118,128) at the canvas's hover
+     alpha (`--fill2`, 7%) and a selected step at 12%. TRANSLUCENT by contract —
+     they lay over whatever surface a row or item sits on — and every text ink
+     below is measured on their composites (styles/inkContrast.test.ts): over
+     white they are #f5f5f6 and #efeff0. The canvas declares a 18% `--sel` and
+     never paints with it; at 18% the composite (#e6e6e8) puts the canvas's own
+     secondary grey #6e6e73 at 4.07:1, under AA on every selected row. */
+  --admin-bg-hover: rgba(118, 118, 128, 0.07);
+  --admin-bg-active: rgba(118, 118, 128, 0.12);
+  /* FILLS, a role the app did not name: the track of a segmented control, a
+     meter, an off toggle and a skeleton (`--fill`, 14%), and the quiet ground of
+     a note, a drop zone or a protected cell (`--fill2`, 7%). The zebra is the
+     canvas's every-other-row tint (`--zebra`, 4%), lighter than hover, so a
+     hovered row still reads as hovered. Translucent, like the state layers. */
+  --admin-bg-fill: rgba(118, 118, 128, 0.14);
+  --admin-bg-fill-subtle: rgba(118, 118, 128, 0.07);
+  --admin-bg-zebra: rgba(118, 118, 128, 0.04);
 
-  /* -- The light neutrals are BLUE-BIASED, not achromatic (UI-0) ----------
-     The legacy greys (#e0e0e0 lines, #141414/#474747/#818181/#999999 inks) were
-     hue-free, which was right under a hue-free `#1b1f24` chrome. Under the navy
-     rail they are not: an achromatic grey beside `#122c4d` reads warm, and the
-     redesign's note 08 names this as the second consequence of recolouring the
-     shell -- "a green-biased grey under a navy rail reads as two unrelated
-     products". So every neutral takes the redesign's blue-biased step at
-     roughly its own lightness: `--line #dbe3ee`, `--line-2 #eaeff6`, and the
-     four inks `--ink #0d1626`, `--ink-2 #44536b`, `--ink-3 #78879c`,
-     `--ink-4 #9aa7b9`.
-
-     The RANKING is unchanged, which is what stops this being a re-layering:
-     primary is still the only ink for a heading, secondary is still the only
-     one that clears AA on both white surfaces (7.79:1 on the panel, 7.24:1 on
-     the recessed one), and tertiary still does NOT (3.66 / 3.40, where the greys
-     gave 3.90 / 3.42). Every guard that was written around "tertiary is not a
-     body ink" -- `resultsContrast`, `themeDiscipline`, `respondContrast` --
-     therefore still measures the same failure it was written for. */
-  --admin-border-default: #d7deeb;
-  /* One step darker than the line, as #d0d0d0 was to #e0e0e0. */
-  --admin-border-hover: #c1cadf;
-  /* CONTROL BOUNDARIES, which are not decorative rules (WCAG 1.4.11).
-     `--admin-border-default` is #d7deeb: 1.35:1 on white. That is right for a hairline
-     between rows and it FAILS 1.4.11 for the edge of an input, which must be
-     distinguishable at 3:1 from what sits on BOTH sides of it. `ui/input.tsx` drew every
-     field in the product at 1.35:1 until 2026-09-22, and no admin guard measured it --
-     `storefront.css` had already made exactly this split (`--storefront-line-control`,
-     "WCAG 1.4.11 wants 3:1") and the admin palette never did.
-     3.25:1 on `--admin-bg-panel`, 3.05:1 on `--admin-bg-outer`: the ground OUTSIDE the
-     field is the binding one, not the white inside it. */
-  --admin-line-control: #7c8fb6;
-  /* The protected hatch (`PROTECTED_HATCH`): stripes in `--admin-hatch-stripe`, gaps in
-     `--admin-hatch-ground`, both painted by the gradient. Every artboard of 10 Sep (26 of
-     26) draws it as `repeating-linear-gradient(135deg, #e6e3f1 0 4px, #f8f7fb 4px 8px)`,
-     and the gaps here are `--admin-bg-outer`. The canvas's stripe was 1.18:1 on it, under
-     protectedHatch.test.ts's floor of 1.2; the stripe was lifted a tenth further from the
-     ground to clear it. It was #dedaee over the recessed `--admin-bg-icon-box` (1.22:1), a
-     shade darker and bluer than the canvas, and before that `--admin-border-hover`,
-     1.47:1, which read as a dark texture.
-
-     Those figures were measured on the violet pair #e4e1f0 / #f8f7fb, 1.206:1. The
-     de-purpling of 2026-09-22 carried both to hue 220 at constant relative luminance and
-     the pair now measures 1.2074:1 -- still over the floor, and over it by the same
-     margin, because the transform moved hue and not lightness. */
-  --admin-hatch-stripe: #dee3ee;
-  --admin-hatch-ground: #f5f8fc;
-  --admin-border-light: #ebeef5;
-  --admin-border-panel: #d7deeb;
+  /* -- Lines --------------------------------------------------------------
+     The canvas's separator `--sep` #e5e7eb is the hairline: row rules, card
+     edges, the box. It is 1.24:1 on white, which is right for a rule and wrong
+     for the edge of a control (WCAG 1.4.11 asks 3:1 of that), so control edges
+     have their own token below. */
+  --admin-border-default: #e5e7eb;
+  --admin-border-hover: #d1d5db;
+  /* CONTROL BOUNDARIES (WCAG 1.4.11). The canvas draws input edges in `--line`,
+     rgba(0,0,0,.16), which composites to #d6d6d6 — 1.47:1 on white, so a field
+     would be a box nobody can find. This is the nearest neutral that clears 3:1
+     on every ground a control sits on: 3.62:1 on white, 3.33:1 on the page ground
+     (the binding one). styles/controlBoundaryContrast.test.ts measures both. */
+  --admin-line-control: #86868b;
+  /* The protected hatch (`PROTECTED_HATCH`): stripes in `--admin-hatch-stripe`,
+     gaps in `--admin-hatch-ground`. The gaps are the page ground; the stripe is
+     the same grey 1.208:1 off it — over protectedHatch.test.ts's floor of 1.2 and
+     under its 1.21 ceiling, so the texture is visible without reading as a dark
+     pattern — and the padlock's tertiary ink is 3.97:1 on it. */
+  --admin-hatch-stripe: #e0e0e5;
+  --admin-hatch-ground: #f5f5f7;
+  --admin-border-light: #ececf0;
+  --admin-border-panel: #e5e7eb;
 
   /* -- Ink ---------------------------------------------------------------
-     Three text tiers plus one non-text tier, and #83 is what decided which is
-     which. `styles/inkContrast.test.ts` measures every one of these against
-     every surface it can print on, in both themes, and fails the build if one
-     stops clearing the threshold its role carries.
+     Three text tiers plus one non-text tier. `styles/inkContrast.test.ts`
+     measures each against every surface above AND every state-layer composite
+     (hover and selected, over the panel and over a card), in both themes, and
+     the role picks the threshold: 4.5:1 for text, 3:1 for the one non-text ink.
 
-     `--admin-tertiary` and `--admin-section-label` were re-valued there. They
-     carry TEXT — a `CardDescription`, a `DialogDescription`, a `TableCaption`,
-     a breadcrumb trail, a `KPIDisplay` eyebrow — at 13px and 10px, so WCAG
-     1.4.3 asks 4.5:1 of both, and at #78879c / #9aa7b9 on white they measured
-     3.66:1 and 2.44:1. There are 144 `text-fg-tertiary` call sites and 14
-     `text-fg-label` ones, which is the issue's own point: a token that fails
-     contrast fails everywhere at once, and it fails on the description line
-     under every heading in the product.
+       primary   #1d1d1f   the canvas's `--label`             16.83 white, 14.65 worst
+       secondary #48484d   muted body copy and labels          9.09 white,  7.91 worst
+       tertiary  #6c6c71   the canvas's `--label2` (#6e6e73)    5.22 white,  4.54 worst
+                           one step darker: #6e6e73 is 4.41:1 on the selected-row
+                           composite, so it would fail on any row a reader had
+                           selected
+       light     #89898e   the canvas's `--label3` (#8e8e93)    3.48 white,  3.03 worst
+                           one step darker for the same reason; NON-TEXT only
+                           (the inactive sort glyph, a chevron, disabled days)
 
-     The new values are the LIGHTEST hue- and chroma-matched greys that clear
-     4.5:1 against the darkest ground they print on — and that ground is not an
-     opaque token. `ui/table.tsx` puts `hover:bg-state-hover
-     data-[state=selected]:bg-state-active` on EVERY row, `index.css` hovers
-     `tbody tr` as well, and a highlighted `DropdownMenuItem`, a `SelectItem` and
-     the command palette's selected row all paint the same tints. Those tints are
-     `rgba()` over a panel or a card, and the composite is exactly computable, so
-     `inkContrast.test.ts` computes it: `--admin-bg-active` over white is #ebebeb,
-     which is where these greys are measured. At #637287 the tier read 4.11:1
-     there — below AA on any row a reader had selected — and 4.49:1 on the hover
-     tint, which the ⌘K palette's ESC chip and every hovered row's description
-     print on. Photographed and measured live in Chromium at /admin/companies.
-
-     4.55:1 on the darkest composite, 5.42:1 on white. */
-  --admin-font-primary: #070f21;
-  --admin-font-secondary: #374565;
-  --admin-font-tertiary: #5e6a82;
-  /* The one NON-text tier. It is held to 1.4.11's 3:1 rather than 1.4.3's
-     4.5:1, and that is only defensible because nothing it paints is body text:
-     the inactive sort glyph in `ui/table.tsx` (a graphic that says "this column
-     sorts"), `ui/calendar.tsx`'s outside-month days, and the `:disabled` rules
-     for `button` and `input`/`select`/`textarea` in `index.css` — all three of
-     the latter being disabled controls, which 1.4.3 exempts by name.
-     Placeholders used to wear it and no longer do — a placeholder is text, so
-     `ui/{input,textarea,select,date-picker}` were moved to
-     `--admin-font-tertiary` under #83, and `.nav-section-title` (the rail's
-     section headings AND the command palette's group headings, at 3.25:1 on the
-     white panel) was moved to `--admin-font-section-label` when the guard below
-     learned to read stylesheets. `inkContrast.test.ts` fails if a new
-     `text-fg-light` appears outside the component allowlist, or if any CSS rule
-     paints text with this token from a selector that is not `:disabled`. It is
-     measured on the state-layer composites too: the inactive sort glyph sits in
-     a `<th>`, and a `<thead>`'s row is a `TableRow` like any other, so it prints
-     on the hover tint. 3.02:1 on the darkest composite. */
-  --admin-font-light: #7c879e;
-  --admin-font-section-label: #5e6a82;
-  /* Text on a solid accent fill — the selected nav row in the legacy
-     RoleBasedNav is `color: '#fff'` on `--admin-accent-blue`.
+     The canvas has two grey inks and the app three, because the app has a muted
+     tier for body copy (`--admin-font-secondary`, "body copy, nav row labels")
+     that the canvas spells in `--label`. It sits between the two so the step
+     from heading to description stays visible. */
+  --admin-font-primary: #1d1d1f;
+  --admin-font-secondary: #48484d;
+  --admin-font-tertiary: #6c6c71;
+  --admin-font-light: #89898e;
+  --admin-font-section-label: #6c6c71;
+  /* Text on a solid blue fill — the selected nav row, the primary button.
      ONLY ever place this on `--admin-accent-blue-fill`, never on
      `--admin-accent-blue`. See the accent block below for why. */
   --admin-font-on-accent: #ffffff;
 
   --admin-accent-green: #12945b;
-  --admin-accent-red: #dd0c15;
+  /* DANGER — a destructive action and an error, nothing else (the canvas's
+     `--danger`). Not a result area: Crítica has its own red below. 6.25:1 with
+     white, so it is also the destructive button's fill. */
+  --admin-accent-red: #c4001a;
 
   /* -- State inks: the accent hues, as TEXT -------------------------------
-     Same separation the accent makes below, for the same reason. The three
-     state accents above are *identity* values — hairlines, icons, soft tints,
-     chart series — where 3:1 is the bar. Set as small text they are not
-     legible: measured against this file, `--admin-accent-amber` is 2.80:1 on
-     `--admin-bg-icon-box` and 3.19:1 on `--admin-bg-panel`, and
-     `--admin-accent-green` is 3.31:1 / 3.77:1. The repo's own bar for text is
-     4.5:1 (`badgeVariantContrast.test.ts`), and the words these carry —
-     PROTECTED, ACTIVE, PAST DUE — are 10px, so 4.5 is the right threshold and
-     not 3.0.
+     A second token per hue, for words. Every one clears 4.5:1 against BOTH
+     surfaces a state word lands on (`--admin-bg-panel` and
+     `--admin-bg-icon-box`) in BOTH themes, which `accentInkContrast.test.ts`
+     re-derives from this file.
 
-     So a second token per hue, for ink only. Every one clears 4.5:1 against
-     BOTH surfaces a state word lands on in this product (`--admin-bg-panel`
-     and `--admin-bg-icon-box`) in BOTH themes, which is what
-     `accentInkContrast.test.ts` re-derives from this file.
-
-     Light darkens and dark lightens, because the surfaces invert. The red ink
-     moves in light even though `--admin-accent-red` alone clears 4.5:1 on the
-     panel (4.83:1): it does *not* clear it on the icon box (4.24:1), and one
-     rule for the family is worth more than one exception in it. */
+     `--admin-accent-blue-ink` is the canvas's `--tint` #1d4ed8 — a link, a
+     "live" chip's word, a selected step's label: 6.70:1 on white, 6.15:1 on the
+     recessed grey, 5.83:1 on a selected row. It exists because the identity blue
+     below is deliberately NOT a text ink. */
   --admin-accent-green-ink: #0f7f4e;
   --admin-accent-amber-ink: #9b6210;
-  --admin-accent-red-ink: #dd0c15;
+  --admin-accent-red-ink: #c4001a;
+  --admin-accent-blue-ink: #1d4ed8;
 
-  /* -- The accent is TWO tokens, deliberately (UI-0) ----------------------
-     The old `#2e9098` measures oklch chroma 0.0887, below the 0.1 floor, which
-     is why the product read grey. `#0d9488` (the validated chart teal, chroma
-     0.1038) fixes that — but white on it is only 3.74:1, and this repo's own
-     standard, stated in `badgeVariantContrast.test.ts`, is 4.5:1 for text.
+  /* -- Blue is THREE tokens, deliberately ---------------------------------
+     One colour, one meaning: blue = action, selection, live. It does three jobs
+     and no single value can do all three:
 
-     The two constraints cannot be met by one value on this hue: the lightest
-     hue-matched teal clearing 4.5:1 is `#0e857b`, at chroma 0.0951 — back
-     under the floor. So identity and fill are separated, which is the design's
-     own third principle (colour does one job) rather than a compromise:
+       --admin-accent-blue-fill        #2563eb  the canvas's `--tintbg` and the
+                                       app's blue: the primary button, the selected
+                                       rail row, a checked toggle. White on it is
+                                       5.17:1 in both themes.
+       --admin-accent-blue-fill-hover  #1d4ed8  6.70:1 with white, further from the
+                                       panel than the resting fill. Dark LIGHTENS
+                                       instead (a darkened step would sink into the
+                                       dark panel) — see the dark block.
+       --admin-accent-blue             #3a7af0  IDENTITY: a hairline, an icon, a
+                                       selected border, a radio dot, a chart mark.
+                                       4.02:1 on white — over 3:1 for a graphic,
+                                       deliberately under 4.5:1 so it is never
+                                       mistaken for a text ink (that is
+                                       `--admin-accent-blue-ink`), and 3.25:1
+                                       against the hairline so a switch's on and
+                                       off fills stay tellable.
 
-       --admin-accent-blue       identity: borders, focus ring, icons, tinted
-                                 backgrounds, large/bold text, chart series 1.
-                                 All of those need >=3:1, and it gives 3.74 on
-                                 the light panel and 4.79 on the dark one.
-       --admin-accent-blue-fill  the ONLY surface `--admin-font-on-accent` may
-                                 sit on. 5.47:1 with white in both themes.
-
-     Hover moves in OPPOSITE directions per theme, and that is not an oversight:
-     the light hover `#115e59` is only 2.36:1 against the dark panel `#171717`,
-     so in dark the button would dissolve into the page. Dark therefore lightens
-     instead, to a step that still clears 4.5:1 with white.
-
-     Every number above is measured, not asserted — `accentContrast.test.ts`
-     re-derives all of them from this file and fails if any drifts. */
-  --admin-accent-blue: #4d76c7;
-  --admin-accent-blue-fill: #1b63f4;
-  --admin-accent-blue-fill-hover: #0a53dd;
+     `accentContrast.test.ts` and `controlBoundaryContrast.test.ts` re-derive
+     every number above from this file and fail if any drifts. */
+  --admin-accent-blue: #3a7af0;
+  --admin-accent-blue-fill: #2563eb;
+  --admin-accent-blue-fill-hover: #1d4ed8;
   --admin-accent-purple: #0d7087;
   --admin-accent-amber: #c77e14;
   --admin-accent-orange: #ea580c;
 
   --admin-accent-bg-green: rgba(18, 148, 91, 0.08);
-  --admin-accent-bg-red: rgba(221, 12, 21, 0.08);
-  --admin-accent-bg-blue: rgba(53, 91, 167, 0.08);
+  --admin-accent-bg-red: rgba(196, 0, 26, 0.08);
+  /* The canvas's `--tintsoft`: the blue fill at 10%. */
+  --admin-accent-bg-blue: rgba(37, 99, 235, 0.1);
   --admin-accent-bg-purple: rgba(10, 134, 164, 0.08);
   --admin-accent-bg-amber: rgba(199, 126, 20, 0.08);
   --admin-accent-bg-orange: rgba(249, 115, 22, 0.08);
   --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.04);
-  --admin-accent-bg-blue-subtle: rgba(53, 91, 167, 0.04);
+  --admin-accent-bg-blue-subtle: rgba(37, 99, 235, 0.04);
   --admin-accent-bg-purple-subtle: rgba(10, 134, 164, 0.04);
   --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.04);
 
   --admin-accent-border-green: rgba(18, 148, 91, 0.2);
-  --admin-accent-border-red: rgba(221, 12, 21, 0.2);
-  --admin-accent-border-blue: rgba(53, 91, 167, 0.2);
+  --admin-accent-border-red: rgba(196, 0, 26, 0.2);
+  --admin-accent-border-blue: rgba(37, 99, 235, 0.2);
   --admin-accent-border-purple: rgba(10, 134, 164, 0.2);
   --admin-accent-border-amber: rgba(199, 126, 20, 0.2);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.2);
 
-  /* -- Status-chip fill and ink (UI-0) -----------------------------------
-     A STATUS CHIP'S SURFACE AND THE INK ON IT. Five tones, one per state the
-     design names: good / warning / critical / accent / neutral.
+  /* -- The three result areas -------------------------------------------
+     Fortaleza ▲, Oportunidad ●, Crítica ▼ (product ruling, 1 Oct). The ONLY job
+     green, amber and red have in this product (user ruling, 11 Nov), always shown
+     with the glyph AND the name, never colour alone. WHERE a score falls — which
+     area — is the company's own ResultBands (`charts/resultBands.ts`,
+     docs/decisions/result-bands.md); these tokens only say what each area looks
+     like, never where its boundaries are.
 
-     ## Why the fills are OPAQUE, and are not the `--admin-accent-bg-*` above
+     Three tokens per area, from the canvas:
+       -ink   the word and the number                (`--str` / `--opp` / `--crit`)
+       -bg    the soft ground a chip or a map cell sits on (`--strbg` ...)
+       -fill  a graphic mark: a bar segment, a dot   (`--cstr` / `--copp` / `--ccrit`)
+     plus `--admin-band-track`, the climate bar's track outside the departments'
+     range (`--trk`).
 
-     Every `--admin-accent-bg-*` is a translucent tint — `rgba(16,185,129,.08)`.
-     Translucent means the colour a chip actually renders is a function of what
-     is behind it, and a chip is not on a fixed surface: `ui/table.tsx`'s
-     `TableRow` carries `hover:bg-state-hover`, so the ordinary act of hovering
-     a row repaints the surface under every chip in it.
+     Ink on its own ground: 5.81 / 5.74 / 5.75:1; on white 6.60 / 6.33 / 6.57:1;
+     on a selected row 5.75 / 5.51 / 5.72:1. The fills are GRAPHICS, not text:
+     #30a46c is 3.16:1 and #e5484d 3.91:1 on white, and amber #f5a524 is 2.04:1 —
+     under 1.4.11's 3:1 on its own, which is why a fill never carries the area
+     alone: the chip beside it carries the glyph, the name and the number. */
+  --admin-band-str-ink: #156b32;
+  --admin-band-str-bg: #e6f4ea;
+  --admin-band-str-fill: #30a46c;
+  --admin-band-opp-ink: #8a5300;
+  --admin-band-opp-bg: #fff3d6;
+  --admin-band-opp-fill: #f5a524;
+  --admin-band-crit-ink: #b42318;
+  --admin-band-crit-bg: #fdecea;
+  --admin-band-crit-fill: #e5484d;
+  --admin-band-track: #e5e5ea;
 
-     Measured in Chromium on `/dev/chart-gallery` rather than assumed: hovering
-     a row puts `--admin-bg-hover` rgba(0,0,0,.04) over the #ffffff panel, so
-     the surface is #f5f5f5, the 8% green tint composites to rgb(227,240,236)
-     and #15803d on it is 4.29:1 — under WCAG AA 1.4.3's 4.5 for the chip's
-     11px text. On `--admin-bg-icon-box` #f3f7fb — the recessed surface
-     `charts/KpiTile.tsx` sets every KPI on — the same pairing is 4.34:1.
-     (It was 4.12:1 when both that surface and `--admin-bg-outer` were #f0f0f0.
-     The navy shell moved the recessed surface to a blue-biased near-white and
-     the page ground to #ffffff, so they are no longer the same hex; the tint
-     still lands under 4.5 on both, which is the whole reason for this block.)
+  /* -- Status-chip fill and ink -------------------------------------------
+     A chip's surface and the word on it, five tones: good / warning / critical /
+     accent / neutral.
 
-     So each tone gets its own OPAQUE fill, which is also what the prototype
-     does (`--good-soft:#e7f6ec; --warn-soft:#fdf3e3; --crit-soft:#fdeaea;
-     --accent-soft:#e6f5f3`, and the dark values below, all taken verbatim). An
-     opaque fill renders the same colour on every surface, so the pairing is a
-     property of the chip and cannot be changed by the thing under it.
-     `--admin-chip-bg-neutral` is the exception, and it is a reference rather
-     than a hex: the prototype's neutral chip is `background:var(--panel-2)`,
-     its recessed neutral surface, and this palette's counterpart for that role
-     is `--admin-bg-icon-box`. It stays a reference even now that the two agree
-     on a value — the recolour gave `--admin-bg-icon-box` the employee
-     redesign's own `--panel-2` (#f3f7fb / #18212f) — because what a neutral
-     chip has to match is the recessed surface on the page beside it, whatever
-     that becomes, and not a hex copied from a prototype. Referencing rather
-     than copying is what stopped these two drifting through this change.
+     The fills are OPAQUE. A chip has no fixed ground — `ui/table.tsx` hovers every
+     row — and a translucent fill takes its colour from whatever is under it, so
+     each tone carries its own opaque fill and the ink is measured against that.
 
-     ## The inks
+     One colour, one meaning, by value: `good` / `warning` / `critical` ARE the
+     three result areas (the `--admin-band-*-ink` on `--admin-band-*-bg` pairs,
+     repeated as literals because `respondContrast.test.ts` reads these tokens as
+     colours, and `tokens.test.ts` pins that the two stay equal). A status that is
+     not a result area wears `neutral` (canvas: status chips are grey, except the
+     live one). `accent` is that live chip: the canvas's `.chip.live`, the blue ink
+     on `--tintsoft` composited over white, 5.82:1. `neutral` is the canvas's
+     `.chip`, the 14% system fill over white, with the muted body ink, 7.70:1.
 
-     The prototype's own status inks do not clear 4.5 on its own fills: #15803d
-     on #e7f6ec is 4.49 and #0d9488 on #e6f5f3 is 3.34. Light therefore steps
-     each hue one further down — green-800 #166534 (6.38), amber-800 #92400e
-     (6.45), teal-800 #115e59 (6.76) — and keeps the prototype's #b91c1c, which
-     already measures 5.59. Dark takes the prototype's inks unchanged (#4ade80
-     8.99, #fbbf24 9.22, #f87171 6.19) and uses the identity accent, 5.62 on the
-     dark teal fill.
-
-     Neutral is `--admin-font-secondary` because a neutral chip is body ink on
-     a recessed surface and there is nothing hued to preserve.
-
-     Worst pairing across both themes: 5.59:1, so there is over a point of
-     headroom rather than the 0.14 the translucent fills left. Re-derived from
-     THIS FILE and from the real `ui/chipVariants.ts` class table by
-     `styles/chipVariantContrast.test.ts`, which measures every tone on four
-     surfaces (panel, hovered panel, icon box, hovered icon box) and fails a
-     fill that is not opaque. */
-  --admin-chip-bg-good: #f2faf6;
-  --admin-chip-bg-warning: #fdf9f0;
-  --admin-chip-bg-critical: #fdf5f5;
-  --admin-chip-bg-accent: #ebf0fa;
-  --admin-chip-bg-neutral: var(--admin-bg-icon-box);
-  --admin-chip-ink-good: #0e7246;
-  --admin-chip-ink-warning: #8d590e;
-  --admin-chip-ink-critical: #c70b13;
-  --admin-chip-ink-accent: #355ba7;
+     Worst pairing across both themes: 5.54:1 (accent, dark), over the 5.5 floor
+     `chipVariantContrast.test.ts` holds, which re-derives all ten from this file
+     and from `ui/chipVariants.ts`. */
+  --admin-chip-bg-good: #e6f4ea;
+  --admin-chip-bg-warning: #fff3d6;
+  --admin-chip-bg-critical: #fdecea;
+  --admin-chip-bg-accent: #e9effd;
+  --admin-chip-bg-neutral: #ececee;
+  --admin-chip-ink-good: #156b32;
+  --admin-chip-ink-warning: #8a5300;
+  --admin-chip-ink-critical: #b42318;
+  --admin-chip-ink-accent: #1d4ed8;
   --admin-chip-ink-neutral: var(--admin-font-secondary);
-
   /* -- Data visualisation (#79) -------------------------------------------
      A categorical series palette, because the accent palette above is not one.
      Measured rather than assumed, with the dataviz validator:
@@ -697,6 +678,26 @@
   --admin-chart-div-pos-1-ink: #0b2b3f;
   --admin-chart-div-pos-2-ink: #0b2b3f;
 
+  /* A NEUTRAL ramp for an ordered scale that is not a result: the answer-distribution strip
+     (`DistributionStrip`), 1 = lightest to 5 = darkest. It painted the diverging ramp until
+     12 Nov, red to grey to blue, and the review measured the clash: red is the Crítica area
+     and blue is the action and the live state, and a share of answers is neither. Greys keep
+     the order a reader needs (which end is "agree") without borrowing a meaning.
+
+     Each fill carries its paired ink (the strip prints the count inside the segment), measured
+     at AA for small text by styles/neutralInkContrast.test.ts, which reads this file. Light:
+     dark ink on the three light steps, white on the two dark ones. */
+  --admin-chart-neutral-1: #eef0f4;
+  --admin-chart-neutral-2: #d6d9e0;
+  --admin-chart-neutral-3: #aeb3bf;
+  --admin-chart-neutral-4: #666d7e;
+  --admin-chart-neutral-5: #3f4555;
+  --admin-chart-neutral-1-ink: #070f21;
+  --admin-chart-neutral-2-ink: #070f21;
+  --admin-chart-neutral-3-ink: #070f21;
+  --admin-chart-neutral-4-ink: #ffffff;
+  --admin-chart-neutral-5-ink: #ffffff;
+
   /* Chart furniture. Recessive on purpose -- grid and axes must not compete
      with the marks. The gap colour is the surface, used as the 2px spacer
      between adjacent fills. */
@@ -708,15 +709,20 @@
   --admin-shadow-md: 0 2px 8px rgba(12, 28, 58, 0.08);
   --admin-shadow-lg: 0 10px 34px rgba(12, 28, 58, 0.10);
 
-  /* The legacy focus ring pointed at --ring, which was set to the *lightest*
-     font colour and then wrapped in hsl() — so it computed to nothing and no
-     ring rendered. Fixed here rather than ported: the ring is the blue accent,
-     which clears 3:1 against every surface in both themes. Since the shell went
-     navy the binding surface is `--admin-shell-bg-raised`, at 3.12:1 in light —
-     see the note there, which is where the headroom is spent. */
-  --admin-focus-ring: #407cf7;
-  --admin-focus-ring-width: 2px;
-  --admin-focus-ring-offset: 2px;
+  /* The focus ring. The canvas draws `box-shadow: 0 0 0 3px rgba(37,99,235,.45)`;
+     a translucent ring has no fixed colour, and over white it composites to
+     #9db9f6, 2.02:1 — under WCAG 1.4.11's 3:1 for a focus indicator. So the ring
+     keeps the canvas's 3px and its blue but is SOLID, in the identity blue, and
+     sits 1px off the element so it stays apart from a blue fill: 4.02:1 on white,
+     3.50:1 on a selected row (the binding page ground), 4.29:1 on the navy rail
+     and 3.62:1 on the raised user menu. It stays an `outline`, never a
+     box-shadow, so it survives `overflow: hidden` parents the way the global rule
+     always has, and `styles/inkContrast.test.ts` measures it on every ground.
+     HIG `focus-and-selection.md` § "Best practices": macOS shows focus by drawing
+     a ring around the item. */
+  --admin-focus-ring: #3a7af0;
+  --admin-focus-ring-width: 3px;
+  --admin-focus-ring-offset: 1px;
 }
 
 /* =========================================================================
@@ -725,145 +731,148 @@
 :root[data-admin-theme='dark'] {
   color-scheme: dark;
 
-  --admin-bg-outer: #070d19;
+  /* The canvas's dark `--bg2`. */
+  --admin-bg-outer: #0f1626;
 
-  /* -- The shell, dark ----------------------------------------------------
-     See the light block for the whole argument. The two values that differ here
-     are `--admin-bg-shell`, which deepens so the frame is never the lighter of
-     frame-and-page, and `--admin-shell-font-label`, which follows it down.
-     Everything else is one value across both themes, as it was before. */
-  --admin-bg-shell: #061120;
-  /* The user menu, which opens INSIDE the rail — see the light block. */
-  --admin-shell-bg-raised: #142241;
-  --admin-shell-bg-hover: rgba(255, 255, 255, 0.08);
+  /* -- The frame, dark ----------------------------------------------------
+     The canvas's dark `--chrome` #0a1122 and `--chrome2` #060c19: the same navy
+     hue, deeper, so the frame stays darker than the box (#121a2c). The raised
+     menu lifts 1.19:1, as in light. Ratios are in the light block's table. */
+  --admin-bg-shell: #0a1122;
+  --admin-shell-bg-raised: #16223c;
+  --admin-shell-bg-sunken: #060c19;
+  --admin-shell-bg-hover: rgba(255, 255, 255, 0.06);
   --admin-shell-bg-active: rgba(255, 255, 255, 0.14);
-  --admin-shell-font-strong: #dbdfec;
-  --admin-shell-font: #b9c5dc;
-  --admin-shell-font-label: #869abc;
-  --admin-shell-border: rgba(255, 255, 255, 0.12);
-  /* The dark surfaces are the redesign's own dark block: `--panel #121a26`,
-     `--panel-2 #18212f` and `--icon-box #1d2735`. The LADDER is the one this
-     palette already had -- panel, then a lifted card, then the recessed tile --
-     but the redesign puts its recessed surface BETWEEN the panel and the card
-     rather than above both, which is the light relationship (`#f3f7fb` sits
-     below the white card) finally holding in dark too. `--admin-bg-card` is the
-     step furthest from the panel here, so `--admin-font-tertiary` still fails AA
-     on it (3.91:1) — the pairing `themeDiscipline.test.ts` exists to catch. */
-  --admin-bg-panel: #0d1321;
-  --admin-bg-card: #111d31;
-  --admin-bg-card-hover: #17243c;
-  --admin-bg-input: #111d31;
-  --admin-bg-icon-box: #10192a;
+  --admin-shell-font-strong: #ffffff;
+  --admin-shell-font: #e6eaf2;
+  --admin-shell-font-label: #8e99b3;
+  --admin-shell-border: rgba(255, 255, 255, 0.1);
+
+  /* The canvas's dark box, card and input: `--bg` #121a2c, `--card` #18213a,
+     `--inbg` #1e2842. A card is LIGHTER than the box in dark, which is how a
+     dark UI raises a surface; the recessed tile is the dark `--bg2`, below both. */
+  --admin-bg-panel: #121a2c;
+  --admin-bg-card: #18213a;
+  --admin-bg-card-hover: #1d2742;
+  --admin-bg-input: #1e2842;
+  --admin-bg-icon-box: #0f1626;
   --admin-bg-overlay: rgba(0, 0, 0, 0.5);
   --admin-bg-scrim: rgba(0, 0, 0, 0.5);
+  /* White tints, as before: over the card they composite to #262e46 and
+     #2f374e, the lightest grounds any dark ink prints on. */
   --admin-bg-hover: rgba(255, 255, 255, 0.06);
   --admin-bg-active: rgba(255, 255, 255, 0.1);
+  /* The canvas's dark fills (`--fill`, `--fill2`) and zebra. */
+  --admin-bg-fill: rgba(140, 150, 175, 0.22);
+  --admin-bg-fill-subtle: rgba(140, 150, 175, 0.12);
+  --admin-bg-zebra: rgba(255, 255, 255, 0.025);
 
-  /* Blue-biased, for the reason the light block gives. The redesign's dark
-     `--line #26313f` / `--line-2 #1e2734` and its four dark inks `#eef3f9`,
-     `#a8b6c9`, `#74839a`, `#5d6b80`.
+  /* Lines. The canvas's dark `--sep` is white at 9%, which over the card is
+     #2d354c — opaque here, so a rule is the same line on every surface.
 
-     `--admin-border-panel` is the tightest measurement in this file. The card's
-     edge against the navy shell is carried entirely by the hairline in dark --
-     the panel and the shell are 1.02:1 apart, which is normal for a dark UI --
-     and #26313f on #0a1c31 is **1.3026:1** against shellInkContrast's floor of
-     1.30. Do not darken this token or lighten `--admin-bg-shell` by eye; there
-     is a quarter of a percent of headroom and the test is the only thing that
-     can see it. */
-  --admin-border-default: #1e2c48;
-  --admin-border-hover: #202d4f;
-  /* 3.07:1 on the dark input, card and panel grounds -- see the light block. */
-  --admin-line-control: #536994;
-  --admin-hatch-stripe: #202d4f; /* 1.30:1 on #1b1433; the artboards draw no dark theme */
-  --admin-hatch-ground: #10192a; /* `--admin-bg-icon-box`: the dark hatch shows what it always showed */
-  /* Measured, not by eye: at #1f173b this hairline WAS the card (`--admin-bg-card`
-     #1f173b), so every `border-line-light` / `divide-line-light` / `bg-line-light` drawn
-     on a card -- the Panel de Control's sparkline cards and attention rules, the survey
-     list's row rules and participation track -- vanished in dark. #2a2150 sits 1.151:1
-     off the card, the light palette's own relation (#eeedf6 on #ffffff is 1.162:1), and
-     stays lighter than `--admin-border-default`. */
-  --admin-border-light: #1d2841;
-  --admin-border-panel: #1e2c48;
+     `--admin-border-panel` is the box's edge against the frame, and in dark it is
+     the edge: the box and the frame are 1.08:1 apart, normal for a dark UI, so
+     shellInkContrast holds the hairline at 1.3:1 against both. #2a3450 is 1.41:1
+     on the box and 1.53:1 on the frame. */
+  --admin-border-default: #2d354c;
+  --admin-border-hover: #3a4560;
+  /* 3.57:1 on the dark input (the binding ground), 3.89:1 on a card. */
+  --admin-line-control: #717d9e;
+  --admin-hatch-stripe: #222c44; /* 1.30:1 on the hatch ground */
+  --admin-hatch-ground: #0f1626; /* `--admin-bg-icon-box` */
+  /* Never the card's own colour (tokens.test.ts): 1.18:1 off the card. */
+  --admin-border-light: #252e44;
+  --admin-border-panel: #2a3450;
 
-  /* The same #83 re-valuation, in the other direction: dark ink lightens where
-     light ink darkened. The binding ground is the LIGHTEST thing a dark-theme
-     ink prints on, and that is not `--admin-bg-card-hover` (#223045) but the
-     selected-row tint over a card: `--admin-bg-active` is rgba(255,255,255,.1),
-     which over `--admin-bg-card` composites to #343d49. Four files render a
-     `<Table>` inside a `<Card>` (`ConsentRecordPanel`, `ProfileActivityList`,
-     `DataAccessPanel`, `QuestionResultCard`), so this is a ground the product
-     really prints on. #8b97ab measured 3.72:1 there and 4.26:1 on the hover
-     tint; #697990 measured 2.48:1. The new values clear 4.51:1 and 3.00:1 on
-     that composite, and more on every other surface.
-
-     `--admin-font-light` no longer sits exactly ON 3.00:1. The navy revalue
-     re-solved every ink for constant relative luminance, and 8-bit rounding
-     moved this one by 6e-4 -- enough to read 2.9981:1 against a floor it had
-     been resting precisely on. It is lifted to clear 3.08:1 on the binding
-     ground (`--admin-bg-active` over `--admin-bg-card`) so the next revalue has
-     somewhere to land. */
-  --admin-font-primary: #edf0f9;
-  --admin-font-secondary: #a0acc5;
-  --admin-font-tertiary: #949fb5;
-  --admin-font-light: #6d7f9a;
-  --admin-font-section-label: #949fb5;
+  /* The canvas's dark inks: `--label` #f1f3f8, `--label2` #a3acc2 (tertiary),
+     `--label3` #8e99b3 (the non-text tier), with the muted body tier between.
+     Measured on the lightest ground they print on, the selected-row tint over a
+     card (#2f374e): primary 10.64, secondary 7.42, tertiary 5.20, light 4.14. */
+  --admin-font-primary: #f1f3f8;
+  --admin-font-secondary: #c7cddb;
+  --admin-font-tertiary: #a3acc2;
+  --admin-font-light: #8e99b3;
+  --admin-font-section-label: #a3acc2;
   --admin-font-on-accent: #ffffff;
 
   --admin-accent-green: #10b981;
+  /* The destructive FILL stays a mid red, because the white label sits on it;
+     the red as TEXT is `--admin-accent-red-ink`, below. */
   --admin-accent-red: #ef4444;
-  /* Ink lightens here, where light darkened — see the light block. Amber and
-     green already clear 4.5:1 on both dark surfaces as identity values, so
-     those two inks restate them rather than inventing a step nobody needs; red
-     does not (3.81:1 on `--admin-bg-icon-box`), so it moves. */
   --admin-accent-green-ink: #10b981;
   --admin-accent-amber-ink: #f59e0b;
-  --admin-accent-red-ink: #f87171;
-  /* Dark lifts the identity accent to chroma 0.1230 (7.20:1 on the dark panel);
-     the fill stays the same step as light because white-on-fill contrast is a
-     property of the fill alone, and hover LIGHTENS here — see the light block. */
-  --admin-accent-blue: #5681d2;
-  --admin-accent-blue-fill: #1b63f4;
-  --admin-accent-blue-fill-hover: #2d6ef3;
+  /* The dark red as TEXT. It was the canvas's dark `--danger` #ff7b7b, 6.92:1 on the box, but
+     the word is also printed on the NEUTRAL CHIP (a «Falló» audit row, a «Sin actividad» job
+     on the system page), and #ff7b7b on the dark chip ground #323b54 is 4.43:1 — under AA for
+     a 12px label. Lifted to #ff8f8f: 5.07:1 on the chip, 8.23:1 on the recessed tile, and more
+     on the box; `inkContrast.test.ts` measures all three. */
+  --admin-accent-red-ink: #ff8f8f;
+  /* The canvas's dark `--tint`: 7.71:1 on the box, 5.25:1 on a selected row. */
+  --admin-accent-blue-ink: #7aaeff;
+  /* The fill is the light one, #2563eb, in dark too — the app's one blue, white
+     at 5.17:1 — and hover LIGHTENS to the canvas's dark `--tintbg` #2f6fef
+     (4.52:1 with white, 3.84:1 off the box against the resting fill's 3.36:1),
+     because a darkened hover would sink into the dark box. The identity blue
+     lifts to #60a5fa: 6.83:1 on the box, 4.79:1 against the hairline. */
+  --admin-accent-blue: #60a5fa;
+  --admin-accent-blue-fill: #2563eb;
+  --admin-accent-blue-fill-hover: #2f6fef;
   --admin-accent-purple: #0a86a4;
   --admin-accent-amber: #f59e0b;
   --admin-accent-orange: #f97316;
 
   --admin-accent-bg-green: rgba(16, 185, 129, 0.1);
   --admin-accent-bg-red: rgba(239, 68, 68, 0.1);
-  --admin-accent-bg-blue: rgba(86, 129, 210, 0.1);
+  /* The canvas's dark `--tintsoft`. */
+  --admin-accent-bg-blue: rgba(47, 111, 239, 0.22);
   --admin-accent-bg-purple: rgba(10, 134, 164, 0.1);
   --admin-accent-bg-amber: rgba(245, 158, 11, 0.1);
   --admin-accent-bg-orange: rgba(249, 115, 22, 0.1);
   --admin-accent-bg-green-subtle: rgba(16, 185, 129, 0.05);
-  --admin-accent-bg-blue-subtle: rgba(86, 129, 210, 0.05);
+  --admin-accent-bg-blue-subtle: rgba(47, 111, 239, 0.08);
   --admin-accent-bg-purple-subtle: rgba(10, 134, 164, 0.05);
   --admin-accent-bg-orange-subtle: rgba(249, 115, 22, 0.05);
 
   --admin-accent-border-green: rgba(16, 185, 129, 0.15);
   --admin-accent-border-red: rgba(239, 68, 68, 0.15);
-  --admin-accent-border-blue: rgba(86, 129, 210, 0.15);
+  --admin-accent-border-blue: rgba(96, 165, 250, 0.3);
   --admin-accent-border-purple: rgba(10, 134, 164, 0.15);
   --admin-accent-border-amber: rgba(245, 158, 11, 0.15);
   --admin-accent-border-orange: rgba(249, 115, 22, 0.15);
 
-  /* Status-chip fill and ink, dark. The prototype's own dark chip values,
-     verbatim: `--good-soft:#10281a --warn-soft:#2e2310 --crit-soft:#2e1414
-     --accent-soft:#10312e` under `--good:#4ade80 --warn:#fbbf24
-     --crit:#f87171 --accent:#14b8a6`. They measure 8.99 / 9.22 / 6.19 / 5.62,
-     so unlike light no step was needed. Opaque for the same reason as light —
-     see the light block for the whole argument. `accent` can be the identity
-     `--admin-accent-blue` here because the fill is dark. */
-  --admin-chip-bg-good: #10281a;
-  --admin-chip-bg-warning: #2e2310;
-  --admin-chip-bg-critical: #2e1414;
-  --admin-chip-bg-accent: #0d1727;
-  --admin-chip-bg-neutral: var(--admin-bg-icon-box);
-  --admin-chip-ink-good: #4ade80;
-  --admin-chip-ink-warning: #fbbf24;
-  --admin-chip-ink-critical: #f87171;
-  --admin-chip-ink-accent: #6a90d8;
+  /* The three result areas, dark. The canvas's dark inks and fills; its soft
+     grounds are translucent (`rgba(48,209,88,.15)` …), so they are carried here
+     as their composite over the dark card, which is where a chip or a map cell
+     sits — opaque, for the reason the light chip block gives. Ink on ground:
+     6.66 / 7.78 / 5.89:1; on the box 9.62 / 11.57 / 7.60:1. */
+  --admin-band-str-ink: #6bd68f;
+  --admin-band-str-bg: #1c3b3f;
+  --admin-band-str-fill: #30a46c;
+  --admin-band-opp-ink: #ffcc4d;
+  --admin-band-opp-bg: #383932;
+  --admin-band-opp-fill: #e59a14;
+  --admin-band-crit-ink: #ff8a80;
+  --admin-band-crit-bg: #3f273a;
+  --admin-band-crit-fill: #e5484d;
+  --admin-band-track: #2e3a57;
+
+  /* Status chips, dark: the result areas above, the live chip (the dark tint ink
+     on `--tintsoft` over the card, 5.54:1, the worst pairing in either theme) and
+     the neutral chip (the dark 22% fill over the card under the muted ink, 6.98:1). */
+  --admin-chip-bg-good: #1c3b3f;
+  --admin-chip-bg-warning: #383932;
+  --admin-chip-bg-critical: #3f273a;
+  --admin-chip-bg-accent: #1d3262;
+  --admin-chip-bg-neutral: #323b54;
+  --admin-chip-ink-good: #6bd68f;
+  --admin-chip-ink-warning: #ffcc4d;
+  --admin-chip-ink-critical: #ff8a80;
+  --admin-chip-ink-accent: #7aaeff;
   --admin-chip-ink-neutral: var(--admin-font-secondary);
 
+  /* The focus ring, dark: the identity blue again, 4.65:1 on the lightest dark
+     ground (a selected row on a card) and 6.22:1 on the raised user menu. */
+  --admin-focus-ring: #60a5fa;
   /* -- Data visualisation, dark ------------------------------------------
      SELECTED for the dark surface, not flipped from light. The dark band is
      narrower (L 0.48-0.67 vs 0.43-0.77), so the light steps fail it: teal-500
@@ -925,11 +934,25 @@
   --admin-chart-div-pos-1-ink: #f0fdfa;
   --admin-chart-div-pos-2-ink: #02100f;
 
+  /* The neutral ramp in dark: 1 sits nearest the card, 5 is the lightest. Light ink on the
+     three dark steps, dark ink on the two light ones -- inverted against light, as the
+     diverging inks are. */
+  --admin-chart-neutral-1: #293042;
+  --admin-chart-neutral-2: #3b4256;
+  --admin-chart-neutral-3: #5b6276;
+  --admin-chart-neutral-4: #9aa2b5;
+  --admin-chart-neutral-5: #d2d7e2;
+  --admin-chart-neutral-1-ink: #f0f3f8;
+  --admin-chart-neutral-2-ink: #f0f3f8;
+  --admin-chart-neutral-3-ink: #f0f3f8;
+  --admin-chart-neutral-4-ink: #070f21;
+  --admin-chart-neutral-5-ink: #070f21;
+
   --admin-chart-grid: #1e2734;
   --admin-chart-axis: #74839a;
   /* The 2px spacer between adjacent fills IS the surface, so it follows
      `--admin-bg-panel`. Left at #171717 it would have been a visible seam. */
-  --admin-chart-surface-gap: #121a26;
+  --admin-chart-surface-gap: #121a2c;
 
   --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --admin-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);

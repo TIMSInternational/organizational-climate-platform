@@ -4,6 +4,7 @@ import { useCompanyName } from '../../../../company-context/useCompanyName'
 import { listDepartments, type Department } from '../../api/departments'
 import { listInvitations, type Invitation } from '../../api/invitations'
 import { listUsers, type User } from '../../api/users'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface AdminUsersState {
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -71,7 +72,7 @@ export function useAdminUsersModel(companyId: string | undefined, enabled: boole
         setStatus('ready')
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       }
     }

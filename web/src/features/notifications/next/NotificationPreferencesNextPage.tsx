@@ -1,11 +1,10 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Check, Clock, Inbox, Lock, Mail, Smartphone } from 'lucide-react'
-import { PageTopBar } from '../../../components/layout'
-import { Alert, AlertDescription, Button, LoadingRegion, NetworkError, SkeletonText, Switch, Table } from '../../../components/ui'
+import { PageHeader } from '../../../components/layout'
+import { Alert, AlertDescription, Button, Chip, LoadingRegion, LoadingState, NetworkError, Switch } from '../../../components/ui'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { cn } from '../../../lib/cn'
-import { CanvasChip, CanvasSelect, IconBox, Panel } from '../../org-structure/next/super/parts'
+import { CanvasSelect, IconBox, Panel } from '../../org-structure/next/super/parts'
 import AccountTabs from '../../profile/next/AccountTabs'
 import { DIGEST_FREQUENCIES, type DigestFrequency, type NotificationPreferences } from '../api/notificationPreferences'
 import { useNotificationPreferencesModel } from './useNotificationPreferencesModel'
@@ -56,8 +55,8 @@ function savedSummary(t: TranslateFn, saved: NotificationPreferences): string {
  *
  * Channel × event as one compact table: the four configurable emails with their switch, the
  * in-app inbox beside each as the thing that never turns off, the account and security mail
- * that is always sent, and the digest frequency — with one "Guardar" and "Descartar", live as
- * the artboard draws them: "Guardar" sends the table as it stands (the saved values again when
+ * that is always sent, and the digest frequency — with one "Guardar" and "Descartar" in the
+ * list's own footer (as every block of Tu perfil saves in its own), live as the artboard draws them: "Guardar" sends the table as it stands (the saved values again when
  * nothing moved, which the server stores unchanged), "Descartar" puts back what the account
  * holds, and the line under the tabs says whether anything is unsaved. Nothing is pre-filled
  * from a default: the table waits for the saved values. The platform sends no push and no SMS,
@@ -99,33 +98,16 @@ export default function NotificationPreferencesNextPage() {
 
   return (
     <div className="flex flex-col gap-section">
-      <div className="-mb-6">
-        <PageTopBar
-          eyebrow={t('notifications.preferences.eyebrow')}
-          title={t('notifications.preferences.title')}
-          description={t('notifications.next.prefs.description')}
-          actions={
-            state.status === 'ready' ? (
-              <>
-                <Button type="button" variant="outline" disabled={saving} onClick={() => setDraft(state.saved)}>
-                  {t('notifications.next.prefs.discard')}
-                </Button>
-                <Button type="button" variant="primary" disabled={saving} onClick={() => void save()}>
-                  <Check aria-hidden="true" />
-                  {t('notifications.next.prefs.save')}
-                </Button>
-              </>
-            ) : undefined
-          }
-        />
-      </div>
+      {/* One title for the three account pages (Tu perfil · Notificaciones · Privacidad), so
+          switching tabs moves neither the title nor the actions; the tab says which page. */}
+      <PageHeader className="mb-0" title={t('profile.next.tabs.label')} description={t('notifications.next.prefs.description')} />
       <AccountTabs />
       {state.status === 'error' ? (
         <NetworkError title={t('notifications.preferences.loadError')} description={state.error ?? undefined} onRetry={state.retry} retryText={t('common.retry')} />
       ) : (
         <LoadingRegion loading={state.status === 'loading' || draft === null} label={t('common.loading')}>
           {state.saved === null || draft === null ? (
-            <SkeletonText lines={6} />
+            <LoadingState rows={6} />
           ) : (
             <div className="flex flex-col gap-4">
               {saveError && (
@@ -134,7 +116,7 @@ export default function NotificationPreferencesNextPage() {
                 </Alert>
               )}
               <p className="m-0 flex items-start gap-2 text-sm text-fg-secondary" data-slot="saved-state">
-                <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-green-ink" />
+                <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-blue" />
                 <span>
                   {justSaved ? t('notifications.preferences.saved') : null}
                   {justSaved ? ' ' : null}
@@ -143,7 +125,23 @@ export default function NotificationPreferencesNextPage() {
                 </span>
               </p>
               <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_23.5rem]">
-                <PreferencesTable draft={draft} onChange={update} />
+                <PreferencesTable
+                  draft={draft}
+                  onChange={update}
+                  footer={
+                    // Saved in the card's footer, as each block of Tu perfil is: the save
+                    // belongs to the list it saves, not to the page header.
+                    <>
+                      <Button type="button" variant="ghost" disabled={saving} onClick={() => setDraft(state.saved)}>
+                        {t('notifications.next.prefs.discard')}
+                      </Button>
+                      <Button type="button" variant="outline" disabled={saving} onClick={() => void save()}>
+                        <Check aria-hidden="true" />
+                        {t('notifications.next.prefs.save')}
+                      </Button>
+                    </>
+                  }
+                />
                 <HowItIsDecided />
               </div>
             </div>
@@ -154,124 +152,102 @@ export default function NotificationPreferencesNextPage() {
   )
 }
 
-/**
- * Below `sm` the table stacks: each row becomes a block -- the label and description, then
- * its email switch, then the in-app note -- and the column headers give way to a small label
- * inside each cell (`CellLabel`). It was a 40rem-wide table in a horizontal scroller, and on a
- * 390px phone the scroller clipped the Correo column off the card, so an employee who opened
- * this page from the footer of a notification email could read every row and change none
- * (G26 follow-up, 2026-10-22). From `sm` up it is the same table it always was.
- */
-const ROW = 'block border-b border-line-light py-1 sm:table-row sm:py-0'
-const TD = 'block border-b-0 px-4 py-1.5 align-middle sm:table-cell sm:border-b sm:py-3'
-
-/** The column header, restated inside the cell where the header row is hidden. */
-function CellLabel({ children }: { children: string }) {
-  return <span className="mb-1 block text-2xs font-bold uppercase tracking-label text-fg-tertiary sm:hidden">{children}</span>
-}
-
-const TH = 'border-b border-line-default px-4 pb-2 pt-1 text-left text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
-
-function InApp() {
-  const { t } = useTranslation()
+/** One row of the grouped list: the notice and what it covers, its control trailing. */
+function ListRow({ pref, children, control }: { pref?: string; children: ReactNode; control: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm text-fg-tertiary">
-      <Inbox aria-hidden="true" className="size-3.5" />
-      {t('notifications.next.prefs.inAppAlways')}
-    </span>
+    <li
+      data-pref={pref}
+      className="m-0 flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line-default px-5 py-3 first:border-t-0"
+    >
+      <div className="flex min-w-0 flex-1 basis-60 flex-col gap-0.5">{children}</div>
+      <div className="flex shrink-0 items-center gap-2.5">{control}</div>
+    </li>
   )
 }
 
-function PreferencesTable({ draft, onChange }: { draft: NotificationPreferences; onChange: (patch: Partial<NotificationPreferences>) => void }) {
+/**
+ * The email notices as a settings pane draws them — a grouped list, one row per notice, its
+ * switch on the trailing edge with the word that says what it does (HIG `toggles.md` › Best
+ * practices; `lists-and-tables.md`). The in-app column of the old table said the same thing on
+ * every row ("No se apaga"), so it is said once, under the list.
+ */
+function PreferencesTable({
+  draft,
+  onChange,
+  footer,
+}: {
+  draft: NotificationPreferences
+  onChange: (patch: Partial<NotificationPreferences>) => void
+  footer: ReactNode
+}) {
   const { t } = useTranslation()
   const digestId = useId()
   return (
-    <section aria-labelledby="prefs-table" className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-sm">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 pt-4 pb-2">
-        <h2 id="prefs-table" className="m-0 text-2xl">
+    <section aria-labelledby="prefs-table" className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line-panel bg-surface-card">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-5 pt-4.5 pb-3">
+        <h2 id="prefs-table" className="m-0 text-2xl leading-tight">
           {t('notifications.next.prefs.tableHeading')}
         </h2>
-        <span className="text-xs text-fg-tertiary">{t('notifications.next.prefs.tableMeta')}</span>
+        <span className="text-sm text-fg-tertiary">{t('notifications.next.prefs.tableMeta')}</span>
       </div>
-      <div className="overflow-x-auto">
-        <Table className="sm:min-w-[40rem]">
-          <thead className="hidden sm:table-header-group">
-            <tr>
-              <th className={TH}>{t('notifications.next.prefs.colAviso')}</th>
-              <th className={cn(TH, 'w-40')}>{t('notifications.next.prefs.colEmail')}</th>
-              <th className={cn(TH, 'w-36')}>{t('notifications.next.prefs.colInApp')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {EMAILS.map(({ key, name, description }) => {
-              const switchId = `pref-${key}`
-              return (
-                <tr key={key} data-pref={key} className={ROW}>
-                  <td className={TD}>
-                    <label htmlFor={switchId} className="m-0 flex flex-col gap-0.5">
-                      <span className="text-sm font-semibold text-fg-primary">{t(name)}</span>
-                      <span className="text-xs leading-snug text-fg-tertiary">{t(description)}</span>
-                    </label>
-                  </td>
-                  <td className={TD}>
-                    <CellLabel>{t('notifications.next.prefs.colEmail')}</CellLabel>
-                    <span className="inline-flex items-center gap-2 text-sm text-fg-secondary">
-                      <Switch
-                        id={switchId}
-                        checked={draft[key]}
-                        onCheckedChange={(checked) => onChange({ [key]: checked })}
-                        className="data-[state=checked]:bg-accent-green"
-                      />
-                      {draft[key] ? t('notifications.next.prefs.receives') : t('notifications.next.prefs.doesNotReceive')}
-                    </span>
-                  </td>
-                  <td className={TD}>
-                    <CellLabel>{t('notifications.next.prefs.colInApp')}</CellLabel>
-                    <InApp />
-                  </td>
-                </tr>
-              )
-            })}
-            <tr className={ROW}>
-              <td className={TD}>
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-sm font-semibold text-fg-primary">{t('notifications.next.prefs.systemName')}</span>
-                  <span className="text-xs leading-snug text-fg-tertiary">{t('notifications.next.prefs.systemDescription')}</span>
-                </span>
-              </td>
-              <td className={TD}>
-                <CellLabel>{t('notifications.next.prefs.colEmail')}</CellLabel>
-                <CanvasChip tone="neutral" icon={<Lock className="size-3" />} label={t('notifications.next.prefs.alwaysSent')} />
-              </td>
-              <td className={TD}>
-                <CellLabel>{t('notifications.next.prefs.colInApp')}</CellLabel>
-                <InApp />
-              </td>
-            </tr>
-            <tr className={cn(ROW, 'border-b-0 bg-surface-icon-box/60')}>
-              <td className={TD}>
-                <label htmlFor={digestId} className="m-0 flex flex-col gap-0.5">
-                  <span className="text-sm font-semibold text-fg-primary">{t('notifications.preferences.digestTitle')}</span>
-                  <span className="text-xs leading-snug text-fg-tertiary">{t('notifications.preferences.digestDescription')}</span>
-                </label>
-              </td>
-              <td className={cn(TD, 'pb-3')} colSpan={2}>
-                <CanvasSelect
-                  id={digestId}
-                  className="w-36"
-                  value={draft.digestFrequency}
-                  onChange={(event) => onChange({ digestFrequency: event.target.value as DigestFrequency })}
-                >
-                  {DIGEST_FREQUENCIES.map((frequency) => (
-                    <option key={frequency} value={frequency}>
-                      {t(DIGEST_KEY[frequency])}
-                    </option>
-                  ))}
-                </CanvasSelect>
-              </td>
-            </tr>
-          </tbody>
-        </Table>
+      <ul data-slot="prefs-list" className="m-0 list-none border-y border-line-default p-0">
+        {EMAILS.map(({ key, name, description }) => {
+          const switchId = `pref-${key}`
+          return (
+            <ListRow
+              key={key}
+              pref={key}
+              control={
+                <>
+                  <span className="text-sm text-fg-secondary">
+                    {draft[key] ? t('notifications.next.prefs.receives') : t('notifications.next.prefs.doesNotReceive')}
+                  </span>
+                  {/* Blue when on, from the primitive: green is Fortaleza, never a switch. */}
+                  <Switch id={switchId} checked={draft[key]} onCheckedChange={(checked) => onChange({ [key]: checked })} />
+                </>
+              }
+            >
+              <label htmlFor={switchId} className="m-0 flex flex-col gap-0.5 font-normal">
+                <span className="text-base font-medium text-fg-primary">{t(name)}</span>
+                <span className="text-sm leading-snug text-fg-tertiary">{t(description)}</span>
+              </label>
+            </ListRow>
+          )
+        })}
+        <ListRow
+          control={<Chip tone="neutral" icon={<Lock />} label={t('notifications.next.prefs.alwaysSent')} />}
+        >
+          <span className="text-base font-medium text-fg-primary">{t('notifications.next.prefs.systemName')}</span>
+          <span className="text-sm leading-snug text-fg-tertiary">{t('notifications.next.prefs.systemDescription')}</span>
+        </ListRow>
+        <ListRow
+          control={
+            <CanvasSelect
+              id={digestId}
+              className="w-36"
+              value={draft.digestFrequency}
+              onChange={(event) => onChange({ digestFrequency: event.target.value as DigestFrequency })}
+            >
+              {DIGEST_FREQUENCIES.map((frequency) => (
+                <option key={frequency} value={frequency}>
+                  {t(DIGEST_KEY[frequency])}
+                </option>
+              ))}
+            </CanvasSelect>
+          }
+        >
+          <label htmlFor={digestId} className="m-0 flex flex-col gap-0.5 font-normal">
+            <span className="text-base font-medium text-fg-primary">{t('notifications.preferences.digestTitle')}</span>
+            <span className="text-sm leading-snug text-fg-tertiary">{t('notifications.preferences.digestDescription')}</span>
+          </label>
+        </ListRow>
+      </ul>
+      <p data-slot="in-app-note" className="m-0 flex items-start gap-2 px-5 py-3 text-sm text-fg-tertiary">
+        <Inbox aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        {t('notifications.next.prefs.inAppFooter')}
+      </p>
+      <div data-slot="prefs-actions" className="flex flex-wrap justify-end gap-2 border-t border-line-light px-5 py-3">
+        {footer}
       </div>
     </section>
   )
@@ -287,6 +263,7 @@ function HowItIsDecided() {
   ]
   return (
     <Panel
+      className="border-line-panel shadow-none py-4.5"
       labelledBy="prefs-how"
       heading={
         <h2 id="prefs-how" className="m-0 text-2xl">

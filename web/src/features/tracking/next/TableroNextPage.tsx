@@ -17,6 +17,7 @@ import type { TableroModel, TableroPlanCard } from './model'
 import { InfoBox, NodoTile, ProgressTrack } from './parts'
 import { useTableroModel, type TableroState } from './useTableroModel'
 import { byCount } from '../../../i18n/plural'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** "1 verde", "0 amarillo", "0 rojo" — the board's tile counts each state by its colour word. */
 const COUNT_KEY: Record<keyof SemaforoCounts, string> = {
@@ -453,7 +454,7 @@ function AvanceInlineForm({
       })
       setComentario('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSaving(false)
     }

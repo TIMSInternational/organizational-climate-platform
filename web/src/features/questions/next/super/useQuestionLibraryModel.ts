@@ -18,6 +18,7 @@ import {
   type CreateQuestionCategoryInput,
 } from '../../api/questionLibraryAdmin'
 import { categoryTree, createBody, itemsIn, updateBody, type CategoryTree, type LibraryDraft } from './libraryDerive'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface QuestionLibraryModelState {
   loading: boolean
@@ -79,7 +80,7 @@ export function useQuestionLibraryModel(): QuestionLibraryModelState {
       // Keep what the reader had open; otherwise open the first category and its first row.
       setSelectedCategoryId((current) => (current && cats.some((c) => c.id === current) ? current : (cats[0]?.id ?? null)))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('errors.generic'))
+      setError(describeApiError(cause, t))
     } finally {
       setLoading(false)
     }
@@ -129,7 +130,7 @@ export function useQuestionLibraryModel(): QuestionLibraryModelState {
         if (cancelled) return
         // No editor from a list row: that is the very PUT which wipes tags and options.
         setDetail(null)
-        setDetailError(cause instanceof Error ? cause.message : t('errors.generic'))
+        setDetailError(describeApiError(cause, t))
       })
     return () => {
       cancelled = true
@@ -160,7 +161,7 @@ export function useQuestionLibraryModel(): QuestionLibraryModelState {
         await reload()
         return true
       } catch (cause) {
-        setFormError(cause instanceof Error ? cause.message : t('errors.generic'))
+        setFormError(describeApiError(cause, t))
         return false
       } finally {
         setSaving(false)
@@ -179,7 +180,7 @@ export function useQuestionLibraryModel(): QuestionLibraryModelState {
         setSelectedCategoryId(created.id)
         return true
       } catch (cause) {
-        setFormError(cause instanceof Error ? cause.message : t('errors.generic'))
+        setFormError(describeApiError(cause, t))
         return false
       } finally {
         setSaving(false)

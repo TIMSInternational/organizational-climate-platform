@@ -49,7 +49,7 @@
       "surveyEndDate": "2026-03-31T00:00:00+00:00",
       "respondentCount": 23,
       "isSuppressed": false,
-      "minimumGroupSize": 5,
+      "minimumGroupSize": 3,
       "dimensions": [
         {
           "dimension": "Collaboration",

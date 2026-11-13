@@ -127,6 +127,8 @@ interface Options {
   /** The `nodoId` claim: the department's id for a node leader, `unassigned-c1` for none. */
   nodoId?: string
   role?: string
+  /** A last edit to the composed model, for a shape the composer would not produce. */
+  edit?: (model: ReturnType<typeof composeLeaderDashboard>) => ReturnType<typeof composeLeaderDashboard>
 }
 
 function renderLeader({
@@ -135,16 +137,17 @@ function renderLeader({
   trackingOn = true,
   nodoId = DEPARTMENT,
   role = 'leader',
+  edit = (model) => model,
 }: Options = {}) {
   setToken(tokenFor({ sub: 'luis', name: 'Luis Mora', role, companyId: 'c1', nodoId }))
-  const model = composeLeaderDashboard({
+  const model = edit(composeLeaderDashboard({
     department: dashboard,
     tablero,
     trackingOn,
     viewer: { personaExternalId: 'luis', name: 'Luis Mora' },
     asOf: '2026-09-11T15:00:00.000Z',
     bands: DEFAULT_RESULT_BANDS,
-  })
+  }))
   return render(
     <TranslationProvider>
       <MemoryRouter initialEntries={['/dashboard']}>
@@ -163,10 +166,22 @@ function card(headingName: string): HTMLElement {
   return section
 }
 
+/** One dimension's row of the climate range bar (the TeamHome board's `.cb`). */
 function dimensionCard(key: string): HTMLElement {
-  const found = document.querySelector<HTMLElement>(`[data-slot="team-dimension"][data-dimension="${key}"]`)
-  if (!found) throw new Error(`no card for ${key}`)
+  const found = document.querySelector<HTMLElement>(`[data-slot="team-dimensions"] li[data-dimension="${key}"]`)
+  if (!found) throw new Error(`no row for ${key}`)
   return found
+}
+
+/** The value the row prints at its end, beside the band chip. */
+function rowReading(key: string): string {
+  const end = dimensionCard(key).lastElementChild as HTMLElement
+  return end.querySelector('.tabular-nums')?.textContent ?? ''
+}
+
+/** The caption under the row's name: the organisation's reading and the team's move. */
+function rowCaption(key: string): string {
+  return dimensionCard(key).firstElementChild?.querySelectorAll('span')[1]?.textContent ?? ''
 }
 
 function legend(): HTMLElement {
@@ -184,7 +199,10 @@ describe('LeaderDashboardView', () => {
   it("draws the artboard's regions: the team's place, the comparison, the plan and the open wave", () => {
     renderLeader()
 
-    expect(screen.getByRole('heading', { level: 1, name: en.dashboard.next.title })).toBeTruthy()
+    // Named for the team, as the rail's "Mi equipo" and the TeamHome board's "Su equipo":
+    // the admin's "Panel de control" did not say this page is one team's.
+    expect(screen.getByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
+    expect(screen.queryByRole('heading', { level: 1, name: en.dashboard.next.title })).toBeNull()
     expect(screen.getByText(`Ingeniería · ${en.users.leader}`)).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: copy.whereHeading })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: copy.compareHeading })).toBeTruthy()
@@ -192,37 +210,58 @@ describe('LeaderDashboardView', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: copy.participationHeading.replace('{wave}', 'Q4') }),
     ).toBeTruthy()
-    // Six dimension cards, in the server's order.
-    const cards = [...document.querySelectorAll<HTMLElement>('[data-slot="team-dimension"]')]
+    // Six dimension rows of the climate range bar, in the server's order.
+    const cards = [...document.querySelectorAll<HTMLElement>('[data-slot="team-dimensions"] li[data-dimension]')]
     expect(cards.map((node) => node.dataset.dimension)).toEqual(KEYS)
   })
 
   /**
-   * Seguridad psicológica: the team's 4,00 against the whole company's 3,75. The raw
-   * difference, 0,25, rounds to +0,3 beside two printed readings — 4,0 and 3,8 — that a reader
-   * subtracts to 0,2. The page prints the difference of what it prints.
+   * Activa is the one blue status chip (the user's ruling of 11 Nov): blue means live, and
+   * green is Fortaleza's — a result area — so an open wave must not wear it. It used to be
+   * the `good` tone, the same green as the "Área de fortaleza" chips in the cards above it.
+   */
+  it('marks the open wave Activa with the blue live chip, not the strength area’s green', () => {
+    renderLeader()
+
+    const row = document.querySelector<HTMLElement>('[data-slot="team-open-survey"]')
+    if (!row) throw new Error('no open survey row')
+    const chip = within(row).getByText(copy.surveyActive)
+    expect(chip.getAttribute('data-live')).toBe('true')
+    const classes = chip.className.split(/\s+/)
+    expect(classes).toContain('bg-chip-accent-fill')
+    expect(classes).not.toContain('bg-chip-good-fill')
+  })
+
+  /**
+   * Seguridad psicológica: the team's 4,00 against the whole company's 3,75, at the two
+   * decimals the climate range bar prints on every home (fix round 1: the leader's bar said
+   * 4,3 where the admin's said 3,92). The move is the difference of what the page prints.
    */
   it('prints each move against the organisation as the difference of the printed readings', () => {
     renderLeader()
 
-    const safety = dimensionCard('psychological_safety')
-    expect(within(safety).getByText('4.0', { selector: '[data-slot="team-reading"]' })).toBeTruthy()
-    expect(within(safety).getByText('+0.2', { selector: '[data-slot="team-move"]' })).toBeTruthy()
-    // Pertenencia 4,33 against 4,00: +0,3. Reconocimiento 3,50 against 3,38: 3,5 − 3,4 = +0,1.
-    expect(within(dimensionCard('belonging')).getByText('+0.3', { selector: '[data-slot="team-move"]' })).toBeTruthy()
-    expect(within(dimensionCard('recognition')).getByText('+0.1', { selector: '[data-slot="team-move"]' })).toBeTruthy()
+    expect(rowReading('psychological_safety')).toBe('4.00')
+    const caption = (org: string, move: string) => copy.compareCaption.replace('{org}', org).replace('{move}', move)
+    expect(rowCaption('psychological_safety')).toBe(caption('3.75', '+0.25'))
+    // Pertenencia 4,33 against 4,00: +0,33. Reconocimiento 3,50 against 3,38: +0,12.
+    expect(rowCaption('belonging')).toBe(caption('4.00', '+0.33'))
+    expect(rowCaption('recognition')).toBe(caption('3.38', '+0.12'))
+    // The organisation's mean is the tick on the track, and named for AT.
+    const track = dimensionCard('psychological_safety').querySelector('[role="img"]')!
+    expect(track.querySelector('[data-comparison]')).not.toBeNull()
+    expect(track.getAttribute('aria-label')).toContain(`${copy.orgName} 3.75`)
   })
 
   it('gives no move a colour or a sign: level is level', () => {
-    // Pertenencia 4,33 against a company 4,34: both print 4,3. Desarrollo 4,17 against 4,40:
-    // 4,2 − 4,4 = −0,2, in red.
-    renderLeader({ dashboard: department({ climate: climate(Q3, { organization: organization([4.34, 4.4, 3.75, 3.38, 3.67, 3.33]) }) }) })
+    // Pertenencia 4,33 against a company 4,334: both print 4,33. Desarrollo 4,17 against
+    // 4,40: −0,23. The move is words in the caption's neutral ink: green and red are
+    // result areas (ruling 11 Nov), never a direction.
+    renderLeader({ dashboard: department({ climate: climate(Q3, { organization: organization([4.334, 4.4, 3.75, 3.38, 3.67, 3.33]) }) }) })
 
-    const level = within(dimensionCard('belonging')).getByText('0.0', { selector: '[data-slot="team-move"]' })
-    expect(level.dataset.direction).toBe('level')
-    expect(level.className).not.toMatch(/accent-(green|red)/)
-    const down = within(dimensionCard('growth')).getByText('-0.2', { selector: '[data-slot="team-move"]' })
-    expect(down.className).toMatch(/accent-red/)
+    const caption = (org: string, move: string) => copy.compareCaption.replace('{org}', org).replace('{move}', move)
+    expect(rowCaption('belonging')).toBe(caption('4.33', '0.00'))
+    expect(rowCaption('growth')).toBe(caption('4.40', '-0.23'))
+    expect(dimensionCard('growth').innerHTML).not.toMatch(/accent-(green|red)/)
   })
 
   /**
@@ -237,22 +276,26 @@ describe('LeaderDashboardView', () => {
   it('reads every cell in the company’s bands, and offers a plan only outside the strength area', () => {
     renderLeader()
 
-    expect(dimensionCard('recognition').dataset.band).toBe('opportunity')
-    expect(dimensionCard('workload').dataset.band).toBe('opportunity')
-    expect(dimensionCard('belonging').dataset.band).toBe('strength')
-    expect(document.querySelectorAll('[data-slot="team-dimension"][class*="accent-red-soft"]')).toHaveLength(0)
+    // The bar's chip names each row's area in the company's bands, by its one full name.
     expect(within(dimensionCard('recognition')).getByText(en.resultBands.name.opportunity)).toBeTruthy()
+    expect(within(dimensionCard('workload')).getByText(en.resultBands.name.opportunity)).toBeTruthy()
     expect(within(dimensionCard('belonging')).getByText(en.resultBands.name.strength)).toBeTruthy()
-    const create = within(dimensionCard('recognition')).getByRole('link', { name: copy.createPlanFor.replace('{dimension}', 'Recognition') })
+    // A plan is offered for exactly the two rows outside the strength area, each by name.
+    const offers = [...document.querySelectorAll<HTMLElement>('[data-slot="team-plan-offer"]')]
+    expect(offers.map((offer) => [offer.dataset.dimension, offer.dataset.band])).toEqual([
+      ['recognition', 'opportunity'],
+      ['workload', 'opportunity'],
+    ])
+    const create = screen.getByRole('link', { name: copy.createPlanFor.replace('{dimension}', 'Recognition') })
     expect(create.getAttribute('href')).toBe('/tracking/planes')
     expect(screen.getAllByRole('link', { name: /^Create a plan for/ })).toHaveLength(2)
     cleanup()
 
-    // A critical reading tints its whole card and names the critical area.
+    // A critical reading is named in the critical area, and is offered a plan.
     renderLeader({ dashboard: department({ climate: climate([4.33, 4.17, 4, 2.8, 4, 3.67]) }) })
-    const critical = dimensionCard('recognition')
+    expect(within(dimensionCard('recognition')).getByText(en.resultBands.name.critical)).toBeTruthy()
+    const critical = document.querySelector<HTMLElement>('[data-slot="team-plan-offer"][data-dimension="recognition"]')!
     expect(critical.dataset.band).toBe('critical')
-    expect(critical.className).toMatch(/accent-red-soft/)
     expect(within(critical).getByText(en.resultBands.name.critical)).toBeTruthy()
   })
 
@@ -267,6 +310,7 @@ describe('LeaderDashboardView', () => {
     const recognition = dimensionCard('recognition')
     expect(within(recognition).getByText(en.resultBands.name.opportunity)).toBeTruthy()
     expect(screen.queryByRole('link', { name: /^Create a plan for/ })).toBeNull()
+    expect(document.querySelector('[data-slot="team-plan-offers"]')).toBeNull()
     expect(screen.queryByText(en.resultBands.leader.planRule.replace('{band}', en.resultBands.name.strength))).toBeNull()
   })
 
@@ -298,9 +342,11 @@ describe('LeaderDashboardView', () => {
     // scale, which is everyone's and no group's — so the grid is what is searched.
     const grid = compare.querySelector<HTMLElement>('[data-slot="team-dimensions"]')!
     expect(grid.textContent).not.toMatch(/\d[.,]\d/)
-    expect(document.querySelectorAll('[data-slot="team-reading"]')).toHaveLength(0)
-    expect(document.querySelectorAll('[data-slot="team-move"]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="team-dimensions"] [data-mean]')).toHaveLength(0)
+    // The organisation's tick is dropped with the team's dot: half a comparison gives the other half back.
+    expect(document.querySelectorAll('[data-slot="team-dimensions"] [data-comparison]')).toHaveLength(0)
     expect(within(compare).getAllByRole('img')).toHaveLength(KEYS.length)
+    for (const key of KEYS) expect(dimensionCard(key).dataset.range).toBe('withheld')
     // No organisation count beside it: the legend keys the team alone.
     expect(legend().textContent).not.toContain('24')
     expect(legend().textContent).not.toContain(copy.legendOrg.replace('{count}', '24'))
@@ -308,6 +354,32 @@ describe('LeaderDashboardView', () => {
     expect(screen.getByRole('img', { name: copy.responsesWithheldLabel.replace('{floor}', String(SERVER_FLOOR)) })).toBeTruthy()
     const tiles = [...document.querySelectorAll<HTMLElement>('[data-slot="nodo-tile"]')]
     expect(tiles[1]?.textContent).not.toMatch(/\b0\b/)
+  })
+
+  /**
+   * The view's own guard, behind the composer's: a row whose team reading is withheld draws
+   * no organisation tick and no caption, even from a model that still carries the
+   * organisation's figure — that figure beside the team's place would give it back.
+   */
+  it('draws no organisation side on a withheld row, whatever the model carries', () => {
+    renderLeader({
+      edit: (model) => ({
+        ...model,
+        closedWave: model.closedWave && {
+          ...model.closedWave,
+          dimensions: model.closedWave.dimensions.map((dimension) =>
+            dimension.key === 'recognition' ? { ...dimension, team: null } : dimension,
+          ),
+        },
+      }),
+    })
+    const row = dimensionCard('recognition')
+    expect(row.dataset.range).toBe('withheld')
+    expect(row.querySelector('[data-comparison]')).toBeNull()
+    expect(row.textContent).not.toContain(copy.orgName)
+    expect(row.querySelector('[role="img"]')?.getAttribute('aria-label')).not.toMatch(/\d[.,]\d/)
+    // The other rows still compare.
+    expect(dimensionCard('belonging').querySelector('[data-comparison]')).not.toBeNull()
   })
 
   it('says a survey under its own floor published nothing, with no names to hatch', () => {
@@ -328,16 +400,17 @@ describe('LeaderDashboardView', () => {
         copy.surveyWithheld.replace('{survey}', 'Encuesta de Clima Q4 (abierta) (Copia)').replace('{floor}', String(SERVER_FLOOR)),
       ),
     ).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="team-dimension"]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="team-dimensions"]')).toHaveLength(0)
   })
 
   it("draws the organisation's side from the payload, with its count in the legend, and marks nothing as sample", () => {
     renderLeader()
 
     for (const [index, key] of KEYS.entries()) {
-      // The org. row of each card, read from `climate.organization` — the company's Q3.
-      const orgRow = within(dimensionCard(key)).getByText(copy.orgWord).parentElement!
-      expect(orgRow.textContent, key).toContain(String(Math.round((ORG_Q3[index] ?? 0) * 10) / 10))
+      // The organisation's reading of each row, from `climate.organization` — the company's Q3.
+      const org = (Math.round((ORG_Q3[index] ?? 0) * 100) / 100).toFixed(2)
+      expect(rowCaption(key), key).toContain(`${copy.orgName} ${org}`)
+      expect(dimensionCard(key).querySelector('[data-comparison]'), key).not.toBeNull()
     }
     expect(legend().textContent).toContain(copy.legendOrg.replace('{count}', '24'))
     expect(legend().textContent).toContain(en.resultBands.leader.planRule.replace('{band}', en.resultBands.name.strength))
@@ -353,17 +426,17 @@ describe('LeaderDashboardView', () => {
   it("draws the team alone where the server withheld the organisation's side, and says so without a number", () => {
     renderLeader({ dashboard: department({ climate: climate(Q3, { organization: null }) }) })
 
-    expect(document.querySelectorAll('[data-slot="team-reading"]')).toHaveLength(KEYS.length)
-    expect(document.querySelectorAll('[data-slot="team-move"]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="team-dimensions"] [data-mean]')).toHaveLength(KEYS.length)
     for (const key of KEYS) {
-      expect(within(dimensionCard(key)).queryByText(copy.orgWord), key).toBeNull()
+      expect(dimensionCard(key).querySelector('[data-comparison]'), key).toBeNull()
+      expect(dimensionCard(key).textContent, key).not.toContain(copy.orgName)
     }
     expect(legend().textContent).toContain(copy.legendOrgWithheld.replace('{floor}', String(SERVER_FLOOR)))
     expect(legend().textContent).not.toMatch(/\b24\b/)
     // The plan rule still stands: the team's own cells are still judged, by the shared rule
     // — Q3's Reconocimiento 3,5 is inside the band, so 'on'. What matters here is that a
     // withheld organisation side does not stop the team's own cell being judged at all.
-    expect(dimensionCard('recognition').dataset.band).toBe('opportunity')
+    expect(within(dimensionCard('recognition')).getByText(en.resultBands.name.opportunity)).toBeTruthy()
   })
 
   /**

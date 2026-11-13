@@ -194,7 +194,7 @@ export default function ReportSharePanel({
                     is the fallback when the clipboard is unavailable. */}
                 <p
                   data-slot="report-share-url"
-                  className="mt-2 break-all font-mono text-sm tabular-nums"
+                  className="mt-2 break-all text-sm tabular-nums"
                 >
                   {shareLinkUrl(window.location.origin, minted.path)}
                 </p>
@@ -262,7 +262,7 @@ export default function ReportSharePanel({
                       <td>{day(share.expiresAt)}</td>
                       {/* Readings, so mono with tabular figures -- the redesign's one
                           typographic law. */}
-                      <td className="font-mono tabular-nums">
+                      <td className="tabular-nums">
                         {share.accessCount.toLocaleString(locale)}
                       </td>
                       <td>

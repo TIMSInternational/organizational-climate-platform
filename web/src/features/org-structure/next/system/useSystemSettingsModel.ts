@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSystemSettings, updateSystemSettings, type SystemSettingsData } from '../../api/systemSettings'
+import { useTranslation } from '../../../../i18n'
+import { describeApiError } from '../../../../api/describeApiError'
 import { draftFrom, isDirty, updatePayload, type SettingsDraft } from './settingsDerive'
 
 export interface SystemSettingsModelState {
@@ -28,6 +30,7 @@ export interface SystemSettingsModelState {
  * what the server now holds rather than what was typed.
  */
 export function useSystemSettingsModel(): SystemSettingsModelState {
+  const { t } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [settings, setSettings] = useState<SystemSettingsData | null>(null)
   const [draft, setDraft] = useState<SettingsDraft | null>(null)
@@ -45,11 +48,11 @@ export function useSystemSettingsModel(): SystemSettingsModelState {
       setSettings(next)
       setDraft(draftFrom(next))
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : '')
+      setLoadError(describeApiError(err, t))
     } finally {
       setLoading(false)
     }
-  }, [baseUrl])
+  }, [baseUrl, t])
 
   useEffect(() => {
     void reload()
@@ -65,11 +68,11 @@ export function useSystemSettingsModel(): SystemSettingsModelState {
       await reload()
       setSaved(true)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : '')
+      setSaveError(describeApiError(err, t))
     } finally {
       setSaving(false)
     }
-  }, [baseUrl, draft, reload])
+  }, [baseUrl, draft, reload, t])
 
   return {
     loading,

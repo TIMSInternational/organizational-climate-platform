@@ -13,6 +13,7 @@ import { avancesReading, byCompromiso, hasRecordedProgress, planLine } from './d
 import type { TableroModel, TableroPlanCard } from './model'
 import { readViewer } from './viewer'
 import { isApiStatus } from '../../../api/authFetch'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * Whose board, if anyone's:
@@ -111,7 +112,7 @@ export function useTableroModel(): TableroState {
         setStatus('restricted')
         return
       }
-      setError(reason instanceof Error ? reason.message : t('errors.generic'))
+      setError(describeApiError(reason, t))
       setStatus('error')
       return
     }

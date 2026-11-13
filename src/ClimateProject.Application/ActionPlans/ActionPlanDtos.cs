@@ -132,4 +132,14 @@ public sealed record ProgressUpdateDetail(
     Guid Id,
     DateTimeOffset UpdateDate,
     string OverallNotes,
-    Guid UpdatedBy);
+    Guid UpdatedBy,
+    /// <summary>
+    /// The name of whoever recorded the update, joined by the server so the Bitácora can
+    /// print it without an administrator-only directory read. Null when that user no longer
+    /// resolves. Last, and defaulted, for the reason <see cref="CreateActionPlanRequest.OwnerId"/>
+    /// gives: a positional record's existing callers keep meaning what they meant.
+    /// </summary>
+    string? UpdatedByName = null);
+
+/// <summary>The body of <c>GET /action-plans/{id}/progress</c>: every update, oldest first.</summary>
+public sealed record ProgressHistoryResponse(IReadOnlyList<ProgressUpdateDetail> Updates);

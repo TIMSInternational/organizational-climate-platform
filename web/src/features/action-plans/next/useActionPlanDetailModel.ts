@@ -3,8 +3,10 @@ import { useTranslation } from '../../../i18n'
 import { isApiStatus } from '../../../api/authFetch'
 import { todayCalendarDay } from '../../../lib/calendarDay'
 import {
+  deleteActionPlan,
   getActionPlan,
   listActionPlans,
+  listProgress,
   recordProgress as postProgress,
   updateActionPlan,
   type ActionPlanDetail,
@@ -20,6 +22,8 @@ import { latestClosedSurvey } from '../../dashboard/next/compose'
 import { findingFromTags } from './useActionPlansListModel'
 import { planFinding, planMove, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
+import { describeApiError } from '../../../api/describeApiError'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 export interface ActionPlanDetailState {
   status: 'loading' | 'ready' | 'error'
@@ -41,6 +45,22 @@ export interface ActionPlanDetailState {
   changeOwner: (ownerId: string | null) => Promise<void>
   /** Rejects with the server's message; `ProgressUpdateForm` renders it beside its fields. */
   recordProgress: (values: ProgressUpdateFormValues) => Promise<void>
+  /**
+   * Correct what the plan says: its title, description, due day and tags (`PUT
+   * /action-plans/{id}`). Rejects with the server's message so the edit form keeps what the
+   * reader typed and says why.
+   */
+  editPlan: (values: PlanEdit) => Promise<void>
+  /** `DELETE /action-plans/{id}`. Rejects with the server's message. */
+  deletePlan: () => Promise<void>
+}
+
+/** The fields the edit form corrects. `dueDate` is a calendar day, `YYYY-MM-DD`. */
+export interface PlanEdit {
+  title: string
+  description: string
+  dueDate: string
+  tags: string[]
 }
 
 const LOADING = { status: 'loading' } as const
@@ -85,7 +105,7 @@ export function useActionPlanDetailModel(
   const [finding, setFinding] = useState<Settled<PlanFinding>>(LOADING)
   const [move, setMove] = useState<Settled<PlanMove>>(LOADING)
   const [owners, setOwners] = useState<Settled<readonly { id: string; name: string }[]>>(LOADING)
-  const [recorded, setRecorded] = useState<ProgressUpdateDetail[]>([])
+  const [history, setHistory] = useState<Settled<ProgressUpdateDetail[]>>(LOADING)
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [generation, setGeneration] = useState(0)
@@ -98,6 +118,12 @@ export function useActionPlanDetailModel(
     setStatus('loading')
     setError(null)
     setForbidden(false)
+    // The history is the plan's own and readable by whoever may read the plan; it is settled
+    // on its own so a failed read costs the Bitácora, never the plan.
+    setHistory(LOADING)
+    void settle(() => listProgress(baseUrl, id)).then((settled) => {
+      if (!cancelled) setHistory(settled)
+    })
     getActionPlan(baseUrl, id, locale)
       .then((loaded) => {
         if (cancelled) return
@@ -107,7 +133,7 @@ export function useActionPlanDetailModel(
       .catch((err: unknown) => {
         if (cancelled) return
         setForbidden(isApiStatus(err, 403))
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       })
     return () => {
@@ -199,8 +225,15 @@ export function useActionPlanDetailModel(
         ),
       ])
       const latest = latestClosedSurvey(surveys)
-      const found = planFinding(trends, latest?.id ?? null, departmentId, { sourceSurveyId, dimensionKey })
-      return { found, moved: planMove(trends, found, departmentId) }
+      // The floor the SERVER applied to this very payload, as the departments page reads it
+      // (`useDepartmentsModel`): an administrator is shown a single department from one
+      // response (ruling 2026-10-15), a leader their own team from the floor of 3. The
+      // product floor only when the payload does not say. Review of 12 Nov: this page
+      // withheld at a constant 3 and printed «Menos de 3» where the server had disclosed
+      // the department, so one department read two ways across two screens.
+      const floor = trends.minimumGroupSize > 0 ? trends.minimumGroupSize : ANONYMITY_FLOOR
+      const found = planFinding(trends, latest?.id ?? null, departmentId, { sourceSurveyId, dimensionKey }, floor)
+      return { found, moved: planMove(trends, found, departmentId, floor) }
     }).then((settled) => {
       apply(setFinding)(settled.status === 'ready' ? { status: 'ready', value: settled.value.found } : settled)
       apply(setMove)(settled.status === 'ready' ? { status: 'ready', value: settled.value.moved } : settled)
@@ -233,7 +266,7 @@ export function useActionPlanDetailModel(
         // the Ficha cannot disagree for a frame.
         setPlan(await updateActionPlan(baseUrl, id, patch))
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : t('errors.generic'))
+        setActionError(describeApiError(err, t))
       } finally {
         setSaving(false)
       }
@@ -246,15 +279,34 @@ export function useActionPlanDetailModel(
       if (!id) return
       setActionError(null)
       const update = await postProgress(baseUrl, id, values)
-      setRecorded((current) => [...current, update])
+      // Appended to what the server returned; when that read failed, ask again rather than
+      // print one note as if it were the whole history.
+      setHistory((current) => (current.status === 'ready' ? { status: 'ready', value: [...current.value, update] } : current))
+      void settle(() => listProgress(baseUrl, id)).then((settled) => {
+        if (settled.status === 'ready') setHistory(settled)
+      })
       // The POST answers with the update row alone; new KPI and objective values need a GET.
       setPlan(await getActionPlan(baseUrl, id, locale))
     },
     [baseUrl, id, locale],
   )
 
+  const editPlan = useCallback(
+    async (values: PlanEdit) => {
+      if (!id) return
+      setActionError(null)
+      setPlan(await updateActionPlan(baseUrl, id, values, locale))
+    },
+    [baseUrl, id, locale],
+  )
+
+  const deletePlan = useCallback(async () => {
+    if (!id) return
+    await deleteActionPlan(baseUrl, id)
+  }, [baseUrl, id])
+
   const model: ActionPlanDetailModel | null = plan
-    ? { plan, asOf: todayCalendarDay(), departmentName, authorName, createdAt, templateName, finding, move, owners, recorded }
+    ? { plan, asOf: todayCalendarDay(), departmentName, authorName, createdAt, templateName, finding, move, owners, history }
     : null
 
   return {
@@ -272,5 +324,7 @@ export function useActionPlanDetailModel(
     // nothing where the reader asked for an unassignment.
     changeOwner: (next) => (next === null ? change({ clearOwner: true }) : change({ ownerId: next })),
     recordProgress,
+    editPlan,
+    deletePlan,
   }
 }

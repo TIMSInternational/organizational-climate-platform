@@ -3,6 +3,7 @@ import { useTranslation } from '../../../i18n'
 import { Button, SelectField, TextField } from '../../../components/ui'
 import { createActionPlan } from '../../action-plans/api/actionPlans'
 import { getSurvey } from '../api/surveys'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** `ActionPlanValidation.ValidPriorities`, in the order the create form offers them. */
 const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
@@ -81,7 +82,7 @@ export default function FollowUpPlanForm({
       })
       onCreated({ id: plan.id, title: plan.title })
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : t('surveyResults.cross.followUpFailed'))
+      setFailure(describeApiError(error, t, 'surveyResults.cross.followUpFailed'))
     } finally {
       setCreating(false)
     }

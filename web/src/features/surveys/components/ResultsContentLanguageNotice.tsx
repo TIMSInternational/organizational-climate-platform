@@ -1,5 +1,7 @@
 import { useTranslation } from '../../../i18n'
+import { Info } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui'
+import { languageInSentence } from '../surveyVocabulary'
 
 interface ResultsContentLanguageNoticeProps {
   /** The survey's own authored content language: `'en' | 'es' | 'both'`. */
@@ -59,19 +61,23 @@ export default function ResultsContentLanguageNotice({
   }
 
   return (
-    <Alert variant="info" className="mb-panel-gap">
+    // `warning` is the neutral notice (a grey ground, the glyph in the secondary ink), as on
+    // the microclimate's own content notice. `info` painted it blue, and blue is the action,
+    // the selection and the live state — never a note about which language is printed.
+    <Alert variant="warning" className="mb-panel-gap">
+      <Info aria-hidden="true" />
       <AlertTitle>{t('surveyResults.languageNoticeTitle')}</AlertTitle>
       <AlertDescription>
         <span className="grid gap-1">
           {substituted && (
             <span>
               {t('surveyResults.showingContentIn', {
-                resolved: languageName(t, resolvedLocale),
-                requested: languageName(t, locale),
+                resolved: languageInSentence(t, resolvedLocale),
+                requested: languageInSentence(t, locale),
               })}
             </span>
           )}
-          <span>{t('surveyResults.authoredIn', { language: languageName(t, language) })}</span>
+          <span>{t('surveyResults.authoredIn', { language: languageInSentence(t, language) })}</span>
           {fallbackFields.length > 0 && (
             <span>{t('surveyResults.fieldsFellBack', { count: fallbackFields.length })}</span>
           )}
@@ -81,20 +87,3 @@ export default function ResultsContentLanguageNotice({
   )
 }
 
-/**
- * `'en' | 'es' | 'both'` as a name a reader recognises.
- *
- * Falls back to the server's own value rather than to a key path: `Survey.Language` is
- * validated against `ContentLanguages`, but an imported row could still carry something
- * this list has not heard of, and printing `surveyResults.languageXx` at a user is worse
- * than printing the code.
- */
-function languageName(t: ReturnType<typeof useTranslation>['t'], value: string): string {
-  const keys: Record<string, string> = {
-    en: 'language.english',
-    es: 'language.spanish',
-    both: 'surveyResults.languageBoth',
-  }
-  const key = keys[value]
-  return key ? t(key) : value
-}

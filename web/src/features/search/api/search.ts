@@ -1,4 +1,5 @@
 import { authFetch } from '../../../api/authFetch'
+import { actionPlanHref } from '../../action-plans/offered'
 
 /**
  * `GET /search` — cross-entity search (#135).
@@ -80,7 +81,9 @@ export function hrefForResult(item: SearchResultItem): string | null {
     case 'question':
       return item.parentId ? `/surveys/${item.parentId}` : null
     case 'action_plan':
-      return `/action-plans/${item.id}`
+      // Dropped, like any unroutable hit, where the deployment does not offer
+      // `/action-plans` — the sidebar's rule (`actionPlansOffered`).
+      return actionPlanHref(item.id)
     case 'department':
       // Flat route by design (#142) — the page takes its company from company-context.
       return '/departments'

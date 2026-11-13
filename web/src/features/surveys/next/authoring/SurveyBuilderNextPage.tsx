@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, Check, EyeOff, FileIcon, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
-import { PageTopBar } from '../../../../components/layout'
+import { ArrowRight, Check, CircleAlert, EyeOff, FileIcon, GripVertical, Lock, MoreHorizontal, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { PageHeader } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
 import {
   Alert,
@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
   EmptyState,
   ErrorState,
+  RadioField,
   Select,
   SelectContent,
   SelectField,
@@ -30,13 +31,14 @@ import { QuestionLibraryBrowser } from '../../../../components/questions'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { CREDENTIAL_MODES, type CredentialMode } from '../../../org-structure/api/companySettings'
 import { credentialModeLabel } from '../../../org-structure/next/settings/credentialModeLabel'
-import { useCompanyScope } from '../../../../company-context'
+import { useCompanyNameFor, useCompanyScope } from '../../../../company-context'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import type { SurveyRespondQuestion } from '../../api/surveyResponses'
 import { SurveyDraftIndicator, SurveyDraftRecoveryBanner } from '../../components/SurveyDraftNotices'
 import { dimensionLabel } from '../../dimensionLabel'
 import { hasDraftableContent } from '../../draftContent'
+import { templateOptionLabel } from '../../templateOwner'
 import {
   SUGGESTED_DIMENSION_KEYS,
   SURVEY_QUESTION_TYPES,
@@ -51,7 +53,8 @@ import {
 } from '../../surveyVocabulary'
 import {
   CONTENT_LANGUAGES,
-  SURVEY_WIZARD_STEPS,
+  SURVEY_BUILDER_STEPS,
+  audienceChoiceOf,
   chosenDimensions,
   derivedOptionValue,
   emptyOption,
@@ -59,20 +62,27 @@ import {
   positionsWithoutDimension,
   questionFromLibrary,
   scheduledDays,
+  settingsErrors,
   startsFromTemplate,
   wizardStepErrors,
+  type AudienceChoice,
   type ContentLanguage,
   type SurveyQuestionValues,
-  type SurveyWizardStepId,
+  type SurveyBuilderStepId,
   type SurveyWizardValues,
 } from '../../wizardValues'
-import { Eyebrow, PanelHeading } from '../../../shared-next/parts'
+import { Eyebrow } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
 import { QuestionBankPicker } from './QuestionBankPicker'
-import { Card } from './parts'
+import { PasteQuestionsDialog } from './PasteQuestionsDialog'
+import { Card, PanelHeading } from './parts'
 import { dimensionSections } from './launch'
+import { QUIET_DISABLED } from './model'
 import { templateCovers } from './templateRows'
 import { useSurveyBuilderModel } from './useSurveyBuilderModel'
+import { BuilderSettingsStep } from './BuilderSettingsStep'
+import { PeoplePicker } from './PeoplePicker'
+import { browserTimeZone, zoneLabel } from './zonedWindow'
 
 const NO_TEMPLATE = '__none__'
 // Radix Select has no empty-string value, so "no licensed service" needs a sentinel,
@@ -119,30 +129,36 @@ export default function SurveyBuilderNextPage() {
 function SurveyBuilder({ companyId }: { companyId: string }) {
   const { t, locale } = useTranslation()
   const m = useSurveyBuilderModel(companyId)
+  // Whose survey this is, on every step: a TIMS operator creates for several clients a day, and
+  // nothing on the six steps said which (docs/audits/2026-11-08-operator-ui-walkthrough.md, C).
+  const companyName = useCompanyNameFor(companyId)
   const { values, patch, setQuestions, stepIndex, setStepIndex, template, draft } = m
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.builder.${key}`, vars)
-  const [attempted, setAttempted] = useState<ReadonlySet<SurveyWizardStepId>>(new Set())
+  const [attempted, setAttempted] = useState<ReadonlySet<SurveyBuilderStepId>>(new Set())
   const [selected, setSelected] = useState(0)
   const [editing, setEditing] = useState<string | null>(null)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [bankOpen, setBankOpen] = useState(false)
+  const [pasteOpen, setPasteOpen] = useState(false)
 
   const fromTemplate = startsFromTemplate(values)
-  const baseErrors = wizardStepErrors(values, t, template === null ? null : template.questions.length)
+  const baseErrors = wizardStepErrors(values, t, template === null ? null : template.questions.length, m.activePeople)
   // A template's questions are rows once they arrive (`templateRows.ts`), so they are validated
   // as rows; until then the wizard's own "the template is loading" stands.
   const questionErrors =
     fromTemplate && template === null && values.questions.length === 0
       ? baseErrors.questions
       : wizardStepErrors({ ...values, templateId: '' }, t).questions
-  const errors = {
+  const settingErrors = settingsErrors(values, t)
+  const errors: Record<SurveyBuilderStepId, string[]> = {
     ...baseErrors,
     questions: questionErrors,
-    review: [...baseErrors.basics, ...baseErrors.schedule, ...baseErrors.audience, ...questionErrors],
+    settings: settingErrors,
+    review: [...baseErrors.basics, ...baseErrors.schedule, ...baseErrors.audience, ...questionErrors, ...settingErrors],
   }
-  const step = SURVEY_WIZARD_STEPS[stepIndex]
-  const last = stepIndex === SURVEY_WIZARD_STEPS.length - 1
+  const step = SURVEY_BUILDER_STEPS[stepIndex]
+  const last = stepIndex === SURVEY_BUILDER_STEPS.length - 1
   const both = values.language === 'both'
   // The reader's column when the survey is bilingual; the survey's own language otherwise.
   const shown: 'en' | 'es' = values.language === 'both' ? (locale === 'es' ? 'es' : 'en') : values.language
@@ -153,7 +169,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
   const focus = Math.min(selected, Math.max(previewQuestions.length - 1, 0))
   const focusSection = sections.find((section) => section.questions.some((entry) => entry.position === focus + 1))
   const reachable = (index: number) =>
-    index <= stepIndex || SURVEY_WIZARD_STEPS.slice(0, index).every((id) => errors[id].length === 0)
+    index <= stepIndex || SURVEY_BUILDER_STEPS.slice(0, index).every((id) => errors[id].length === 0)
 
   function goNext() {
     if (errors[step].length > 0) {
@@ -180,22 +196,20 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
 
   return (
     <div>
-      <PageTopBar
+      {/* The board's `.hdr`: eyebrow, serif title with the grey status chip beside it (status chips
+          are grey except Activa), the step line as the sub. No primary in the header: the one
+          primary on this screen is Siguiente / Crear in the footer. */}
+      <PageHeader
+        eyebrow={companyName ? copy('forCompany', { company: companyName }) : undefined}
         title={copy('title')}
-        // The artboard's chip: small, serif, lavender — not the sans secondary badge.
-        badge={{
-          text: copy('draftBadge'),
-          variant: 'secondary',
-          // `font-store-serif` is the headings' Goudy; `font-serif` is Tailwind's Georgia stack.
-          className: 'h-5.5 rounded border border-line-default bg-surface-icon-box px-2 font-store-serif text-xs font-normal text-fg-primary',
-        }}
-        tightBreadcrumb
-        description={`${copy(`stepLine.${step}`)} ${copy('stepOf', { current: stepIndex + 1, total: SURVEY_WIZARD_STEPS.length })}`}
+        titleAccessory={<Chip data-testid="builder-draft-chip" label={copy('draftBadge')} />}
+        description={`${copy(`stepLine.${step}`)} ${copy('stepOf', { current: stepIndex + 1, total: SURVEY_BUILDER_STEPS.length })}`}
         breadcrumbs={[{ label: t('navigation.surveys'), href: '/surveys' }, { label: copy('title') }]}
         actions={
           <Button
             type="button"
             variant="outline"
+            className={QUIET_DISABLED}
             disabled={!hasDraftableContent(values) || draft.state.status === 'saving' || draft.state.status === 'conflict'}
             onClick={draft.saveNow}
           >
@@ -214,10 +228,17 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
       )}
       {m.unsaved && (
         <Alert variant="destructive" role="alert" className="mb-4">
-          <AlertDescription>
-            {copy('questionsNotSaved', { message: m.unsaved.message })}{' '}
-            <Link to={`/surveys/${m.unsaved.id}/questions`}>{copy('openQuestionEditor')}</Link>
-          </AlertDescription>
+          {m.unsaved.kind === 'people' ? (
+            <AlertDescription>
+              {copy('audience.peopleNotSaved', { message: m.unsaved.message })}{' '}
+              <Link to={`/surveys/${m.unsaved.id}`}>{copy('audience.openSurvey')}</Link>
+            </AlertDescription>
+          ) : (
+            <AlertDescription>
+              {copy('questionsNotSaved', { message: m.unsaved.message })}{' '}
+              <Link to={`/surveys/${m.unsaved.id}/questions`}>{copy('openQuestionEditor')}</Link>
+            </AlertDescription>
+          )}
         </Alert>
       )}
       {draft.recovery !== null && (
@@ -230,29 +251,36 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
         />
       )}
 
-      {/* `-mt-1`: the header's 24px bottom margin (`mb-section`) collapses with this one, and the
-          artboard puts the rail 20px under the hairline (measured: 198 → 218). */}
-      <Card className="-mt-1 flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5" data-testid="builder-rail">
+      <Card className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5" data-testid="builder-rail">
         <ol aria-label={t('surveys.wizardStepList')} className="m-0 flex min-w-0 flex-1 list-none flex-wrap items-center gap-x-3.5 gap-y-2 p-0">
-          {SURVEY_WIZARD_STEPS.map((id, index) => {
+          {SURVEY_BUILDER_STEPS.map((id, index) => {
             const state = index < stepIndex ? (errors[id].length === 0 ? 'done' : 'open') : index === stepIndex ? 'current' : 'pending'
             return (
               // `mb-0`: index.css gives every <li> a 4px bottom margin, which made the rail 4px taller.
-              <li key={id} className={cn('mb-0 flex min-w-0 items-center gap-3.5', index < SURVEY_WIZARD_STEPS.length - 1 && 'xl:flex-1')}>
+              <li key={id} className={cn('mb-0 flex min-w-0 items-center gap-3.5', index < SURVEY_BUILDER_STEPS.length - 1 && 'xl:flex-1')}>
                 <button
                   type="button"
                   aria-current={state === 'current' ? 'step' : undefined}
                   disabled={!reachable(index)}
                   onClick={() => setStepIndex(index)}
-                  className="flex min-w-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default"
+                  // `shrink-0`: a shrinking button let its nowrap label spill over the connector
+                  // beside it, so the line ran under «Datos básicos» like a link underline.
+                  // `disabled:opacity-100`: index.css halves every `button:disabled`, which took the
+                  // pending rungs' «Pendiente» and step names from 5.22:1 to 2.07:1 light and
+                  // 2.82:1 dark. A pending rung is status the user reads, so it keeps its ink.
+                  className="flex shrink-0 items-center gap-2.5 border-0 bg-transparent p-0 text-left shadow-none disabled:cursor-default disabled:opacity-100"
                 >
+                  {/* Blue marks the step you are on (blue = selection); the others are grey and say
+                      their state in words and a glyph. Red is OCC's mark and green/amber the result
+                      areas, so none of them may stand for a wizard state (color.md › Best practices). */}
                   <span
                     aria-hidden="true"
+                    data-slot="rail-marker"
                     className={cn(
-                      'flex size-5.5 shrink-0 items-center justify-center rounded-full font-mono text-xs [&>svg]:size-3',
-                      state === 'done' && 'border border-accent-green-ring bg-chip-good-fill text-chip-good-ink',
-                      state === 'open' && 'border border-accent-amber-ring bg-chip-warning-fill text-chip-warning-ink',
-                      state === 'current' && 'bg-accent-red font-semibold text-fg-on-accent',
+                      'flex size-5.5 shrink-0 items-center justify-center rounded-full text-xs tabular-nums [&>svg]:size-3',
+                      state === 'done' && 'bg-surface-fill text-fg-primary',
+                      state === 'open' && 'border border-line-control bg-surface-card font-semibold text-fg-primary',
+                      state === 'current' && 'bg-accent-blue-fill font-semibold text-fg-on-accent',
                       state === 'pending' && 'border border-line-default bg-surface-icon-box text-fg-label',
                     )}
                   >
@@ -266,9 +294,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                     <span
                       className={cn(
                         'text-xs leading-[1.25]',
-                        state === 'done' && 'text-chip-good-ink',
-                        state === 'open' && 'text-accent-amber-ink',
-                        state === 'current' && 'text-chip-critical-ink',
+                        state === 'done' && 'text-fg-secondary',
+                        state === 'open' && 'font-medium text-fg-primary',
+                        state === 'current' && 'text-accent-blue-ink',
                         state === 'pending' && 'text-fg-label',
                       )}
                     >
@@ -276,8 +304,10 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                     </span>
                   </span>
                 </button>
-                {index < SURVEY_WIZARD_STEPS.length - 1 && (
-                  <span aria-hidden="true" className={cn('hidden h-px min-w-6 flex-1 xl:block', index < stepIndex ? 'bg-accent-green' : 'bg-line-default')} />
+                {index < SURVEY_BUILDER_STEPS.length - 1 && (
+                  // Neutral for every state: the blue marker already says where you are, and a blue
+                  // rule beside text that is not a link read as one (blue = action/selection).
+                  <span aria-hidden="true" data-slot="rail-connector" className="hidden h-px min-w-4 flex-1 self-center bg-line-default xl:block" />
                 )}
               </li>
             )
@@ -361,7 +391,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                         className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 pb-2.75 pl-2 pr-3 pt-2.5 sm:flex"
                       >
                         <GripVertical aria-hidden="true" data-slot="drag-grip" className="size-4 shrink-0 cursor-grab text-fg-label" />
-                        <span className="w-5.5 shrink-0 text-center font-mono text-sm text-fg-secondary tabular-nums">{index + 1}</span>
+                        <span className="w-5.5 shrink-0 text-center text-sm text-fg-secondary tabular-nums">{index + 1}</span>
                         <button
                           type="button"
                           aria-pressed={isSelected}
@@ -381,7 +411,8 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                             {question.category ? (
                               <Chip label={dimensionLabel(question.category, t)} />
                             ) : (
-                              <Chip tone="warning" label={copy('noDimension')} />
+                              // Grey with a glyph: amber is the Oportunidad area, never a warning.
+                              <Chip icon={<CircleAlert aria-hidden="true" className="size-3" />} label={copy('noDimension')} />
                             )}
                             <Chip label={typeChip(t, question)} />
                           </span>
@@ -391,12 +422,10 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                             artboard's "Obligatoria" is regular — the extra weight cost the text
                             column 1.7px. */}
                         <label className="mb-0 inline-flex shrink-0 items-center gap-2 text-sm font-normal text-fg-secondary">
-                          {/* The artboard's switch is #12945b (SurveyBuilder.dc.html), the accent
-                              green — the chip ink is a darker, text-weight green — on its 16×28
-                              track (`size="sm"`), 4px narrower than the default's. */}
+                          {/* Toggles are blue (ruling of 11 Nov; the Switch primitive paints its
+                              checked fill itself), on the 16×28 track (`size="sm"`). */}
                           <Switch
                             size="sm"
-                            className="data-[state=checked]:bg-accent-green"
                             checked={question.required}
                             onCheckedChange={(value) => patchQuestion(own.key, { required: value === true })}
                           />
@@ -451,6 +480,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   <DropdownMenuContent>
                     <DropdownMenuItem onSelect={() => setBankOpen(true)}>{copy('addFromBank')}</DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setLibraryOpen(true)}>{copy('addFromLibrary')}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setPasteOpen(true)}>{copy('addFromPaste')}</DropdownMenuItem>
                     <DropdownMenuItem
                       onSelect={() => {
                         const [key] = m.takeKeys(1)
@@ -478,6 +508,13 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   setQuestions((questions) => [...questions, ...picked.map((item, index) => questionFromLibrary(item, keys[index]))])
                 }}
               />
+              <PasteQuestionsDialog
+                open={pasteOpen}
+                onOpenChange={setPasteOpen}
+                language={values.language}
+                takeKeys={m.takeKeys}
+                onAdd={(pasted) => setQuestions((questions) => [...questions, ...pasted])}
+              />
               <QuestionBankPicker
                 open={bankOpen}
                 onOpenChange={setBankOpen}
@@ -490,7 +527,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
             <StepForm step={step} m={m} both={both} copy={copy} />
           )}
           {attempted.has(step) && errors[step].length > 0 && (
-            <ul role="alert" className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-accent-amber-ink">
+            <ul role="alert" className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-accent-red-ink">
               {errors[step].map((message) => (
                 <li key={message}>{message}</li>
               ))}
@@ -509,15 +546,19 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
             }
           />
           <p className="-mt-3 mb-0 text-sm text-fg-secondary">{copy('previewLine')}</p>
-          <div className="flex flex-col gap-3.5 rounded-lg border border-line-default bg-surface-card px-4.5 pb-4.5 pt-4 shadow-xs">
+          <div className="flex flex-col gap-3.5 rounded-xl border border-line-panel bg-surface-card px-4.5 pb-4.5 pt-4">
             <div className="flex flex-col gap-1 border-b border-line-light pb-3">
               <Eyebrow className="leading-normal">{copy('surveyEyebrow')}</Eyebrow>
-              {/* The artboard's `.serif` at 18px: the headings' Goudy (`font-store-serif`, not
-                  Tailwind's Georgia `font-serif`) at their 1.2 line height. */}
-              <p className="m-0 font-store-serif text-[1.125rem] leading-tight text-fg-primary">{title || copy('untitled')}</p>
+              {/* The survey's title as the respondent meets it: the one display serif
+                  (`font-display`), never the storefront's Goudy or Tailwind's Georgia. */}
+              <p className="m-0 font-display text-[1.125rem] font-semibold leading-tight text-fg-primary">{title || copy('untitled')}</p>
               {description && <p className="m-0 text-sm text-fg-secondary">{description}</p>}
             </div>
-            {focusSection ? (
+            {focusSection && values.randomizeQuestions ? (
+              // A randomised survey prints no dimension over any question (`respondDimensions`),
+              // so the preview does not either.
+              <PreviewQuestion question={previewQuestions[focus]} position={focus + 1} total={previewQuestions.length} />
+            ) : focusSection ? (
               <PreviewSection category={focusSection.category} index={focusSection.index} count={focusSection.count}>
                 <PreviewQuestion question={previewQuestions[focus]} position={focus + 1} total={previewQuestions.length} />
               </PreviewSection>
@@ -533,8 +574,9 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
                   artboard's `.btn` (weight 500) at `height: 28px` in a content box, so 30px with its
                   borders: at 28px regular the preview card came out 2px short of the artboard's. */}
               <span className="flex flex-wrap gap-2" data-slot="preview-actions">
-                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded border border-line-default px-3 text-sm font-medium text-fg-primary">{copy('saveLater')}</span>
-                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded border border-accent-red-ring bg-chip-critical-fill px-3 text-sm font-medium text-chip-critical-ink">
+                <span className="inline-flex h-7.5 items-center whitespace-nowrap rounded-md border border-line-control px-3 text-sm font-medium text-fg-primary">{copy('saveLater')}</span>
+                {/* The respondent's one primary, in the action blue (red is OCC's mark only). */}
+                <span data-slot="preview-submit" className="inline-flex h-7.5 items-center whitespace-nowrap rounded-md bg-accent-blue-fill px-3 text-sm font-medium text-fg-on-accent">
                   {copy('submitAnswers')}
                 </span>
               </span>
@@ -560,7 +602,7 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
           )}
         </span>
         <span className="flex gap-2">
-          <Button type="button" variant="outline" disabled={stepIndex === 0} onClick={() => setStepIndex(stepIndex - 1)}>
+          <Button type="button" variant="outline" className={QUIET_DISABLED} disabled={stepIndex === 0} onClick={() => setStepIndex(stepIndex - 1)}>
             {copy('back')}
           </Button>
           <Button type="button" variant="primary" disabled={m.submitting || m.unsaved !== null} onClick={goNext}>
@@ -628,12 +670,16 @@ function QuestionsFooter({
       {missing === 0 ? (
         // 216px: the artboard's two lines, "Cada dimensión tiene al menos / una pregunta" (at 220px
         // "una" still fit on the first line in the shot).
-        <span className="inline-flex max-w-54 items-start gap-1.5 text-chip-good-ink [&>svg]:mt-0.5">
+        <span className="inline-flex max-w-54 items-start gap-1.5 text-fg-secondary [&>svg]:mt-0.5">
           <Check aria-hidden="true" className="size-3.5" />
           {copy('everyDimension')}
         </span>
       ) : (
-        <span className="text-accent-amber-ink">{copy('withoutDimension', { count: missing })}</span>
+        // Neutral ink with a glyph: amber is a result area, never a warning colour.
+        <span className="inline-flex items-start gap-1.5 font-medium text-fg-primary [&>svg]:mt-0.5">
+          <CircleAlert aria-hidden="true" className="size-3.5" />
+          {copy('withoutDimension', { count: missing })}
+        </span>
       )}
     </div>
   )
@@ -697,7 +743,7 @@ function QuestionEditor({
         </div>
       </fieldset>
       {needsScaleLabels(question.type) && (
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {columns.map((col) => (
             <div key={col} className="contents">
               <TextField
@@ -760,7 +806,7 @@ function StepForm({
   both,
   copy,
 }: {
-  step: SurveyWizardStepId
+  step: SurveyBuilderStepId
   m: ReturnType<typeof useSurveyBuilderModel>
   both: boolean
   copy: (key: string, vars?: Record<string, string | number>) => string
@@ -768,20 +814,27 @@ function StepForm({
   const { t, locale } = useTranslation()
   const { values, patch, departments, templates, template } = m
   const fromTemplate = startsFromTemplate(values)
+  // The zone the schedule's wall clocks are read on: the company's, or -- unread -- the browser's,
+  // named either way so nobody has to guess whose 23:59 it is (G16).
+  const zone = m.timeZone ?? browserTimeZone()
+  const zoneNote = copy(m.timeZone === null ? 'zoneBrowser' : 'zoneCompany', { zone: zoneLabel(zone) })
+  const choice = audienceChoiceOf(values)
   const days = scheduledDays(values)
   const columns: ('en' | 'es')[] = both ? ['es', 'en'] : [values.language === 'es' ? 'es' : 'en']
-  const headcount = (departments ?? []).reduce((sum, d) => sum + d.employeeCount, 0)
 
   if (step === 'basics') {
     return (
       <>
         <PanelHeading title={t('surveys.stepBasics')} />
-        <div className="grid gap-3 md:grid-cols-2">
+        {/* `grid-cols-1` (minmax(0, 1fr)): below md the implicit column sized itself to the
+            longest option, «Ninguno — esta encuesta no consume licencia», and pushed all three
+            selects past the card's right edge at 390px (surveys-new-390-light.png). */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <SelectField
             label={t('surveys.startFromTemplate')}
             value={values.templateId === '' ? NO_TEMPLATE : values.templateId}
             onChange={(next) => m.chooseTemplate(next === NO_TEMPLATE ? '' : next)}
-            options={[{ value: NO_TEMPLATE, label: t('surveys.startBlank') }, ...templates.map((option) => ({ value: option.id, label: option.name }))]}
+            options={[{ value: NO_TEMPLATE, label: t('surveys.startBlank') }, ...templates.map((option) => ({ value: option.id, label: templateOptionLabel(t, option) }))]}
           />
           <SelectField
             required
@@ -793,6 +846,11 @@ function StepForm({
           {/* A separate axis from the type above, and optional. Leaving it on "none" is
               what keeps a survey unmetered — see LICENSED_SERVICES (#496). */}
           <SelectField
+            // The field is a grid too: its `auto` column kept the long option's width even in a
+            // shrinkable outer column, so the trigger still overran the card at 390px.
+            // `md:col-span-2`: from md it takes the row it already sat alone on, so the option
+            // reads in full instead of truncating to one column's width.
+            className="md:col-span-2"
             label={t('surveys.serviceLabel')}
             value={values.serviceType === '' ? NO_SERVICE : values.serviceType}
             onChange={(next) => patch({ serviceType: next === NO_SERVICE ? '' : next })}
@@ -826,13 +884,14 @@ function StepForm({
     return (
       <>
         <PanelHeading title={t('surveys.stepSchedule')} />
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <TextField required type="datetime-local" label={t('surveys.startDate')} value={values.startDate} onChange={(next) => patch({ startDate: next })} />
           <TextField required type="datetime-local" label={t('surveys.endDate')} value={values.endDate} onChange={(next) => patch({ endDate: next })} />
         </div>
+        <p className="m-0 text-sm text-fg-secondary" data-testid="builder-zone">{zoneNote}</p>
         {days !== null && (
           <p className="m-0 text-sm text-fg-secondary">
-            <span className="font-mono text-fg-primary tabular-nums">{days}</span> {copy('daysOpen')}
+            <span className="font-medium text-fg-primary tabular-nums">{days}</span> {copy('daysOpen')}
           </p>
         )}
       </>
@@ -842,6 +901,30 @@ function StepForm({
     return (
       <>
         <PanelHeading title={t('surveys.stepAudience')} />
+        <RadioField
+          label={copy('audience.legend')}
+          value={choice}
+          onChange={(next) => patch({ audienceMode: next as AudienceChoice })}
+          options={[
+            { value: 'company', label: copy('audience.company') },
+            // No department to tick is no way to finish this choice: offered only when there is one.
+            { value: 'departments', label: copy('audience.departments'), disabled: departments === null || departments.length === 0 },
+            { value: 'people', label: copy('audience.people') },
+          ]}
+        />
+        {choice === 'company' && (
+          <p className="m-0 text-sm text-fg-secondary" data-testid="audience-company">
+            {m.people ? copy('audience.companyCount', { count: m.people.length }) : copy('audience.companyAll')}
+          </p>
+        )}
+        {choice === 'people' && (
+          m.people === undefined ? (
+            <p className="m-0 text-sm text-fg-secondary">{copy('audience.peopleLoading')}</p>
+          ) : (
+            <PeoplePicker people={m.people} users={m.users} chosen={values.userIds ?? []} onChange={(ids) => patch({ userIds: ids })} />
+          )
+        )}
+        {choice === 'departments' && (
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
           <legend className="mb-1.5 text-sm font-medium">{t('surveys.departmentsLabel')}</legend>
           {departments === null || departments.length === 0 ? (
@@ -864,10 +947,15 @@ function StepForm({
               ))}
             </div>
           )}
-          {departments !== null && departments.length > 0 && values.departmentIds.length === 0 && (
-            <p className="m-0 text-sm text-fg-secondary">{copy('reachesEveryone', { count: headcount })}</p>
+          {departments !== null && departments.length > 0 && values.departmentIds.length > 0 && (
+            <p className="m-0 text-sm text-fg-secondary">
+              {copy('audience.departmentsCount', {
+                count: departments.filter((d) => values.departmentIds.includes(d.id)).reduce((sum, d) => sum + d.employeeCount, 0),
+              })}
+            </p>
           )}
         </fieldset>
+        )}
         <p className="m-0 flex items-start gap-2 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary">
           <ShieldCheck aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
           {copy('floorNote', { floor: ANONYMITY_FLOOR })}
@@ -879,6 +967,12 @@ function StepForm({
           value={values.targetAudienceCount}
           onChange={(next) => patch({ targetAudienceCount: next })}
         />
+        {values.targetAudienceCount.trim() === '' && m.audienceEstimate !== null ? (
+          // Said BEFORE it is left blank: blank now stands for this count, not for "no rate".
+          <p className="-mt-2 m-0 text-sm text-fg-secondary" data-testid="audience-target-default">
+            {copy('audience.targetDefault', { count: m.audienceEstimate })}
+          </p>
+        ) : null}
         {/* No "Anónima" checkbox: respondents never log in (ruled 2026-10-12), and only an
             anonymous survey can be answered without an account, so every survey built here is
             one (`values.anonymous` defaults to true; both create routes default the same way, through
@@ -904,6 +998,9 @@ function StepForm({
       </>
     )
   }
+  if (step === 'settings') {
+    return <BuilderSettingsStep values={values} patch={patch} />
+  }
   // review
   const named = (departments ?? []).filter((d) => values.departmentIds.includes(d.id)).map((d) => d.name)
   const rows: [string, string][] = [
@@ -913,7 +1010,15 @@ function StepForm({
     [t('surveys.contentLanguage'), languageLabel(t, values.language)],
     [t('surveys.startDate'), reviewDate(values.startDate, locale)],
     [t('surveys.endDate'), reviewDate(values.endDate, locale)],
-    [t('surveys.departmentsLabel'), values.departmentIds.length === 0 ? t('surveys.departmentsAll') : named.join(', ') || t('surveys.readingDepartmentsUnlisted')],
+    [copy('zoneLabel'), zoneLabel(zone)],
+    [
+      copy('audience.legend'),
+      choice === 'people'
+        ? copy((values.userIds ?? []).length === 1 ? 'audience.reviewPeopleOne' : 'audience.reviewPeople', { count: (values.userIds ?? []).length })
+        : choice === 'departments'
+          ? named.join(', ') || t('surveys.readingDepartmentsUnlisted')
+          : copy('audience.company'),
+    ],
     ...(fromTemplate
       ? []
       : [[
@@ -921,6 +1026,11 @@ function StepForm({
           values.credentialMode ? credentialModeLabel(t, values.credentialMode) : inheritLabel(t, m.companyCredentialMode),
         ] as [string, string]]),
     [copy('questionsTitle'), String(values.questions.length)],
+    // The settings step (G16), each row in the respondent's terms.
+    [copy('settings.reviewOrder'), values.randomizeQuestions ? copy('settings.reviewRandom') : copy('settings.reviewAuthored')],
+    [copy('settings.autoSaveLabel'), values.allowPartialResponses && values.autoSave !== false ? copy('settings.reviewOn') : copy('settings.reviewOff')],
+    [copy('settings.timeLimitLabel'), values.timeLimitMinutes?.trim() ? copy('settings.reviewMinutes', { count: values.timeLimitMinutes.trim() }) : copy('settings.noLimit')],
+    [copy('settings.responseLimitLabel'), values.responseLimit?.trim() ? values.responseLimit.trim() : copy('settings.noLimit')],
   ]
   return (
     <>

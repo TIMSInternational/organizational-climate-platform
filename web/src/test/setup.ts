@@ -56,4 +56,7 @@ vi.mock('../features/result-bands/api', async (importOriginal) => {
 afterEach(async () => {
   const { forgetResultBands } = await import('../features/result-bands/useResultBands')
   forgetResultBands()
+  // The same for company names read by id (`useCompanyNameFor`): module state, per page load.
+  const { forgetCompanyNames } = await import('../company-context/useCompanyNameFor')
+  forgetCompanyNames()
 })

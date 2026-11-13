@@ -4,7 +4,8 @@ import { Button, Input, Table, type ChipTone } from '../../../../components/ui'
 import { CanvasChip, CanvasSelect } from '../../next/super/parts'
 import type { IntakeDemographicTarget, IntakeRow } from '../../api/intake'
 import type { CredentialMode } from '../../api/companySettings'
-import type { BulkImportIssue, BulkImportResponse, BulkImportRowResult } from '../../api/bulkImport'
+import type { BulkImportResponse, BulkImportRowResult } from '../../api/bulkImport'
+import { intakeReasons } from './intakeReasons'
 import { ROLE_TARGETS } from './intakeModel'
 
 /**
@@ -20,24 +21,6 @@ const STATUS_TONE: Record<string, ChipTone> = {
   duplicate: 'warning',
   error: 'critical',
 }
-
-/**
- * The reasons the server names by code, each with a sentence in both catalogues
- * (`users.intake.reason.*`). A code outside this set is one this screen was not written for; it
- * falls back to the server's English rather than to nothing, because an unexplained red row is
- * worse than an untranslated one.
- */
-const REASON_CODES: ReadonlySet<string> = new Set([
-  'name_required',
-  'invalid_email',
-  'invalid_role',
-  'department_not_found',
-  'department_inactive',
-  'invalid_demographic',
-  'already_user',
-  'already_invited',
-  'repeated_in_file',
-])
 
 /**
  * Step 3: every row, editable, with the server's verdict against each one.
@@ -98,13 +81,7 @@ export function ReviewStep({
   const optionLabel = (field: string, value: string) =>
     demographicTargets.find((d) => d.field === field)?.optionLabels?.[value] ?? value
 
-  const reasonText = (row: BulkImportRowResult, issue: BulkImportIssue, index: number) =>
-    REASON_CODES.has(issue.code)
-      ? t(`users.intake.reason.${issue.code}`, { value: issue.value || t('users.intake.roleMissing') })
-      : (row.errors[index] ?? issue.code)
-
-  const reasonsFor = (row: BulkImportRowResult) =>
-    row.issues && row.issues.length > 0 ? row.issues.map((issue, index) => reasonText(row, issue, index)) : row.errors
+  const reasonsFor = (row: BulkImportRowResult) => intakeReasons(row, t, t('users.intake.roleMissing'))
 
   return (
     <div className="flex min-w-0 flex-col gap-3">

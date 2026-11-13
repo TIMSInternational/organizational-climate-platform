@@ -118,11 +118,13 @@ afterEach(() => {
 })
 
 describe('the figure', () => {
-  it('reads the count from /live-results, in the figure face', async () => {
+  it('reads the count from /live-results, in tabular figures of the UI face', async () => {
     renderPage()
     // The detail says 12; the poll says 13. 13 on screen is proof the poll landed.
     await waitFor(() => expect(figure()).toBe('13'))
-    expect(document.querySelector('[data-slot="live-figure"]')?.className).toMatch(/font-mono/)
+    const figureClasses = document.querySelector('[data-slot="live-figure"]')!.className.split(/\s+/)
+    expect(figureClasses).toContain('tabular-nums')
+    expect(figureClasses).not.toContain('font-mono')
     expect(screen.getByText('of 40 expected responses')).toBeTruthy()
   })
 
@@ -218,7 +220,9 @@ describe('what people wrote', () => {
     await waitFor(() => expect(figure()).toBe(String(BELOW_THE_FLOOR)))
 
     const block = wordsBlock()
-    expect(within(block).getByText(`Protected until ${MINIMUM_RESPONDENTS} responses`)).toBeTruthy()
+    // The ProtectedState primitive: the padlock and "Fewer than {floor}", never a count.
+    const mark = within(block).getByText(`Fewer than ${MINIMUM_RESPONDENTS}`)
+    expect(mark.closest('[data-slot="protected-state"]')).toBeTruthy()
     expect(block.querySelector('[data-slot="words-hatch"]')).toBeTruthy()
     expect(screen.queryByText('visa')).toBeNull()
     expect(screen.queryByText('handover')).toBeNull()
@@ -492,5 +496,73 @@ describe('by role', () => {
     expect(await screen.findByText(en.microclimates.next.noAccessTitle)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Close the session' })).toBeNull()
     await waitFor(() => expect(vi.mocked(fetch)).not.toHaveBeenCalled())
+  })
+})
+
+/**
+ * The company's clock (after #640 gave it to the list and the detail). The session opens at
+ * `02:06 UTC` on 10 Sep and closes at the same time on 12 Sep, and every expectation names the
+ * zone it is read in, so the same assertions hold under TZ=America/Chicago and TZ=UTC.
+ */
+describe('the company’s clock', () => {
+  const UTC_WINDOW = { startTime: '2026-09-10T02:06:08.991+00:00', endTime: '2026-09-12T02:06:08.992+00:00' }
+
+  function routeWithZone(microclimate: MicroclimateDetail, zone: string | null) {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/settings')) {
+        return Promise.resolve(
+          zone === null
+            ? new Response(JSON.stringify({ message: 'boom' }), { status: 500 })
+            : new Response(JSON.stringify({ settings: { timezone: zone } }), { status: 200 }),
+        )
+      }
+      const body = url.includes('/live-results') ? results() : microclimate
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+    })
+  }
+
+  beforeEach(() => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+  })
+
+  /** The run under the title: the close, then the sentence naming the zone it is read in. */
+  function sentences(): HTMLElement {
+    return document.querySelector('[data-slot="page-meta-sentences"]') as HTMLElement
+  }
+
+  it.each([
+    ['America/Costa_Rica', '11 de septiembre a las 20:06', '9 sept 2026, 20:06', '11 sept 2026, 20:06', /^En vivo · actualizado a las 9:00:\d\d$/, 'Costa Rica (GMT-6)'],
+    ['Asia/Tokyo', '12 de septiembre a las 11:06', '10 sept 2026, 11:06', '12 sept 2026, 11:06', /^En vivo · actualizado a las 0:00:\d\d$/, 'Tokyo (GMT+9)'],
+  ])('prints every date and time on the company’s zone (%s) and names it', async (zone, closes, opens, closesFact, stamped, label) => {
+    // 15:00 UTC on 11 Sep, so the poll's own stamp is read on the same clock as the session.
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date('2026-09-11T15:00:00Z') })
+    routeWithZone(detail(UTC_WINDOW), zone)
+    renderPage()
+    expect(await screen.findByText(`abierta hasta el ${closes}`)).toBeTruthy()
+    expect(screen.getByText(opens)).toBeTruthy()
+    expect(screen.getByText(closesFact)).toBeTruthy()
+    await waitFor(() => expect(document.querySelector('[data-slot="live-stamp"]')?.textContent).toMatch(stamped))
+    expect(sentences().textContent).toContain(`Fechas y horas en la zona de la empresa: ${label}.`)
+    // The session's own company: a super administrator reads whichever tenant it is in.
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith('/admin/companies/c1/settings'))).toBe(true)
+  })
+
+  it('says when a draft’s link will be shared on the company’s clock', async () => {
+    routeWithZone(detail({ ...UTC_WINDOW, status: 'draft' }), 'America/Costa_Rica')
+    renderPage()
+    expect(await screen.findByText('El enlace se comparte cuando la sesión abra, el 9 de septiembre a las 20:06.')).toBeTruthy()
+  })
+
+  it('falls back to the browser’s zone when the company’s cannot be read, and says which', async () => {
+    routeWithZone(detail(UTC_WINDOW), null)
+    renderPage()
+    // The label names the browser zone's place (`Chicago`), not its IANA id.
+    const browser = (Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop() ?? '').replace(/_/g, ' ')
+    const time = new Intl.DateTimeFormat('es', { hour: 'numeric', minute: '2-digit' }).format(new Date(UTC_WINDOW.endTime))
+    expect(await screen.findByText(new RegExp(`^abierta hasta el .* a las ${time}$`))).toBeTruthy()
+    const note = sentences().textContent ?? ''
+    expect(note).toContain('No se pudo leer la zona horaria de la empresa: fechas y horas en la de este navegador, ')
+    expect(note).toContain(browser)
   })
 })

@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    { "source": "/logos/:companyId", "destination": "https://api.climate.timsint.com/public/company-logos/:companyId" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

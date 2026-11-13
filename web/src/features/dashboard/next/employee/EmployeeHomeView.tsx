@@ -260,10 +260,10 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
     >
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <Chip tone="good" label={t('employee.next.openChip')} icon={<Check aria-hidden="true" />} />
+          <Chip tone="live" label={t('employee.next.openChip')} />
           {closes ? <span className="text-sm text-fg-secondary">{closes}</span> : null}
         </div>
-        <h3 className="m-0 font-store-serif text-2xl font-normal">{survey.name ?? t('surveys.untitled')}</h3>
+        <h3 className="m-0 font-display text-2xl font-semibold">{survey.name ?? t('surveys.untitled')}</h3>
 
         {/* Three readings, in mono, as the canvas sets them. `dl` because each is a
             labelled value rather than a row of a table. Equal thirds wherever a third holds
@@ -351,10 +351,10 @@ function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
       <div className="flex min-w-0 flex-col gap-3">
         {model.hasAnsweredIdentified ? (
           <div className="flex flex-wrap items-center gap-2.5">
-            <Chip tone="good" label={t('employee.next.answeredChip')} icon={<Check aria-hidden="true" />} />
+            <Chip tone="neutral" label={t('employee.next.answeredChip')} icon={<Check aria-hidden="true" />} />
           </div>
         ) : null}
-        <h3 className="m-0 font-store-serif text-2xl font-normal">{t('employee.next.nothingDueTitle')}</h3>
+        <h3 className="m-0 font-display text-2xl font-semibold">{t('employee.next.nothingDueTitle')}</h3>
         <p className="mb-0 max-w-measure text-base text-fg-secondary">
           {/* Never the department. This used to read "no hay ninguna encuesta abierta para
               <departamento>", which was wrong twice over and ESPH's rehearsal caught it on

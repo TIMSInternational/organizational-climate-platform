@@ -17,13 +17,13 @@ describe('KpiTile', () => {
     expect(screen.getByText('72')).toBeTruthy()
   })
 
-  it('sets the number in tabular mono, and leaves the label in the sans face', () => {
+  it('sets the number in tabular figures in the sans face, never a third monospaced face', () => {
     // The typographic rule is the whole design thesis, so it is pinned rather
     // than left to the eye: a value that silently loses `tabular-nums` shifts
     // width as it updates and the row stops reading as an instrument.
     render(<KpiTile label="Participation" value={84} />)
     const value = screen.getByText('84')
-    expect(value.className).toContain('font-mono')
+    expect(value.className).not.toContain('font-mono')
     expect(value.className).toContain('tabular-nums')
     expect(screen.getByText('Participation').className).not.toContain('font-mono')
   })
@@ -160,10 +160,12 @@ describe('KpiTile eyebrow', () => {
 })
 
 describe('KpiTile valueText', () => {
-  it('prints a reading that is a name, not a number, in the instrument face: the canvas’s "Q3"', () => {
+  it('prints a reading that is a name, not a number, in the reading slot: the canvas’s "Q3"', () => {
     render(<KpiTile label="Last closed survey" value={null} valueText="Q3" unit="closed 6 Aug" />)
     const reading = screen.getByText('Q3')
-    expect(reading.className).toContain('font-mono')
+    expect(reading.getAttribute('data-slot')).toBe('kpi-value')
+    expect(reading.className).toContain('tabular-nums')
+    expect(reading.className).not.toContain('font-mono')
     expect(screen.queryByText('—')).toBeNull()
   })
 })

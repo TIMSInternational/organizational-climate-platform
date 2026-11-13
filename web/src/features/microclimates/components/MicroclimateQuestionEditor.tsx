@@ -1,12 +1,15 @@
+import { useId } from 'react'
+import { GripVertical, Plus, Trash2, X } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import {
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CheckboxField,
-  SelectField,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
   TextField,
 } from '../../../components/ui'
 import { QUESTION_TYPES } from '../questionTypes'
@@ -68,6 +71,17 @@ interface MicroclimateQuestionEditorProps {
  * label is marked required rather than optional the way a multiple-choice label is.
  * Reusing the option editor and asking authors to type the emoji into the label field
  * is precisely the shape #198 rejected.
+ *
+ * ## Drawn as the row beside it, not as a card of its own
+ *
+ * In the creation page this block sits between `QuestionRow`s (the collapsed rows for the
+ * types that need no options), so it takes their grammar exactly: the same hairline box and
+ * padding, the grip and the number disc, the `Obligatoria`/`Opcional` switch in the header
+ * instead of a checkbox, and the type as a compact select where the row shows its chip. A
+ * remove action is an icon button with the action as its accessible name (the trash for the
+ * question, a cross for an option) and an add action is the tinted text button (`.btn.t`),
+ * never bare text or a second carded button -- HIG `buttons.md` § "Best practices": a
+ * button must look like one, and one control grammar per list.
  */
 export default function MicroclimateQuestionEditor({
   question,
@@ -82,6 +96,7 @@ export default function MicroclimateQuestionEditor({
   const bilingual = needsBothLanguages(language)
   const showsOptions = question.type === 'multiple_choice'
   const showsEmojiScale = question.type === 'emoji_rating'
+  const switchId = useId()
 
   function updateOption(key: string, patch: Partial<WizardOptionValues>): void {
     onChange({
@@ -102,107 +117,151 @@ export default function MicroclimateQuestionEditor({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">
-          {t('microclimates.questionNumber', { order })}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-panel-gap">
-        {bilingual ? (
-          // Side by side on a wide screen, stacked on a phone. Both are always
-          // rendered: a bilingual session that is missing one column cannot be
-          // published, so hiding the second field behind a toggle would hide the
-          // reason the publish gate later refuses.
-          <div className="grid gap-panel-gap md:grid-cols-2">
-            <TextField
-              label={t('microclimates.questionTextEn')}
-              value={question.textEn}
-              onChange={(value) => onChange({ ...question, textEn: value })}
-              disabled={disabled}
-              required
-            />
-            <TextField
-              label={t('microclimates.questionTextEs')}
-              value={question.textEs}
-              onChange={(value) => onChange({ ...question, textEs: value })}
-              disabled={disabled}
-              required
-            />
-          </div>
-        ) : (
-          <TextField
-            label={t('surveys.questionText')}
-            value={language === 'es' ? question.textEs : question.textEn}
-            onChange={(value) =>
-              onChange(
-                language === 'es' ? { ...question, textEs: value } : { ...question, textEn: value },
-              )
-            }
+    <div
+      role="group"
+      aria-label={t('microclimates.questionNumber', { order })}
+      className="flex flex-col gap-2 rounded-xl border border-line-default px-3 pt-2.5 pb-3"
+    >
+      <div className="flex flex-wrap items-center gap-2.5">
+        <GripVertical aria-hidden="true" className="size-4 shrink-0 text-fg-tertiary" />
+        <span
+          aria-hidden="true"
+          className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-surface-fill text-xs font-semibold tabular-nums text-fg-secondary"
+        >
+          {order}
+        </span>
+        <Select
+          value={question.type}
+          disabled={disabled}
+          onValueChange={(type) =>
+            onChange({
+              ...question,
+              type,
+              // Two blank rows rather than none: the rule is "at least two", and
+              // an empty list makes the author guess how many are needed.
+              options:
+                type === 'multiple_choice' && question.options.length === 0
+                  ? [emptyOption(nextKey()), emptyOption(nextKey())]
+                  : question.options,
+              // Four faces, glyphs seeded and names blank. The glyphs are a
+              // starting point an author can overwrite; the names are the one
+              // thing nobody else can supply, so they are left empty and the
+              // step refuses to advance until they are filled.
+              emojiOptions:
+                type === 'emoji_rating' && question.emojiOptions.length === 0
+                  ? defaultEmojiScale(nextKey)
+                  : question.emojiOptions,
+            })
+          }
+        >
+          <SelectTrigger size="sm" className="w-auto" aria-label={t('common.type')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {QUESTION_TYPES.map((type) => (
+              <SelectItem key={type} value={type}>
+                {questionTypeLabel(t, type)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="flex-1" />
+        <span className="inline-flex items-center gap-2 text-sm text-fg-secondary">
+          <Switch
+            id={switchId}
+            checked={question.required}
+            disabled={disabled}
+            onCheckedChange={(required) => onChange({ ...question, required })}
+          />
+          <label htmlFor={switchId} className="m-0 text-sm font-normal leading-normal text-fg-secondary">
+            {question.required ? t('microclimates.next.create.required') : t('microclimates.next.create.optional')}
+          </label>
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-canvas"
+          onClick={onRemove}
+          disabled={disabled}
+          aria-label={t('microclimates.removeQuestion')}
+          title={t('microclimates.removeQuestion')}
+        >
+          <Trash2 aria-hidden="true" />
+        </Button>
+      </div>
+
+      {bilingual ? (
+        // Side by side on a wide screen, stacked on a phone. Both are always
+        // rendered: a bilingual session that is missing one column cannot be
+        // published, so hiding the second field behind a toggle would hide the
+        // reason the publish gate later refuses.
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <Input
+            aria-label={t('microclimates.questionTextEn')}
+            placeholder={t('microclimates.questionTextEn')}
+            value={question.textEn}
+            onChange={(event) => onChange({ ...question, textEn: event.target.value })}
             disabled={disabled}
             required
           />
-        )}
-
-        <div className="grid gap-panel-gap md:grid-cols-2">
-          <SelectField
-            label={t('common.type')}
-            value={question.type}
-            onChange={(type) =>
-              onChange({
-                ...question,
-                type,
-                // Two blank rows rather than none: the rule is "at least two", and
-                // an empty list makes the author guess how many are needed.
-                options:
-                  type === 'multiple_choice' && question.options.length === 0
-                    ? [emptyOption(nextKey()), emptyOption(nextKey())]
-                    : question.options,
-                // Four faces, glyphs seeded and names blank. The glyphs are a
-                // starting point an author can overwrite; the names are the one
-                // thing nobody else can supply, so they are left empty and the
-                // step refuses to advance until they are filled.
-                emojiOptions:
-                  type === 'emoji_rating' && question.emojiOptions.length === 0
-                    ? defaultEmojiScale(nextKey)
-                    : question.emojiOptions,
-              })
-            }
-            options={QUESTION_TYPES.map((type) => ({
-              value: type,
-              label: questionTypeLabel(t, type),
-            }))}
+          <Input
+            aria-label={t('microclimates.questionTextEs')}
+            placeholder={t('microclimates.questionTextEs')}
+            value={question.textEs}
+            onChange={(event) => onChange({ ...question, textEs: event.target.value })}
             disabled={disabled}
-          />
-          <CheckboxField
-            label={t('microclimates.questionRequired')}
-            checked={question.required}
-            onChange={(checked) => onChange({ ...question, required: checked })}
-            disabled={disabled}
+            required
           />
         </div>
+      ) : (
+        <Input
+          // The same accessible name the field had as a labelled TextField, which the
+          // wizard's tests (and a screen-reader user) find it by.
+          aria-label={t('surveys.questionText')}
+          placeholder={t('surveys.questionText')}
+          value={language === 'es' ? question.textEs : question.textEn}
+          onChange={(event) =>
+            onChange(
+              language === 'es'
+                ? { ...question, textEs: event.target.value }
+                : { ...question, textEn: event.target.value },
+            )
+          }
+          disabled={disabled}
+          required
+        />
+      )}
 
-        {showsOptions && (
-          <div className="flex flex-col gap-inline">
-            {question.options.map((option, index) => (
-              <div key={option.key} className="flex flex-wrap items-end gap-inline">
-                <div className="grid min-w-0 flex-1 gap-panel-gap md:grid-cols-2">
-                  <TextField
-                    label={
-                      bilingual
-                        ? t('microclimates.optionLabelEn', { number: index + 1 })
-                        : t('microclimates.optionLabel', { number: index + 1 })
+      {showsOptions && (
+        <div className="flex flex-col gap-2">
+          {question.options.map((option, index) => {
+            const labelFirst = bilingual
+              ? t('microclimates.optionLabelEn', { number: index + 1 })
+              : t('microclimates.optionLabel', { number: index + 1 })
+            return (
+              <div key={option.key} className="flex items-center gap-2">
+                <div className={bilingual ? 'grid min-w-0 flex-1 grid-cols-1 gap-2 md:grid-cols-2' : 'min-w-0 flex-1'}>
+                  <Input
+                    aria-label={labelFirst}
+                    placeholder={labelFirst}
+                    // The column the content language writes, like the question text and the
+                    // emoji labels: a Spanish microclimate's options are `labelEs`, which is
+                    // what `localizedFor` sends and what a draft is read back into (G23).
+                    value={language === 'es' ? option.labelEs : option.labelEn}
+                    onChange={(event) =>
+                      updateOption(
+                        option.key,
+                        language === 'es' ? { labelEs: event.target.value } : { labelEn: event.target.value },
+                      )
                     }
-                    value={option.labelEn}
-                    onChange={(value) => updateOption(option.key, { labelEn: value })}
                     disabled={disabled}
-                    className={bilingual ? undefined : 'md:col-span-2'}
                   />
                   {bilingual && (
-                    <TextField
-                      label={t('microclimates.optionLabelEs', { number: index + 1 })}
+                    <Input
+                      aria-label={t('microclimates.optionLabelEs', { number: index + 1 })}
+                      placeholder={t('microclimates.optionLabelEs', { number: index + 1 })}
                       value={option.labelEs}
-                      onChange={(value) => updateOption(option.key, { labelEs: value })}
+                      onChange={(event) => updateOption(option.key, { labelEs: event.target.value })}
                       disabled={disabled}
                     />
                   )}
@@ -210,6 +269,7 @@ export default function MicroclimateQuestionEditor({
                 <Button
                   type="button"
                   variant="ghost"
+                  size="icon-canvas"
                   onClick={() =>
                     onChange({
                       ...question,
@@ -217,125 +277,127 @@ export default function MicroclimateQuestionEditor({
                     })
                   }
                   disabled={disabled}
+                  aria-label={t('microclimates.removeOption', { number: index + 1 })}
+                  title={t('microclimates.removeOption', { number: index + 1 })}
                 >
-                  {t('microclimates.removeOption', { number: index + 1 })}
+                  <X aria-hidden="true" />
                 </Button>
               </div>
-            ))}
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  onChange({ ...question, options: [...question.options, emptyOption(nextKey())] })
-                }
-                disabled={disabled}
-              >
-                {t('microclimates.addOption')}
-              </Button>
-            </div>
+            )
+          })}
+          <div>
+            <Button
+              type="button"
+              variant="plain"
+              size="canvas"
+              className="-ml-2"
+              onClick={() =>
+                onChange({ ...question, options: [...question.options, emptyOption(nextKey())] })
+              }
+              disabled={disabled}
+            >
+              <Plus aria-hidden="true" />
+              {t('microclimates.addOption')}
+            </Button>
           </div>
-        )}
+        </div>
+      )}
 
-        {showsEmojiScale && (
-          <div className="flex flex-col gap-inline">
-            {/* Said once, above the rows, rather than as help text on every label: the
-                author needs to know WHY a face has to be named before they meet four
-                required fields, and repeating it four times is noise. */}
-            <p className="text-sm text-fg-secondary">{t('microclimates.emojiScaleHint')}</p>
-            {question.emojiOptions.map((face, index) => (
-              <div key={face.key} className="flex flex-wrap items-end gap-inline">
-                <div className="grid min-w-0 flex-1 gap-panel-gap md:grid-cols-3">
-                  <TextField
-                    label={t('microclimates.emojiGlyph', { number: index + 1 })}
-                    value={face.emoji}
-                    onChange={(value) => updateEmojiOption(face.key, { emoji: value })}
-                    disabled={disabled}
-                    required
-                  />
-                  {bilingual ? (
-                    <>
-                      <TextField
-                        label={t('microclimates.emojiLabelEn', { number: index + 1 })}
-                        value={face.labelEn}
-                        onChange={(value) => updateEmojiOption(face.key, { labelEn: value })}
-                        disabled={disabled}
-                        required
-                      />
-                      <TextField
-                        label={t('microclimates.emojiLabelEs', { number: index + 1 })}
-                        value={face.labelEs}
-                        onChange={(value) => updateEmojiOption(face.key, { labelEs: value })}
-                        disabled={disabled}
-                        required
-                      />
-                    </>
-                  ) : (
-                    // Bound to the column the CONTENT LANGUAGE actually writes, the way
-                    // the question-text field above does it -- not always to `labelEn`.
-                    // The plain option rows below still bind to `labelEn` unconditionally
-                    // while `localizedFor` reads `labelEs` for a Spanish microclimate;
-                    // that mismatch is a pre-existing defect on the multiple-choice path
-                    // and is deliberately not copied here.
-                    <TextField
-                      label={t('microclimates.emojiLabel', { number: index + 1 })}
-                      value={language === 'es' ? face.labelEs : face.labelEn}
-                      onChange={(value) =>
-                        updateEmojiOption(
-                          face.key,
-                          language === 'es' ? { labelEs: value } : { labelEn: value },
-                        )
-                      }
-                      disabled={disabled}
-                      // Required whichever language it is: this is the option's
-                      // accessible name, and the server refuses a face without one
-                      // rather than storing an unnamed emoji.
-                      required
-                      className="md:col-span-2"
-                    />
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() =>
-                    onChange({
-                      ...question,
-                      emojiOptions: question.emojiOptions.filter(
-                        (candidate) => candidate.key !== face.key,
-                      ),
-                    })
-                  }
+      {showsEmojiScale && (
+        <div className="flex flex-col gap-2">
+          {/* Said once, above the rows, rather than as help text on every label: the
+              author needs to know WHY a face has to be named before they meet four
+              required fields, and repeating it four times is noise. */}
+          <p className="text-sm text-fg-secondary">{t('microclimates.emojiScaleHint')}</p>
+          {question.emojiOptions.map((face, index) => (
+            <div key={face.key} className="flex items-end gap-2">
+              <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 md:grid-cols-3">
+                <TextField
+                  label={t('microclimates.emojiGlyph', { number: index + 1 })}
+                  value={face.emoji}
+                  onChange={(value) => updateEmojiOption(face.key, { emoji: value })}
                   disabled={disabled}
-                >
-                  {t('microclimates.removeEmojiOption', { number: index + 1 })}
-                </Button>
+                  required
+                />
+                {bilingual ? (
+                  <>
+                    <TextField
+                      label={t('microclimates.emojiLabelEn', { number: index + 1 })}
+                      value={face.labelEn}
+                      onChange={(value) => updateEmojiOption(face.key, { labelEn: value })}
+                      disabled={disabled}
+                      required
+                    />
+                    <TextField
+                      label={t('microclimates.emojiLabelEs', { number: index + 1 })}
+                      value={face.labelEs}
+                      onChange={(value) => updateEmojiOption(face.key, { labelEs: value })}
+                      disabled={disabled}
+                      required
+                    />
+                  </>
+                ) : (
+                  // Bound to the column the CONTENT LANGUAGE actually writes, the way
+                  // the question-text field above does it -- not always to `labelEn`.
+                  // The plain option rows above bind the same way since G23.
+                  <TextField
+                    label={t('microclimates.emojiLabel', { number: index + 1 })}
+                    value={language === 'es' ? face.labelEs : face.labelEn}
+                    onChange={(value) =>
+                      updateEmojiOption(
+                        face.key,
+                        language === 'es' ? { labelEs: value } : { labelEn: value },
+                      )
+                    }
+                    disabled={disabled}
+                    // Required whichever language it is: this is the option's
+                    // accessible name, and the server refuses a face without one
+                    // rather than storing an unnamed emoji.
+                    required
+                    className="md:col-span-2"
+                  />
+                )}
               </div>
-            ))}
-            <div>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
+                size="icon-canvas"
                 onClick={() =>
                   onChange({
                     ...question,
-                    emojiOptions: [...question.emojiOptions, emptyEmojiOption(nextKey())],
+                    emojiOptions: question.emojiOptions.filter(
+                      (candidate) => candidate.key !== face.key,
+                    ),
                   })
                 }
                 disabled={disabled}
+                aria-label={t('microclimates.removeEmojiOption', { number: index + 1 })}
+                title={t('microclimates.removeEmojiOption', { number: index + 1 })}
               >
-                {t('microclimates.addEmojiOption')}
+                <X aria-hidden="true" />
               </Button>
             </div>
+          ))}
+          <div>
+            <Button
+              type="button"
+              variant="plain"
+              size="canvas"
+              className="-ml-2"
+              onClick={() =>
+                onChange({
+                  ...question,
+                  emojiOptions: [...question.emojiOptions, emptyEmojiOption(nextKey())],
+                })
+              }
+              disabled={disabled}
+            >
+              <Plus aria-hidden="true" />
+              {t('microclimates.addEmojiOption')}
+            </Button>
           </div>
-        )}
-
-        <div>
-          <Button type="button" variant="ghost" onClick={onRemove} disabled={disabled}>
-            {t('microclimates.removeQuestion')}
-          </Button>
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   )
 }

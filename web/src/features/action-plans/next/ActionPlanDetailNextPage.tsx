@@ -1,14 +1,15 @@
 import { useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router'
-import { ArrowRight, ChartColumn, ChevronDown, Clock, Ellipsis, Plus, Target } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router'
+import { ArrowRight, ChartColumn, ChevronDown, Clock, Ellipsis, Pencil, Plus, Shield, Target, Trash2 } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
-import { CanvasCard, FactList, HatchTag, IconBox, NoteBand, PageMeta } from '../../../components/canvas'
+import { PageHeader } from '../../../components/layout'
+import { CanvasCard, FactList, IconBox, PageMeta } from '../../../components/canvas'
 import {
   Alert,
   AlertDescription,
   Button,
   Chip,
+  ConfirmationDialog,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -16,16 +17,19 @@ import {
   DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
+  ErrorState,
   LoadingRegion,
-  NetworkError,
+  Note,
   Progress,
+  ProtectedState,
   SkeletonText,
-  type ChipTone,
 } from '../../../components/ui'
 import { useCompanyScope } from '../../../company-context'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
@@ -33,14 +37,16 @@ import { calendarDay, calendarDayLong } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import { dimensionLabel } from '../../surveys/dimensionLabel'
 import { reading } from '../../dashboard/next/derive'
-import { ANONYMITY_FLOOR, BandChip, bandOf } from '../../../components/charts'
+import { BandChip, bandOf } from '../../../components/charts'
 import { useResultBands } from '../../result-bands/useResultBands'
 import ProgressUpdateForm from '../components/ProgressUpdateForm'
-import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, statusLabel } from '../actionPlanVocabulary'
+import PlanEditForm from '../components/PlanEditForm'
+import { ACTION_PLAN_PRIORITIES, ACTION_PLAN_STATUSES, kpiProgressPercent, priorityLabel, progressPercentText, statusLabel } from '../actionPlanVocabulary'
 import { daysToDue, dueDay, elapsedShare, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 import { useActionPlanDetailModel, type ActionPlanDetailState } from './useActionPlanDetailModel'
 import { byCount } from '../../../i18n/plural'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * `/action-plans/:id` — the redesigned Detalle de plan, drawn as the ActionPlanDetail board
@@ -68,14 +74,7 @@ export default function ActionPlanDetailNextPage() {
     return <EmptyState title={t('actionPlans.accessRestricted')} description={t('actionPlans.noPermissionMessage')} />
   }
   if (state.status === 'error') {
-    return (
-      <NetworkError
-        title={t('errors.generic')}
-        description={state.error ?? undefined}
-        onRetry={state.reload}
-        retryText={t('common.retry')}
-      />
-    )
+    return <ErrorState title={t('actionPlans.next.loadPlanFailed')} description={state.error ?? undefined} onRetry={state.reload} />
   }
   if (state.status === 'loading' || !state.model) {
     return (
@@ -95,13 +94,6 @@ const STATUS_KEY: Record<string, string> = {
   cancelled: 'actionPlans.next.status.cancelled',
 }
 
-const STATUS_TONE: Record<string, ChipTone> = {
-  not_started: 'neutral',
-  in_progress: 'accent',
-  completed: 'good',
-  overdue: 'critical',
-  cancelled: 'neutral',
-}
 
 /** The board's sentence-case status ("No iniciado"); the server's own word for one it does not know. */
 function statusWord(t: TranslateFn, status: string): string {
@@ -109,9 +101,12 @@ function statusWord(t: TranslateFn, status: string): string {
   return key ? t(key) : statusLabel(t, status)
 }
 
-function priorityTone(priority: string): ChipTone {
-  return priority === 'high' || priority === 'critical' ? 'warning' : 'neutral'
-}
+/*
+ * Every status and priority chip is gray. Blue is for what is live and what can be acted on;
+ * green, amber and red are the three result areas and nothing else (ruling of 11 Nov, HIG
+ * `color.md` › "Avoid using the same color to mean different things"). A plan's lateness is
+ * said by the due sentence beside them: a red clock and the words in the meta line's ink.
+ */
 
 /** A plan that is over: its due date no longer counts down. */
 const SETTLED = new Set(['completed', 'cancelled'])
@@ -150,7 +145,23 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
   const capabilities = useViewerCapabilities()
   const { plan, asOf } = model
   const manages = capabilities.canManageActionPlan(plan)
+  const navigate = useNavigate()
   const [progressOpen, setProgressOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function confirmDelete() {
+    setDeleteError(null)
+    try {
+      await state.deletePlan()
+    } catch (err) {
+      setDeleteError(describeApiError(err, t))
+      // Rethrown so the dialog stays open with the reason in it (`ConfirmationDialog`).
+      throw err
+    }
+    void navigate('/action-plans', { replace: true })
+  }
 
   const due = dueDay(plan.dueDate)
   const days = daysToDue(asOf, plan.dueDate)
@@ -178,25 +189,33 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
 
   return (
     <div>
-      <PageTopBar
-        compact
+      <PageHeader
         title={plan.title}
         eyebrow={scopeName ? t('actionPlans.next.eyebrow', { scope: scopeName }) : t('actionPlans.next.eyebrowPlain')}
         breadcrumbs={[{ label: t('navigation.actionPlans'), href: '/action-plans' }, { label: plan.title }]}
         meta={
           <PageMeta>
-            <Chip label={statusWord(t, plan.status)} tone={STATUS_TONE[plan.status] ?? 'neutral'} />
-            <Chip label={t('actionPlans.next.priorityChip', { priority: priorityWord })} tone={priorityTone(plan.priority)} />
-            <span className={cn(!settled && days < 0 && 'text-accent-red-ink')}>{dueSentence}</span>
+            <Chip label={statusWord(t, plan.status)} />
+            <Chip label={t('actionPlans.next.priorityChip', { priority: priorityWord })} />
+            {/* One red cue: the clock. The words keep the meta line's ink, so "Venció el…" does
+                not wear the Crítica band's red beside the area chip (one colour per meaning). */}
+            <span data-slot="plan-due-sentence" className="inline-flex items-center gap-1">
+              {!settled && days < 0 && <Clock aria-hidden="true" data-slot="plan-due-clock" className="size-3.5 shrink-0 text-accent-red-ink" />}
+              {dueSentence}
+            </span>
           </PageMeta>
+        }
+        primaryAction={
+          manages ? (
+            <Button variant="primary" size="canvas" onClick={() => setProgressOpen(true)}>
+              <Plus aria-hidden="true" />
+              {t('actionPlans.next.recordProgress')}
+            </Button>
+          ) : undefined
         }
         actions={
           manages ? (
             <>
-              <Button variant="primary" size="canvas" onClick={() => setProgressOpen(true)}>
-                <Plus aria-hidden="true" />
-                {t('actionPlans.next.recordProgress')}
-              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="canvas" disabled={state.saving}>
@@ -221,6 +240,11 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                    <Pencil aria-hidden="true" />
+                    {t('actionPlans.next.edit.menu')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuLabel>{t('actionPlans.next.priorityMenu')}</DropdownMenuLabel>
                   <DropdownMenuRadioGroup value={plan.priority} onValueChange={(next) => void state.changePriority(next)}>
                     {ACTION_PLAN_PRIORITIES.map((priority) => (
@@ -243,6 +267,19 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                       </DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>
+                  {/* Deleting is administrators only on the server (`ActionPlanEndpoints.DeleteAsync`),
+                      the same rule as every write in this menu; the confirm says what goes with it. */}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => {
+                      setDeleteError(null)
+                      setDeleteOpen(true)
+                    }}
+                  >
+                    <Trash2 aria-hidden="true" />
+                    {t('actionPlans.next.delete.menu')}
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
@@ -256,7 +293,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_--spacing(85)]">
         <div className="flex min-w-0 flex-col gap-4">
           <DeadlineCard model={model} days={days} dueLong={dueLong} dueShort={dueShort} createdDay={createdDay} author={author} />
           <WhatCard model={model} scopeName={scopeName} manages={manages} />
@@ -296,26 +333,26 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                   value: plan.ownerName ? (
                     <span className="font-medium text-fg-primary">{plan.ownerName}</span>
                   ) : (
-                    // Amber, not grey: unassigned is a thing to fix before the first progress
-                    // note, which is what the list's "SIN RESPONSABLE" tile says too.
-                    <span className="text-accent-amber-ink">{t('actionPlans.next.unassigned')}</span>
+                    // In words, not amber: unassigned is a task to settle before the first
+                    // progress note (the list's "Sin responsable" tile says so), not a result area.
+                    <span className="text-fg-secondary">{t('actionPlans.next.unassigned')}</span>
                   ),
                 },
                 {
                   id: 'priority',
                   term: t('actionPlans.next.sheet.priority'),
-                  value: <Chip label={priorityLabel(t, plan.priority)} tone={priorityTone(plan.priority)} />,
+                  value: <Chip label={priorityLabel(t, plan.priority)} />,
                 },
                 {
                   id: 'status',
                   term: t('actionPlans.next.sheet.status'),
-                  value: <Chip label={statusWord(t, plan.status)} tone={STATUS_TONE[plan.status] ?? 'neutral'} />,
+                  value: <Chip label={statusWord(t, plan.status)} />,
                 },
                 {
                   id: 'created',
                   term: t('actionPlans.next.sheet.created'),
                   value: createdDay ? (
-                    <span className="font-mono tabular-nums">{dayWithYear(createdDay, locale)}</span>
+                    <span className="tabular-nums">{dayWithYear(createdDay, locale)}</span>
                   ) : (
                     <span className="text-fg-tertiary">{t('actionPlans.next.sheet.unknown')}</span>
                   ),
@@ -323,7 +360,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
                 {
                   id: 'due',
                   term: t('actionPlans.next.sheet.due'),
-                  value: <span className="font-mono tabular-nums">{dayWithYear(due, locale)}</span>,
+                  value: <span className="tabular-nums">{dayWithYear(due, locale)}</span>,
                 },
                 {
                   id: 'template',
@@ -342,7 +379,7 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
               ]}
             />
           </CanvasCard>
-          <NoteBand roomy>{t('actionPlans.next.guard')}</NoteBand>
+          <Note icon={<Shield />}>{t('actionPlans.next.guard')}</Note>
         </div>
       </div>
 
@@ -364,14 +401,49 @@ function ActionPlanDetailView({ state, model }: { state: ActionPlanDetailState; 
           </DialogContent>
         </Dialog>
       )}
+
+      {manages && (
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent closeLabel={t('common.close')}>
+            <DialogHeader>
+              <DialogTitle>{t('actionPlans.next.edit.title')}</DialogTitle>
+              <DialogDescription>{t('actionPlans.next.edit.description')}</DialogDescription>
+            </DialogHeader>
+            {/* Mounted only while open, so every opening starts from what the plan says now. */}
+            {editOpen && (
+              <PlanEditForm
+                initial={{ title: plan.title, description: plan.description, dueDay: due, tags: plan.tags }}
+                onCancel={() => setEditOpen(false)}
+                onSubmit={async (values) => {
+                  await state.editPlan(values)
+                  setEditOpen(false)
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {manages && (
+        <ConfirmationDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          variant="destructive"
+          title={t('actionPlans.next.delete.title')}
+          description={deleteError ?? t('actionPlans.next.delete.body', { title: plan.title })}
+          confirmText={t('actionPlans.next.delete.confirm')}
+          cancelText={t('common.cancel')}
+          onConfirm={confirmDelete}
+        />
+      )}
     </div>
   )
 }
 
 function Box({ label, value, note }: { label: string; value: ReactNode; note: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-outer px-3 py-2.5">
-      <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-fill-subtle px-3 py-2.5">
+      <span className="text-2xs font-semibold uppercase tracking-tile text-fg-label">{label}</span>
       {value}
       <span className="text-sm text-fg-tertiary">{note}</span>
     </div>
@@ -416,7 +488,9 @@ function DeadlineCard({
   return (
     <CanvasCard title={t('actionPlans.next.deadline.title')}>
       <div className="flex items-end gap-5">
-        <span className={cn('shrink-0 font-mono text-[2.5rem] leading-none tabular-nums', late ? 'text-accent-red-ink' : 'text-fg-primary')}>
+        {/* Primary ink even when late: a large red numeral reads as the Crítica area, and the
+            lead sentence beside it already says "de retraso" (one colour per meaning). */}
+        <span data-slot="deadline-count" className="shrink-0 text-kpi-display font-semibold leading-none tracking-display tabular-nums text-fg-primary">
           {count}
         </span>
         <div className="flex min-w-0 flex-col gap-1 pb-1">
@@ -429,7 +503,7 @@ function DeadlineCard({
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <div className="relative h-2 rounded-md bg-surface-icon-box">
+        <div className="relative h-2 rounded-md bg-surface-fill">
           <div className="absolute inset-y-0 left-0 rounded-md bg-line-default" style={{ width: `${share * 100}%` }} />
           <div
             aria-hidden="true"
@@ -438,22 +512,22 @@ function DeadlineCard({
           />
           <div aria-hidden="true" className="absolute -top-1 right-0 h-4 w-0.5 bg-line-hover" />
         </div>
-        <div className="flex justify-between gap-3 text-xs text-fg-tertiary">
-          <span className="font-mono tabular-nums text-fg-primary">
+        <div className="flex justify-between gap-3 text-sm text-fg-tertiary">
+          <span className="tabular-nums text-fg-primary">
             {createdDay
               ? t(createdIsToday ? 'actionPlans.next.deadline.todayMark' : 'actionPlans.next.deadline.createdMark', {
                   date: calendarDay(Date.parse(`${createdDay}T00:00:00Z`), locale),
                 })
               : t('actionPlans.next.deadline.todayMark', { date: calendarDay(Date.parse(`${asOf}T00:00:00Z`), locale) })}
           </span>
-          <span className="font-mono tabular-nums">{t('actionPlans.next.deadline.dueMark', { date: dueShort })}</span>
+          <span className="tabular-nums">{t('actionPlans.next.deadline.dueMark', { date: dueShort })}</span>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Box
           label={t('actionPlans.next.deadline.createdLabel')}
           value={
-            <span className="font-mono text-lg tabular-nums text-fg-primary">
+            <span className="text-lg tabular-nums text-fg-primary">
               {createdDay ? dayWithYear(createdDay, locale) : t('actionPlans.next.sheet.unknown')}
             </span>
           }
@@ -461,7 +535,7 @@ function DeadlineCard({
         />
         <Box
           label={t('actionPlans.next.deadline.dueLabel')}
-          value={<span className="font-mono text-lg tabular-nums text-fg-primary">{dayWithYear(dueDay(plan.dueDate), locale)}</span>}
+          value={<span className="text-lg tabular-nums text-fg-primary">{dayWithYear(dueDay(plan.dueDate), locale)}</span>}
           note={inDays}
         />
         <Box
@@ -475,7 +549,9 @@ function DeadlineCard({
 }
 
 function Label({ children }: { children: ReactNode }) {
-  return <span className="pt-0.75 text-2xs font-bold uppercase tracking-label text-fg-label">{children}</span>
+  // The spec's `dl.kv` term: secondary ink at the body's step down, sentence case. Uppercase at
+  // 11px is the eyebrow's alone.
+  return <span className="pt-0.5 text-sm font-medium text-fg-tertiary">{children}</span>
 }
 
 function WhatCard({
@@ -497,7 +573,8 @@ function WhatCard({
   const proposed = model.finding.status === 'ready' && model.finding.value.status !== 'none' && model.finding.value.proposed
   return (
     <CanvasCard title={t('actionPlans.next.what.title')}>
-      <div className="grid grid-cols-[136px_minmax(0,1fr)] gap-x-4 gap-y-3 text-base">
+      {/* One column at phone width — the 136px term column left the answer ~130px at 390. */}
+      <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-base sm:grid-cols-[--spacing(34)_minmax(0,1fr)] sm:gap-y-3">
         <Label>{t('actionPlans.next.what.what')}</Label>
         <p className="m-0 text-fg-primary">{plan.title}</p>
         <Label>{t('actionPlans.next.what.why')}</Label>
@@ -510,7 +587,7 @@ function WhatCard({
               store its finding", which stopped being true when the detail response started
               carrying `sourceSurveyId` and the `dimension:` tag; a plan raised from a cell
               now shows what it recorded, and says so by not wearing this. */}
-          {proposed && <Chip label={t('actionPlans.next.proposed')} tone="warning" title={t('actionPlans.next.proposedHint')} />}
+          {proposed && <Chip label={t('actionPlans.next.proposed')} title={t('actionPlans.next.proposedHint')} />}
         </div>
         {manages ? (
           <FindingBlock finding={model.finding} move={model.move} scopeName={scopeName} />
@@ -560,10 +637,12 @@ function FindingBlock({
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <Chip label={scope} />
-          <HatchTag label={t('actionPlans.next.finding.protected')} />
+          {/* The padlock and "Menos de {floor}": the floor `planFinding` withheld this group
+              under (the payload's own), and no number of its own. */}
+          <ProtectedState floor={value.floor} />
         </div>
         <span className="text-sm text-fg-tertiary">
-          {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope, floor: ANONYMITY_FLOOR })}
+          {t('actionPlans.next.finding.protectedNote', { survey: value.surveyTitle, scope, floor: value.floor })}
         </span>
         {openLink}
       </div>
@@ -575,7 +654,9 @@ function FindingBlock({
       <div className="flex flex-wrap items-center gap-2">
         <Chip label={scope} />
         <span className="font-medium text-fg-primary">{dimensionLabel(value.dimensionKey, t)}</span>
-        <span className={cn('font-mono font-semibold tabular-nums', band === 'critical' ? 'text-chip-critical-ink' : 'text-fg-primary')}>
+        {/* The figure in the label ink; the band chip beside it carries the area's colour,
+            glyph and name, so the colour never stands alone. */}
+        <span className="font-semibold tabular-nums text-fg-primary">
           {reading(value.score, locale, 1, bands?.scale)}
         </span>
         {band !== null && bands !== null && <BandChip band={band} bands={bands} />}
@@ -619,18 +700,17 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
   }
   if (value.status === 'protected') {
     return (
-      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code, floor: ANONYMITY_FLOOR })}</span>
+      <span className="text-sm text-fg-tertiary">{t('actionPlans.next.finding.moveProtected', { code: value.code, floor: value.floor })}</span>
     )
   }
   const delta = value.to - value.from
-  // The sign is always drawn, and the arrow never carries the direction alone: colour and
-  // glyph are both present, which is the same rule the dashboard's moves follow.
-  const rose = delta > 0
+  // The sign carries the direction, in the label ink: ▲ and ▼ are the result areas' glyphs
+  // and green and red their colours, so a move wears neither (ruling of 11 Nov).
   const flat = Math.abs(delta) < 0.05
   return (
     <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
       <span className="text-fg-secondary">{t('actionPlans.next.finding.moveLabel')}</span>
-      <span className="font-mono tabular-nums text-fg-secondary">
+      <span className="tabular-nums text-fg-secondary">
         {t('actionPlans.next.finding.moveReading', {
           fromCode: value.fromCode,
           from: reading(value.from, locale, 1, scale),
@@ -639,8 +719,8 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
         })}
       </span>
       {!flat && (
-        <span className={cn('font-mono tabular-nums', rose ? 'text-accent-green-ink' : 'text-accent-red-ink')}>
-          {rose ? '\u25b2' : '\u25bc'} {delta > 0 ? '+' : '\u2212'}
+        <span data-slot="plan-move-delta" className="font-semibold tabular-nums text-fg-primary">
+          {delta > 0 ? '+' : '\u2212'}
           {reading(Math.abs(delta), locale, 1, scale)}
         </span>
       )}
@@ -650,7 +730,7 @@ function MoveLine({ move }: { move: Settled<PlanMove> }) {
 }
 
 function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const { plan } = model
   const none = plan.kpis.length === 0 && plan.objectives.length === 0
   return (
@@ -670,11 +750,11 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
           {plan.kpis.map((kpi) => {
             const percent = kpiProgressPercent(kpi.currentValue, kpi.targetValue)
             return (
-              <li key={kpi.id} className="flex items-center gap-3">
+              <li key={kpi.id} className="flex flex-wrap items-center gap-3">
                 <IconBox>
                   <ChartColumn />
                 </IconBox>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex min-w-48 flex-1 flex-col gap-1">
                   <span className="font-semibold text-fg-primary">{kpi.name}</span>
                   <span className="text-sm text-fg-tertiary">
                     {t('actionPlans.next.measures.kpiReading', { current: kpi.currentValue, target: kpi.targetValue, unit: kpi.unit })}
@@ -683,10 +763,10 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
                 {percent === null ? (
                   <span className="text-sm text-fg-tertiary">{t('actionPlans.notApplicable')}</span>
                 ) : (
-                  <div className="flex w-40 items-center gap-2">
+                  <div className="flex w-40 items-center gap-2 max-sm:min-w-40 max-sm:flex-1">
                     <Progress value={percent} className="min-w-16 flex-1" aria-label={kpi.name} />
-                    <span className="font-mono text-sm tabular-nums text-fg-secondary">
-                      {t('actionPlans.percentValue', { percent: Math.round(percent) })}
+                    <span className="text-sm tabular-nums text-fg-secondary">
+                      {progressPercentText(percent, locale)}
                     </span>
                   </div>
                 )}
@@ -708,23 +788,23 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
       ) : (
         <ul className="m-0 flex list-none flex-col gap-3 p-0">
           {plan.objectives.map((objective) => (
-            <li key={objective.id} className="flex items-center gap-3">
+            <li key={objective.id} className="flex flex-wrap items-center gap-3">
               <IconBox>
                 <Target />
               </IconBox>
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex min-w-48 flex-1 flex-col gap-1">
                 <span className="font-semibold text-fg-primary">{objective.description}</span>
                 <span className="text-sm text-fg-tertiary">{objective.successCriteria}</span>
               </div>
-              <Chip label={statusWord(t, objective.currentStatus)} tone={STATUS_TONE[objective.currentStatus] ?? 'neutral'} />
-              <div className="flex w-40 items-center gap-2">
+              <Chip label={statusWord(t, objective.currentStatus)} />
+              <div className="flex w-40 items-center gap-2 max-sm:min-w-40 max-sm:flex-1">
                 <Progress
                   value={Math.max(0, Math.min(100, objective.completionPercentage))}
                   className="min-w-16 flex-1"
                   aria-label={objective.description}
                 />
-                <span className="font-mono text-sm tabular-nums text-fg-secondary">
-                  {t('actionPlans.percentValue', { percent: objective.completionPercentage })}
+                <span className="text-sm tabular-nums text-fg-secondary">
+                  {progressPercentText(objective.completionPercentage, locale)}
                 </span>
               </div>
             </li>
@@ -735,6 +815,18 @@ function MeasuresCard({ model }: { model: ActionPlanDetailModel }) {
     </CanvasCard>
   )
 }
+
+/**
+ * A log row: date, mark, entry, as the artboard draws them from 640px. Under it the 96px date
+ * column left the entry ~130px at 390 ("Operaciones y / Logística · prioridad / alta"), so
+ * the date moves to a small line above the entry and the entry takes the row beside the mark.
+ */
+const LOG_ROW =
+  'grid grid-cols-[--spacing(7)_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 border-t border-line-light py-2.5 sm:grid-cols-[--spacing(24)_--spacing(7)_minmax(0,1fr)] sm:gap-3'
+const LOG_DATE = 'col-start-2 row-start-1 text-sm tabular-nums text-fg-tertiary sm:col-start-1 sm:pt-1.5'
+const LOG_MARK =
+  'col-start-1 row-span-2 row-start-1 inline-flex size-7 items-center justify-center rounded-full border border-line-default bg-surface-icon-box text-fg-secondary sm:col-start-2 sm:row-span-1'
+const LOG_BODY = 'col-start-2 row-start-2 flex min-w-0 flex-col gap-0.5 sm:col-start-3 sm:row-start-1 sm:pt-1'
 
 function LogCard({
   model,
@@ -752,24 +844,31 @@ function LogCard({
   dueShort: string
 }) {
   const { t, locale } = useTranslation()
-  const entries = 1 + model.recorded.length
+  const history = model.history.status === 'ready' ? model.history.value : []
+  const entries = 1 + history.length
   return (
     <CanvasCard
       title={t('actionPlans.next.log.title')}
-      aside={entries === 1 ? t('actionPlans.next.log.entryOne') : t('actionPlans.next.log.entries', { count: entries })}
+      aside={
+        model.history.status === 'ready'
+          ? entries === 1
+            ? t('actionPlans.next.log.entryOne')
+            : t('actionPlans.next.log.entries', { count: entries })
+          : undefined
+      }
     >
       <ol className="m-0 flex list-none flex-col p-0">
-        <li className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
-          <span className="pt-1.5 font-mono text-sm tabular-nums text-fg-tertiary">
+        <li className={LOG_ROW}>
+          <span className={LOG_DATE}>
             {createdDay ? calendarDay(Date.parse(`${createdDay}T00:00:00Z`), locale) : t('actionPlans.next.sheet.unknown')}
           </span>
           <span
             aria-hidden="true"
-            className="inline-flex size-7 items-center justify-center rounded-full border border-line-default bg-surface-icon-box text-xs font-semibold text-fg-secondary"
+            className={cn(LOG_MARK, 'text-xs font-semibold')}
           >
             {author ? initials(author) : null}
           </span>
-          <div className="flex min-w-0 flex-col gap-0.5 pt-1">
+          <div className={LOG_BODY}>
             <span className="text-base text-fg-primary">
               {author ? (
                 <>
@@ -788,31 +887,44 @@ function LogCard({
             </span>
           </div>
         </li>
-        {model.recorded.map((update) => (
-          <li key={update.id} className="grid grid-cols-[96px_28px_minmax(0,1fr)] items-start gap-3 border-t border-line-light py-2.5">
-            <span className="pt-1.5 font-mono text-sm tabular-nums text-fg-tertiary">
+        {history.map((update) => (
+          <li key={update.id} className={LOG_ROW}>
+            <span className={LOG_DATE}>
               {calendarDay(Date.parse(update.updateDate), locale)}
             </span>
             <span
               aria-hidden="true"
-              className="inline-flex size-7 items-center justify-center rounded-full border border-line-default bg-surface-icon-box text-fg-secondary"
+              className={LOG_MARK}
             >
               <Clock className="size-3.5" />
             </span>
-            <div className="flex min-w-0 flex-col gap-0.5 pt-1">
-              <span className="text-base text-fg-primary">{t('actionPlans.next.log.progress')}</span>
+            <div className={LOG_BODY}>
+              <span className="text-base text-fg-primary">
+                {update.updatedByName ? (
+                  <>
+                    {t('actionPlans.next.log.progressBy')} <b className="font-semibold">{update.updatedByName}</b>
+                  </>
+                ) : (
+                  t('actionPlans.next.log.progress')
+                )}
+              </span>
               <span className="break-words text-sm text-fg-tertiary">{update.overallNotes}</span>
             </div>
           </li>
         ))}
       </ol>
-      <p className="m-0 flex items-center gap-3 rounded-lg border border-dashed border-line-default p-3 text-base text-fg-tertiary">
-        <Clock aria-hidden="true" className="size-4 shrink-0 text-fg-tertiary" />
+      {model.history.status === 'loading' && (
+        <p className="m-0 text-sm text-fg-tertiary">{t('actionPlans.next.log.historyLoading')}</p>
+      )}
+      {model.history.status === 'failed' && (
+        <p className="m-0 text-sm text-fg-tertiary">{t('actionPlans.next.log.historyFailed')}</p>
+      )}
+      <Note icon={<Clock />} className="text-fg-secondary">
         <span>
           {t('actionPlans.next.log.noteBefore')} <b className="font-semibold text-fg-primary">{t('actionPlans.next.log.noteAction')}</b>
           {t('actionPlans.next.log.noteAfter')}
         </span>
-      </p>
+      </Note>
     </CanvasCard>
   )
 }

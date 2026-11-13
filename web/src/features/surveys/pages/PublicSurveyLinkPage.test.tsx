@@ -245,7 +245,7 @@ describe('PublicSurveyLinkPage', () => {
     await screen.findByRole('button', { name: /Empezar/ })
 
     await userEvent.selectOptions(
-      screen.getByRole('combobox', { name: 'Cambiar Idioma' }),
+      screen.getByRole('combobox', { name: 'Cambiar idioma' }),
       'en',
     )
     await screen.findByRole('combobox', { name: 'Switch Language' })
@@ -282,7 +282,7 @@ describe('PublicSurveyLinkPage', () => {
     await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
     expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true)
 
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar Idioma' }), 'en')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar idioma' }), 'en')
     // The switch really landed: the shell's own control is renamed by it.
     await screen.findByRole('combobox', { name: 'Switch Language' })
 
@@ -452,7 +452,7 @@ describe('PublicSurveyLinkPage', () => {
     serve({ resolve: () => new Response(JSON.stringify(link()), { status: 200 }) })
     renderPage()
 
-    expect(screen.getByRole('combobox', { name: 'Cambiar Idioma' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Cambiar idioma' })).toBeTruthy()
   })
 })
 

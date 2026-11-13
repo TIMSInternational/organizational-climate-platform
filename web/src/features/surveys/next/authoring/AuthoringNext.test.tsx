@@ -17,7 +17,7 @@ import { SurveyDetailView } from './SurveyDetailNextPage'
 import SurveyDistributionNextPage, { DistributionView, INVITATION_PREVIEW_ROWS } from './SurveyDistributionNextPage'
 import { INVITATION_COLUMNS } from './launch'
 import SurveyBuilderNextPage from './SurveyBuilderNextPage'
-import { PreviewQuestion } from './QuestionPreview'
+import { PreviewQuestion, PreviewSection } from './QuestionPreview'
 import type { DistributionActions, DistributionModel } from './useDistributionModel'
 import * as drafts from '../../api/surveyDrafts'
 import * as creating from '../../api/surveyCreate'
@@ -191,7 +191,7 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     const status = screen.getByTestId('tile-status')
     expect(within(status).getAllByRole('button').map((b) => b.textContent)).toEqual(['Cerrar'])
     // No directory read and no invitations: the stated target is the only audience known.
-    expect(screen.getByTestId('tile-responses').textContent).toContain('de 24 · 13 %')
+    expect(screen.getByTestId('tile-responses').textContent).toContain('de 24 · 12 %')
   })
 
   it('does not say a draft "closed", and will not open one whose window has already passed', () => {
@@ -208,11 +208,22 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(closes).toContain('Debía cerrar')
     expect(closes).not.toContain('Cerró')
     const status = screen.getByTestId('tile-status')
-    expect(within(status).getByText('Lo que puedes hacer ahora')).toBeTruthy()
+    expect(within(status).getByText(es.surveys.next.detail.allowed)).toBeTruthy()
     expect((within(status).getByRole('button', { name: 'Activar' }) as HTMLButtonElement).disabled).toBe(true)
     expect((within(status).getByRole('button', { name: 'Programar' }) as HTMLButtonElement).disabled).toBe(true)
     expect((within(status).getByRole('button', { name: 'Archivar' }) as HTMLButtonElement).disabled).toBe(false)
     expect(screen.getByTestId('status-end-passed').textContent).toContain('La fecha de cierre ya pasó')
+    // Held disabled for a stated reason, so the verbs keep a readable ink: the Button's
+    // `disabled:opacity-45` printed them at 2.88:1 on white (detail-draft-super_admin-light.png).
+    for (const name of ['Activar', 'Programar']) {
+      const classes = within(status).getByRole('button', { name }).className.split(' ')
+      expect(classes).toEqual(expect.arrayContaining(['disabled:opacity-100', 'disabled:text-fg-label']))
+      expect(classes).not.toContain('disabled:opacity-45')
+    }
+    // The warning spans the row under the readings, not inside the Estado tile: inside, it made
+    // that tile ~330px taller than the other three (detail-draft-light.png).
+    expect(status.contains(screen.getByTestId('status-end-passed-block'))).toBe(false)
+    expect(screen.getByTestId('detail-readings').contains(screen.getByTestId('status-end-passed-block'))).toBe(false)
     // Each verb says what it does.
     expect(screen.getByTestId('status-consequences').textContent).toContain('Programar: abre en su fecha de inicio')
     expect(screen.getByTestId('status-consequences').textContent).toContain('Activar: recibe respuestas')
@@ -240,8 +251,10 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(onTransition).not.toHaveBeenCalled()
 
     const dialog = await screen.findByRole('alertdialog')
-    // The consequence is named, not implied: it cannot be reopened.
-    expect(dialog.textContent).toContain('no se puede reabrir')
+    // The consequence is named, not implied: since the 2026-11-08 ruling a close can be undone,
+    // but not by this reader -- only a super admin, with a new close and a reason.
+    expect(dialog.textContent).toContain('Reabrirla solo lo puede hacer un super administrador')
+    expect(dialog.textContent).not.toContain('no se puede reabrir')
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
     expect(onTransition).not.toHaveBeenCalled()
@@ -358,15 +371,18 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     }
   })
 
-  it("lays the rows and tiles on the artboard's rhythm: 24px department rows, tiles 20px under the header", () => {
-    // Measured: index.css's 4px <li> margin set the department rows 28px apart (the artboard's
-    // are 24), and the header's 24px margin put the tiles 24px under its hairline (20 on the
-    // board). The classes are the pin; the shots are the evidence.
+  it("lays the rows and tiles on the board's rhythm: 24px department rows, tiles the header's 24px under it", () => {
+    // Measured: index.css's 4px <li> margin set the department rows 28px apart (the board's are
+    // 24). The tiles sit PageHeader's own 24px (`mb-section`) under its hairline, as every
+    // Apple-design board spaces a header from its first row, so the grid adds no margin of its own.
     detail(survey())
     for (const row of within(screen.getByTestId('detail-departments')).getAllByRole('listitem')) {
       expect(row.className.split(' ')).toContain('mb-0')
     }
-    expect(screen.getByTestId('detail-readings').className.split(' ')).toContain('-mt-1')
+    expect(screen.getByTestId('detail-readings').className.split(' ')).not.toContain('-mt-1')
+    // The four tiles stretch to one height, as the board's `.grid.g4 > .card.kpi` draws them.
+    expect(screen.getByTestId('detail-readings').className.split(' ')).not.toContain('items-start')
+    expect(screen.getByTestId('detail-readings').closest('div')?.querySelector('[data-slot="page-header"]')).not.toBeNull()
     expect(screen.getByTestId('tile-status').querySelector('span')?.className.split(' ')).toContain('leading-normal')
   })
 
@@ -380,6 +396,7 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
 const noop: DistributionActions = {
   invite: () => undefined,
   setOneSessionOnly: () => undefined,
+  setOpensBeforeStart: () => undefined,
   createLink: () => undefined,
   regenerateLink: () => undefined,
   revokeLink: () => undefined,
@@ -416,12 +433,41 @@ const distribution = (
   )
 
 describe('Distribución (Distribution artboard)', () => {
-  it('closes on the sentence the server wrote, verbatim, under the good-ink shield', () => {
+  it('closes on the sentence the server wrote, verbatim, on a neutral note rather than a result colour', () => {
     distribution(invitationList())
-    expect(screen.getByTestId('guarantee').textContent).toContain('Frase del servidor sobre lo que se registra.')
-    expect(screen.getByTestId('guarantee').querySelector('[data-slot="guarantee-shield"]')?.getAttribute('class')).toContain('text-chip-good-ink')
-    // The artboard's 18px serif, not the 14px `text-lg`.
-    expect(screen.getByText('Frase del servidor sobre lo que se registra.').getAttribute('class')).toContain('text-[1.125rem]')
+    const guarantee = screen.getByTestId('guarantee')
+    expect(guarantee.textContent).toContain('Frase del servidor sobre lo que se registra.')
+    expect(guarantee.getAttribute('data-slot')).toBe('note')
+    expect(guarantee.getAttribute('data-tone')).toBe('neutral')
+    // Green is a result area (ruling of 11 Nov): nothing in the note may wear its ink or fill.
+    expect(guarantee.outerHTML).not.toMatch(/chip-good|accent-green|band-str/)
+    expect(guarantee.querySelector('[data-slot="guarantee-shield"]')).not.toBeNull()
+  })
+
+  it("prints the close date in the company's zone, as the detail page does, never the browser's", () => {
+    // 03:00 UTC on 28 Oct is still the 27th in Costa Rica (UTC-6) and already the 28th in Tokyo.
+    // The tile said 28 oct in the browser's zone while the detail page said 27 oct in the
+    // company's (review 12 Nov). Two zones on either side of UTC make the test independent
+    // of the zone the runner happens to be in.
+    const endDate = '2026-10-28T03:00:00Z'
+    distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'active', endDate }), timeZone: 'America/Costa_Rica' })
+    expect(screen.getByTestId('tile-closes').textContent).toMatch(/27 oct/)
+    cleanup()
+    distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'active', endDate }), timeZone: 'Asia/Tokyo' })
+    expect(screen.getByTestId('tile-closes').textContent).toMatch(/28 oct/)
+  })
+
+  it('says an active survey past its date "debía cerrar", and only a closed one "cerró", as the detail page does', () => {
+    // An active survey still takes responses: "CERRÓ" over its tile contradicted "Activa".
+    distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'active', endDate: '2026-08-20T12:00:00Z' }) })
+    const live = screen.getByTestId('tile-closes').textContent ?? ''
+    expect(live).toContain('Debía cerrar')
+    expect(live).not.toContain('Cerró')
+    cleanup()
+    distribution(invitationList(), 'company_admin', true, { survey: survey({ status: 'closed', endDate: '2026-08-20T12:00:00Z' }) })
+    const closed = screen.getByTestId('tile-closes').textContent ?? ''
+    expect(closed).toContain('Cerró')
+    expect(closed).not.toContain('Debía cerrar')
   })
 
   it('reads 3 of 3 with a working link and nobody invited yet, and keeps naming the audience', () => {
@@ -475,13 +521,15 @@ describe('Distribución (Distribution artboard)', () => {
     expect(audience).not.toContain('Toda la empresa')
   })
 
-  it("shows the first rows of the invitations and the rest on request, in the artboard's columns and link ink", async () => {
+  it("shows the first rows of the invitations and the rest on request, in the artboard's columns and the action blue", async () => {
     distribution(invitationList(6))
     const table = within(screen.getByTestId('step-invitations')).getByRole('table')
     expect(within(table).getAllByRole('row')).toHaveLength(INVITATION_PREVIEW_ROWS + 1)
     expect([...table.querySelectorAll('col')].map((col) => col.style.width)).toEqual([...INVITATION_COLUMNS])
     const seeAll = screen.getByRole('button', { name: 'Ver las 6' })
-    expect(seeAll.getAttribute('class')).toContain('text-fg-secondary')
+    // The spec's `.btn.t`: the one control on the line is the action blue, not a grey word.
+    expect(seeAll.getAttribute('class')).toContain('text-accent-blue-ink')
+    expect(seeAll.getAttribute('class')).not.toContain('text-fg-secondary')
     await userEvent.click(seeAll)
     expect(within(table).getAllByRole('row')).toHaveLength(7)
   })
@@ -613,12 +661,11 @@ describe('Distribución (Distribution artboard)', () => {
     expect(within(action as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
       'Registrar la audiencia',
     ])
-    // The artboard's 14px step title (`text-lg` in this scale; `text-base` is 13px).
-    expect(within(step).getByRole('heading', { level: 3 }).className.split(' ')).toContain('text-lg')
-    expect(screen.getByTestId('distribution-readings').className.split(' ')).toContain('-mt-1')
+    // The spec's `.h3`: 15px (`text-base`) semibold sans.
+    expect(within(step).getByRole('heading', { level: 3 }).className.split(' ')).toEqual(expect.arrayContaining(['text-base', 'font-semibold']))
   })
 
-  it("prints 'y n personas más' in the artboard's #5e6a82: the label ink, which clears AA on the card in both palettes", () => {
+  it("prints 'y n personas más' in the label ink (#6c6c71 since the Apple design), which clears AA on the card in both palettes", () => {
     distribution(invitationList(6))
     const more = screen.getByTestId('invitations-more')
     expect(more.textContent).toContain('y 2 personas más')
@@ -626,16 +673,24 @@ describe('Distribución (Distribution artboard)', () => {
     expect(more.className.split(' ')).not.toContain('text-fg-secondary')
     const [inkLight, inkDark] = tokenPair('admin-font-section-label')
     const [cardLight, cardDark] = tokenPair('admin-bg-card')
-    expect(inkLight).toBe('#5e6a82')
+    expect(inkLight).toBe('#6c6c71')
     expect(contrast(inkLight, cardLight)).toBeGreaterThanOrEqual(4.5)
     expect(contrast(inkDark, cardDark)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it("sets the guarantee in the headings' Goudy, never Tailwind's Georgia font-serif", () => {
+  it('sets the guarantee in the body sans: the serif is for titles only, and Goudy never enters the admin frame', () => {
     distribution(invitationList())
     const sentence = screen.getByText('Frase del servidor sobre lo que se registra.')
-    expect(sentence.className.split(' ')).toEqual(expect.arrayContaining(['font-store-serif', 'leading-tight']))
+    expect(sentence.className.split(' ')).toContain('text-base')
+    expect(sentence.className.split(' ')).not.toEqual(expect.arrayContaining(['font-store-serif']))
     expect(sentence.className.split(' ')).not.toContain('font-serif')
+    expect(sentence.className.split(' ')).not.toContain('font-display')
+  })
+
+  it('paints no checklist mark, bucket or invitation chip in a result colour', () => {
+    distribution(invitationList(6))
+    const step = screen.getByTestId('step-invitations')
+    expect(step.outerHTML).not.toMatch(/chip-good|chip-warning|chip-critical|accent-amber|accent-green/)
   })
 })
 
@@ -708,6 +763,36 @@ describe('Distribución — the role half of the rule, through the page model', 
     page('company_admin')
     expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
+  })
+
+  /**
+   * The walkthrough's A1 (docs/audits/2026-11-08-operator-ui-walkthrough.md): the survey's own
+   * company decides, never the header. A TIMS operator whose header held another client opened
+   * this page and got no roster, no per-person button and no send control, and nothing said why.
+   */
+  it("offers a super administrator whose header holds another client the survey company's controls, and moves the header there", async () => {
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'otra-empresa')
+    renderAs('super_admin', <SurveyDistributionNextPage />, '', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
+    // The directory read is the survey's company's, not the header's.
+    expect(vi.mocked(usersApi.listUsers).mock.calls.map((call) => call[1])).toEqual(['c1'])
+    await waitFor(() => expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('c1'))
+  })
+
+  it('offers a super administrator with nothing selected the same controls', async () => {
+    renderAs('super_admin', <SurveyDistributionNextPage />, '', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(usersApi.listUsers).toHaveBeenCalled()
+  })
+
+  it("offers a company administrator of another company nothing, even with the survey's company stored as a selection", async () => {
+    // The selection is consulted for a super administrator only; a company admin is their claim.
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'c1')
+    renderAs('company_admin', <SurveyDistributionNextPage />, 'c2', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    await screen.findByTestId('step-audience')
+    expect(screen.queryByRole('button', { name: 'Cambiar audiencia' })).toBeNull()
+    expect(usersApi.listUsers).not.toHaveBeenCalled()
   })
 
   it("offers a leader of the survey's own company no audience, send, reminder or link control", async () => {
@@ -921,6 +1006,22 @@ describe('PreviewQuestion (the respondent card on SurveyBuilder and SurveyDetail
   })
   const cells = () => [...document.querySelectorAll<HTMLElement>('[data-slot="preview-choice"]')]
 
+  it("sets the question semibold in the UI face at body size, as the artboards' `<b>`, and shows the section's place", () => {
+    render(
+      <TranslationProvider>
+        <PreviewSection category="psychological_safety" index={2} count={6}>
+          <PreviewQuestion question={question()} position={1} total={6} />
+        </PreviewSection>
+      </TranslationProvider>,
+    )
+    const text = document.querySelector<HTMLElement>('[data-slot="preview-question-text"]')!
+    expect(text.className.split(' ')).toEqual(expect.arrayContaining(['text-base', 'font-semibold']))
+    for (const face of ['font-display', 'font-serif', 'text-xl']) expect(text.className.split(' ')).not.toContain(face)
+    const counter = document.querySelector<HTMLElement>('[data-slot="preview-section-count"]')!
+    expect(counter.textContent).toBe('2 de 6')
+    expect(counter.className.split(' ')).not.toContain('sr-only')
+  })
+
   it("lets a numeric scale's five cells shrink into a 390px card, and keeps a choice row's 40px cells, which wrap", () => {
     // builder-390.png: five 40px cells and four 8px gaps (232px) ran past the 208px inside the
     // preview card. A numeric row never wraps, so its cells may shrink; a choice row wraps instead.
@@ -1059,8 +1160,11 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(switches).toHaveLength(2)
     for (const toggle of switches) {
       expect(toggle.hasAttribute('disabled')).toBe(false)
-      // The artboard's bright green (#12945b, SurveyBuilder.dc.html), not the darker chip ink.
-      expect(toggle.getAttribute('class')).toContain('data-[state=checked]:bg-accent-green')
+      // Blue, never green: green is the Fortaleza result area, and the Apple-design ruling of
+      // 11 Nov makes every toggle blue. `ui/switch.tsx` applies the blue after the caller's
+      // classes, so the page's own green no longer reaches the screen.
+      expect(toggle.getAttribute('class')).toContain('data-[state=checked]:bg-accent-blue')
+      expect(toggle.getAttribute('class')).not.toContain('data-[state=checked]:bg-accent-green')
     }
     await userEvent.click(within(list).getByRole('button', { name: 'Acciones de la pregunta 1' }))
     expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Subir', 'Bajar', 'Eliminar'])
@@ -1078,7 +1182,7 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     const row = await screen.findByTestId('add-question')
     expect(row.textContent).toContain('· del banco, de la biblioteca o en blanco')
     await userEvent.click(within(row).getByRole('button', { name: /Agregar pregunta/ }))
-    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Del banco', 'De la biblioteca', 'En blanco'])
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Del banco', 'De la biblioteca', 'Pegar desde Excel', 'En blanco'])
   })
 
   it("keeps the reader's Spanish on a bilingual template, live — /use takes the language", async () => {
@@ -1174,6 +1278,18 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     }
     expect(within(screen.getByTestId('builder-step')).getByText(/Arrastre para reordenar/).className.split(' ')).toContain('-mt-3')
     expect(within(screen.getByTestId('builder-rail')).getAllByRole('listitem').every((item) => item.className.split(' ').includes('mb-0'))).toBe(true)
+    // The connector between steps is neutral whatever the state (blue beside non-link text read
+    // as a link underline), and a step's button never shrinks under its label to let it spill
+    // over that connector (new-settings-light.png).
+    const connectors = [...screen.getByTestId('builder-rail').querySelectorAll('[data-slot="rail-connector"]')]
+    expect(connectors).toHaveLength(5)
+    for (const line of connectors) {
+      expect(line.className.split(' ')).toContain('bg-line-default')
+      expect(line.className).not.toContain('bg-accent-blue')
+    }
+    for (const step of within(screen.getByTestId('builder-rail')).getAllByRole('listitem')) {
+      expect(step.querySelector('button')?.className.split(' ')).toContain('shrink-0')
+    }
   })
 
   it('fits the content-language select inside the rail at 390px and lets the preview buttons wrap', async () => {
@@ -1199,6 +1315,37 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(document.querySelector('[data-slot="preview-answered"]')?.className.split(' ')).toContain('text-fg-label')
   })
 
+  it('keeps the ink of its disabled controls: the pending rungs, Guardar borrador and Atrás', async () => {
+    // surveys-new light/dark: index.css's `button:disabled { opacity: 0.5 }` took «Pendiente» and
+    // the pending step names to 2.07:1 light / 2.82:1 dark, and the Button's `disabled:opacity-45`
+    // took Guardar borrador and Atrás to 2.88:1. On the first step Atrás and steps 2-6 are disabled.
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    const save = await screen.findByRole('button', { name: 'Guardar borrador' })
+    const back = screen.getByRole<HTMLButtonElement>('button', { name: 'Atrás' })
+    expect(back.disabled).toBe(true)
+    for (const button of [save, back]) {
+      const classes = button.className.split(' ')
+      expect(classes).toEqual(expect.arrayContaining(['disabled:opacity-100', 'disabled:text-fg-label']))
+      expect(classes).not.toContain('disabled:opacity-45')
+    }
+    const rungs = within(screen.getByTestId('builder-rail')).getAllByRole('listitem').map((item) => item.querySelector('button'))
+    const pending = rungs.filter((rung) => rung?.disabled)
+    expect(pending.length).toBeGreaterThan(0)
+    for (const rung of pending) expect(rung?.className.split(' ')).toContain('disabled:opacity-100')
+  })
+
+  it('keeps the basics selects inside the card on a phone: the grid column may shrink', async () => {
+    // surveys-new-390: the grid's implicit `auto` column took the width of the longest option,
+    // «Ninguno — esta encuesta no consume licencia», and pushed all three selects past the card.
+    renderAs('company_admin', <SurveyBuilderNextPage />)
+    const step = await screen.findByTestId('builder-step')
+    const grid = within(step).getByText('Partir de una plantilla').closest('.md\\:grid-cols-2')
+    expect(grid?.className.split(' ')).toContain('grid-cols-1')
+    // …and so may the service field's own grid, whose trigger holds the longest option.
+    const field = within(step).getByText('Servicio licenciado').closest('.grid')
+    expect(field?.className.split(' ')).toContain('grid-cols-1')
+  })
+
   it("saves the draft under the artboard's plain page glyph, not a page of text lines", async () => {
     renderAs('company_admin', <SurveyBuilderNextPage />)
     const icon = (await screen.findByRole('button', { name: 'Guardar borrador' })).querySelector('[data-slot="save-draft-icon"]')
@@ -1206,16 +1353,19 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect(icon?.getAttribute('class')).not.toContain('lucide-file-text')
   })
 
-  it("sets the preview title and the draft chip in the headings' Goudy, never Tailwind's Georgia font-serif", async () => {
+  it('sets the preview title in the one display serif and the draft chip as a grey sans status chip', async () => {
     vi.mocked(templatesApi.getSurveyTemplate).mockResolvedValue(templateRead('es'))
     restoreDraft(4)
     await openBuilder()
     const title = within(await screen.findByTestId('builder-preview')).getByText('Clima Q1')
-    expect(title.className.split(' ')).toEqual(expect.arrayContaining(['font-store-serif', 'leading-tight']))
+    expect(title.className.split(' ')).toEqual(expect.arrayContaining(['font-display', 'leading-tight']))
     expect(title.className.split(' ')).not.toContain('font-serif')
-    const chip = screen.getByText('Borrador')
-    expect(chip.className.split(' ')).toContain('font-store-serif')
-    expect(chip.className.split(' ')).not.toContain('font-serif')
+    expect(title.className.split(' ')).not.toContain('font-store-serif')
+    // Status chips are grey, in the UI face: the serif is for titles and question text only.
+    const chip = screen.getByTestId('builder-draft-chip')
+    expect(chip.textContent).toBe('Borrador')
+    for (const face of ['font-display', 'font-store-serif', 'font-serif']) expect(chip.className.split(' ')).not.toContain(face)
+    expect(chip.getAttribute('data-live')).toBeNull()
   })
 
   it("writes a changed arrangement onto the template's copy: the copied question, the row's required flag", async () => {
@@ -1228,6 +1378,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await within(list).findByText('Confío en la dirección.')
     await userEvent.click(within(list).getAllByRole('switch')[0])
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    // Through the settings step (G16), left untouched, to the review.
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(questionAuthoring.replaceSurveyQuestions).toHaveBeenCalledTimes(1))
     const [, id, sent] = vi.mocked(questionAuthoring.replaceSurveyQuestions).mock.calls[0]
@@ -1262,6 +1414,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await userEvent.keyboard('{Escape}')
     await within(screen.getByTestId('builder-questions')).findByText('Me siento escuchado.')
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    // Through the settings step (G16), left untouched, to the review.
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(creating.createSurvey).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(creating.createSurvey).mock.calls[0][1]
@@ -1286,6 +1440,9 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     const sent = vi.mocked(creating.createSurvey).mock.calls[0][1]
     expect(sent.title).toBe('Pulso de octubre')
     expect(sent.questions).toEqual([{ text: 'Me siento escuchado.', type: 'likert', required: true, order: 0, category: 'trust' }])
-    expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions').filter((k, i, a) => a.indexOf(k) === i).sort())
+    // `targetAudienceCount` joins the payload deliberately (walkthrough B6, 2026-11-08): the count
+    // was left blank, so it is the audience the step chose rather than nothing at all.
+    expect(Number.isInteger(sent.targetAudienceCount) && (sent.targetAudienceCount as number) > 0).toBe(true)
+    expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions', 'targetAudienceCount').filter((k, i, a) => a.indexOf(k) === i).sort())
   })
 })

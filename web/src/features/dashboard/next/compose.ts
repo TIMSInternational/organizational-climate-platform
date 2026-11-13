@@ -3,6 +3,7 @@ import type { Microclimate, MicroclimateDetail } from '../../microclimates/api/m
 import { WHOLE_COMPANY_KEY, type ClimateTrendsResponse } from '../../surveys/api/climateTrends'
 import type { SurveyInvitationList } from '../../surveys/api/surveyDistribution'
 import type { SurveyDetail, SurveyListItem } from '../../surveys/api/surveys'
+import { remindersSent } from '../../surveys/next/authoring/launch'
 import type { PlanAccion } from '../../tracking/api/trackingApi'
 import type { CompanyAdminDashboard } from '../api/dashboard'
 import { daysBetween, lowestCell, type MapCell } from './derive'
@@ -11,6 +12,7 @@ import type {
   ComposedAdminDashboardModel,
   AttentionItem,
   DimensionSeries,
+  FailureCause,
   MapRow,
   OpenSurvey,
   PlanRef,
@@ -79,7 +81,7 @@ import type {
 /** One region's payload, or the reason it has none. */
 export type Part<T> =
   | { status: 'live'; value: T }
-  | { status: 'fallback'; reason: 'failed'; error: string | null }
+  | { status: 'fallback'; reason: 'failed'; error: string | null; cause?: FailureCause }
   | { status: 'fallback'; reason: 'empty' }
   | { status: 'off' }
 
@@ -237,9 +239,13 @@ export function questionOrderOf(survey: Pick<SurveyDetail, 'questions'>): string
   return order
 }
 
-/** Reminders sent for a survey: every invitation's `reminderCount` (attempts), summed. */
-export function remindersOf(list: Pick<SurveyInvitationList, 'invitations'>): number {
-  return list.invitations.reduce((sum, invitation) => sum + invitation.reminderCount, 0)
+/**
+ * Reminders sent for a survey: the invitations' `reminderCount` (attempts) plus the reminders
+ * recorded on per-survey keys (`summary.keyReminders`) -- the survey page's own rule
+ * (`remindersSent`), so the two screens cannot disagree.
+ */
+export function remindersOf(list: Pick<SurveyInvitationList, 'invitations'> & { summary?: Pick<SurveyInvitationList['summary'], 'keyReminders'> }): number {
+  return remindersSent(list) ?? 0
 }
 
 interface SurveysRegion {
@@ -351,7 +357,7 @@ function composeMap(
 function toRegionState(part: Part<unknown>): RegionState {
   if (part.status === 'live') return { status: 'live' }
   if (part.status === 'off') return { status: 'off' }
-  return part.reason === 'failed' ? { status: 'fallback', reason: 'failed', error: part.error } : part
+  return part.reason === 'failed' ? { status: 'fallback', reason: 'failed', error: part.error, cause: part.cause } : part
 }
 
 const EMPTY: Part<never> = { status: 'fallback', reason: 'empty' }

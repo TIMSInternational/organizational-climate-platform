@@ -25,12 +25,13 @@ const EM_DASH = '—'
  *
  * ## The typographic rule
  *
- * The value is set in `--admin-font-mono` with tabular figures; the label and the
- * sub-line stay in the sans face. That single rule is what makes the product read
- * as an instrument rather than a dashboard, so the value carries `font-mono
- * tabular-nums` explicitly rather than inheriting the tile's font. The delta does
- * too — a number that shifts width as it changes is the thing tabular figures
- * exist to prevent, and the delta is the number most likely to change in place.
+ * The value is set in the UI sans face with tabular figures, like the label and the
+ * sub-line: the Apple design (11 Nov) allows two faces only — the system sans and the
+ * serif for titles — so a third, monospaced face for figures is gone (its slashed zero
+ * also read «0» as «Ø»). The value carries `tabular-nums` explicitly rather than
+ * inheriting it. The delta does too — a number that shifts width as it changes is the
+ * thing tabular figures exist to prevent, and the delta is the number most likely to
+ * change in place.
  *
  * ## Colour never carries the change alone
  *
@@ -197,7 +198,7 @@ export default function KpiTile({
       {/* The unit shares the value's baseline, as the artboards draw it — never a
           second line, which is what `sub` is for. */}
       <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
-        <span data-slot="kpi-value" className={cn('font-mono tabular-nums', SIZES[size].value)}>
+        <span data-slot="kpi-value" className={cn('tabular-nums', SIZES[size].value)}>
           {valueText ?? (value === null ? EM_DASH : formatMetric(value, format, locale))}
         </span>
         {unit && <span className="text-sm text-fg-secondary">{unit}</span>}
@@ -214,7 +215,7 @@ export default function KpiTile({
           >
             {/* The glyph, not the colour, is what carries the direction. */}
             <span aria-hidden="true">{direction === 'up' ? '▲' : '▼'}</span>{' '}
-            <span className="font-mono tabular-nums">
+            <span className="tabular-nums">
               {formatMetric(delta, format, locale)}
             </span>
           </span>

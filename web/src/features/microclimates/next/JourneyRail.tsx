@@ -14,11 +14,12 @@ const TITLE_KEY: Record<JourneyKey, string> = {
  * "Crear · Compartir · Ver en vivo · Leer" — the rail the Crear and Detalle boards draw
  * under the header, the triage's "as one flow: create, share, watch, read" made visible.
  *
- * A done step is a green check, the current one a red numbered disc (the identity fill,
- * `bg-accent-blue-fill`, which is `#dd0c15` in both palettes and carries white at 5.47:1),
- * a pending one a hollow numbered disc. Pending ink is `text-fg-tertiary`, not the board's
- * `#8a82a5`: that is `text-fg-light`, a non-text ink under 4.5:1 (`inkContrast.test.ts`). The rule after a done step is green. The state is
- * never the colour alone: the current step is `aria-current="step"` and its note says so.
+ * Drawn as the Apple design's `.steps` (occ.css): a done step is a check on a disc in the
+ * label ink, the current one a blue disc inside a blue-tinted pill with its note in the blue
+ * ink (blue is selection and "where you are"), a pending one a numbered disc on the gray fill.
+ * Green is not used: it means the Fortaleza result area and nothing else. Pending ink is
+ * `text-fg-tertiary` (4.5:1 or better on the card). The state is never the colour alone: the
+ * current step is `aria-current="step"`, a done one carries the check, and the notes say so.
  */
 export function JourneyRail({
   states,
@@ -32,64 +33,97 @@ export function JourneyRail({
   return (
     <nav
       aria-label={t('microclimates.next.journey.label')}
-      className="rounded-xl border border-line-default bg-surface-card px-5 py-3 shadow-xs"
+      className="rounded-xl border border-line-default bg-surface-card px-4 py-3"
     >
-      <ol className="m-0 flex list-none flex-wrap items-center gap-x-3.5 gap-y-3 p-0 xl:flex-nowrap">
-        {JOURNEY.map((key, index) => {
-          const state = states[key]
-          const previous = index > 0 ? states[JOURNEY[index - 1] as JourneyKey] : null
-          return (
-            <li
-              key={key}
-              className={cn('flex min-w-0 items-center gap-3.5', index > 0 && 'flex-1')}
-              aria-current={state === 'current' ? 'step' : undefined}
-            >
-              {index > 0 && (
-                <span
-                  aria-hidden="true"
-                  className={cn('hidden h-px min-w-5 flex-1 xl:block', previous === 'done' ? 'bg-accent-green' : 'bg-line-default')}
-                />
+      <JourneySteps states={states} notes={notes} />
+    </nav>
+  )
+}
+
+/**
+ * The four steps alone, without the rail's card. The list page's "Un microclima es un flujo
+ * corto" card draws the same steps inside its own card, so the flow looks the same on the
+ * list, Crear and Detalle (one stepper, not two). `titles` overrides the step names where a
+ * page words them its own way; it defaults to the rail's.
+ */
+export function JourneySteps({
+  states,
+  notes,
+  titles,
+}: {
+  states: Record<JourneyKey, JourneyState>
+  notes: Record<JourneyKey, string>
+  titles?: Record<JourneyKey, string>
+}) {
+  const { t } = useTranslation()
+  // Below `xl` a grid, not a wrapping row: one step per line on a phone, two by two from
+  // `sm`. The wrapping row gave each of four `flex-1` steps a quarter of 390px, so every
+  // label broke one word per line and "Compartir" ran into "Ver en vivo" (#640's shot).
+  // From `xl` the board's one row with its rules between the steps, unchanged.
+  return (
+    <ol
+      data-slot="journey-rail"
+      className="m-0 grid list-none grid-cols-1 gap-x-3.5 gap-y-3 p-0 sm:grid-cols-2 xl:flex xl:flex-nowrap xl:items-center"
+    >
+      {JOURNEY.map((key, index) => {
+        const state = states[key]
+        const previous = index > 0 ? states[JOURNEY[index - 1] as JourneyKey] : null
+        return (
+          <li
+            key={key}
+            className={cn('flex min-w-0 items-center gap-3.5', index > 0 && 'flex-1')}
+            aria-current={state === 'current' ? 'step' : undefined}
+            data-state={state}
+          >
+            {index > 0 && (
+              <span
+                aria-hidden="true"
+                className={cn('hidden h-px min-w-5 flex-1 xl:block', previous === 'done' ? 'bg-fg-tertiary' : 'bg-line-default')}
+              />
+            )}
+            <span
+              data-slot="journey-step"
+              className={cn(
+                'flex min-w-0 items-center gap-2.5 rounded-full py-1 pr-3 pl-1',
+                state === 'current' && 'bg-accent-blue-soft',
               )}
-              <span className="flex min-w-0 items-center gap-2.5">
-                {state === 'done' ? (
-                  <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full border border-accent-green-ring bg-accent-green-soft text-accent-green-ink">
-                    <Check aria-hidden="true" className="size-3" strokeWidth={2.4} />
-                  </span>
-                ) : (
-                  <span
-                    className={cn(
-                      'inline-flex size-5.5 shrink-0 items-center justify-center rounded-full font-mono text-xs tabular-nums',
-                      state === 'current'
-                        ? 'bg-accent-blue-fill font-semibold text-fg-on-accent'
-                        : 'border border-line-default bg-surface-icon-box text-fg-tertiary',
-                    )}
-                  >
-                    {index + 1}
-                  </span>
-                )}
-                <span className="flex min-w-0 flex-col leading-snug">
-                  <span
-                    className={cn(
-                      'text-sm font-semibold',
-                      state === 'current' ? 'text-fg-primary' : state === 'done' ? 'text-fg-secondary' : 'text-fg-tertiary',
-                    )}
-                  >
-                    {t(TITLE_KEY[key])}
-                  </span>
-                  <span
-                    className={cn(
-                      'text-xs xl:whitespace-nowrap',
-                      state === 'current' ? 'text-accent-red-ink' : 'text-fg-tertiary',
-                    )}
-                  >
-                    {notes[key]}
-                  </span>
+            >
+              {state === 'done' ? (
+                <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-fg-primary text-surface-card">
+                  <Check aria-hidden="true" className="size-3" strokeWidth={2.4} />
+                </span>
+              ) : (
+                <span
+                  className={cn(
+                    'inline-flex size-5.5 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums',
+                    state === 'current' ? 'bg-accent-blue-fill text-fg-on-accent' : 'bg-surface-fill text-fg-secondary',
+                  )}
+                >
+                  {index + 1}
+                </span>
+              )}
+              <span className="flex min-w-0 flex-col leading-snug">
+                <span
+                  className={cn(
+                    'text-sm font-semibold',
+                    state === 'current' ? 'text-accent-blue-ink' : state === 'done' ? 'text-fg-primary' : 'text-fg-secondary',
+                  )}
+                >
+                  {titles?.[key] ?? t(TITLE_KEY[key])}
+                </span>
+                <span
+                  className={cn(
+                    'text-xs',
+                    state === 'current' ? 'text-accent-blue-ink' : 'text-fg-tertiary',
+                  )}
+                >
+                  {notes[key]}
                 </span>
               </span>
-            </li>
-          )
-        })}
-      </ol>
-    </nav>
+            </span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }

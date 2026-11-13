@@ -12,6 +12,7 @@ import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import ClimateTrendsNextPage from './ClimateTrendsNextPage'
 import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import en from '../../../../i18n/en.json'
+import { ApiError } from '../../../../api/authFetch'
 /**
  * The floor the *server* says it applied, deliberately NOT `ANONYMITY_FLOOR`.
  *
@@ -172,7 +173,15 @@ describe('ClimateTrendsNextPage', () => {
     // Belonging 4,0 is in the strength area; Workload 3,3 in the opportunity area.
     expect(belonging?.getAttribute('data-band')).toBe('strength')
     expect(workload?.getAttribute('data-band')).toBe('opportunity')
-    expect(within(belonging as HTMLElement).getByText(en.resultBands.name.strength)).toBeTruthy()
+    // The card's chip prints the area's one full name, as the chips over the range bar and every
+    // other banded screen do — one name per area — never the short «Strength».
+    expect(within(belonging as HTMLElement).getByTitle(en.resultBands.name.strength).textContent).toBe(en.resultBands.name.strength)
+    // The table's cells carry no area name of their own; the legend under the table names all three.
+    const tableLegend = document.querySelector('[data-testid="trends-table-legend"]') as HTMLElement
+    expect(tableLegend).toBeTruthy()
+    for (const band of ['strength', 'opportunity', 'critical'] as const) {
+      expect(tableLegend.textContent).toContain(en.resultBands.short[band])
+    }
     expect(within(belonging as HTMLElement).getByRole('img').getAttribute('aria-label')).toContain('3.3 → 3.7 → 4.0')
     // Both trends requests carried the resolved company, and the department breakdown was asked for.
     expect(vi.mocked(getClimateTrends).mock.calls.map(([, query]) => [query?.companyId, query?.groupBy])).toEqual([
@@ -207,11 +216,11 @@ describe('ClimateTrendsNextPage', () => {
       const reading = card.querySelector('[data-slot="trend-reading"]')
       expect(reading?.className.split(/\s+/)).toContain('leading-normal')
     }
-    // The segments at the canvas's rendered 28px (26px + their borders): at 26px the control
-    // was 34px, the artboard's 36, and every card under it sat 2px high.
+    // The segments are the board's `.seg` (the SegmentedControl primitive): 28px segments,
+    // `h-control-md`, so the control is the artboard's 32px and every card under it sits level.
     const segments = [...document.querySelectorAll('[data-slot="trends-segments"] button')]
     expect(segments.length).toBeGreaterThan(0)
-    for (const segment of segments) expect(segment.className.split(/\s+/)).toContain('h-7')
+    for (const segment of segments) expect(segment.className.split(/\s+/)).toContain('h-control-md')
     // The footnote closes the table card in the artboard's 16.5px line, 12px under the last row.
     const footnote = document.querySelector('[data-slot="trends-footnote"]') as HTMLElement
     expect(footnote.className.split(/\s+/)).toEqual(expect.arrayContaining(['-mt-1', 'leading-normal']))
@@ -259,7 +268,8 @@ describe('ClimateTrendsNextPage', () => {
     await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
     const workload = document.querySelector('[data-slot="trend-card"][data-dimension="workload"]') as HTMLElement
     expect(workload.getAttribute('data-band')).toBe('critical')
-    expect(within(workload).getByText('Zona roja')).toBeTruthy()
+    // The chip, by its title: the chart names the area in the same words.
+    expect(within(workload).getByTitle('Zona roja').textContent).toBe('Zona roja')
     // The one dimension in the critical area rose since Q2 (3,0 → 3,3), and the tile says so.
     expect(tile('Zona roja').textContent).toContain(copy.risingOne)
   })
@@ -320,6 +330,83 @@ describe('ClimateTrendsNextPage', () => {
     expect(cardOrder()).toEqual(['belonging', 'workload'])
   })
 
+  /**
+   * The signature element on this screen: each dimension of the latest closed wave on the
+   * climate range bar, read from the payload and ticked at the first wave. A wave the floor
+   * withheld for the drawn group is a protected row — padlock and "Fewer than {floor}" from the
+   * SERVER's floor, and no number of it anywhere in the row or its accessible label.
+   */
+  it('draws every dimension of the latest wave on the climate range bar, and a withheld wave as protected with no number', async () => {
+    vi.mocked(getClimateTrends).mockImplementation(async (_base, query) => {
+      if (query?.groupBy !== 'department') return whole()
+      const payload = byDepartment()
+      return {
+        ...payload,
+        groups: payload.groups.map((group) => ({
+          ...group,
+          points: group.points.map((point) =>
+            point.surveyId === 's3' ? { ...point, respondentCount: 0, isSuppressed: true, scores: [null, null] } : point,
+          ),
+        })),
+      }
+    })
+    renderAt('company_admin')
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
+    const range = document.querySelector('[data-slot="trends-range"]') as HTMLElement
+    expect(within(range).getByRole('heading', { name: copy.rangeHeading.replace('{wave}', 'Q3') })).toBeTruthy()
+    const rows = [...range.querySelectorAll('li[data-dimension]')]
+    expect(rows.map((row) => row.getAttribute('data-dimension'))).toEqual(['belonging', 'workload'])
+    for (const row of rows) expect(row.getAttribute('data-range')).toBe('mean')
+    // The server's 4.0 for belonging in Q3, ticked at its 3.3 in Q1 — at one decimal, as the
+    // cards and the table under the bar print the same dimension (app-wide-mean.md).
+    expect(within(range).getAllByRole('img')[0].getAttribute('aria-label')).toBe(
+      `${en.charts.range.ariaMean.replace('{mean}', '4.0')}; Q1 3.3`,
+    )
+
+    await userEvent.click(within(screen.getByRole('group', { name: copy.breakDownBy })).getByRole('button', { name: 'Finanzas' }))
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="trends-range"] li[data-dimension="belonging"]')?.getAttribute('data-range')).toBe('withheld'),
+    )
+    const withheld = document.querySelector('[data-slot="trends-range"] li[data-dimension="belonging"]') as HTMLElement
+    expect(withheld.textContent).toContain(en.charts.range.protected.replace('{floor}', String(SERVER_FLOOR)))
+    expect(withheld.querySelector('[data-mean]')).toBeNull()
+    expect(withheld.querySelector('[data-comparison]')).toBeNull()
+    expect(withheld.textContent ?? '').not.toMatch(/\d[.,]\d/)
+    expect(within(withheld).getByRole('img').getAttribute('aria-label')).toBe(
+      en.charts.range.ariaProtected.replace('{floor}', String(SERVER_FLOOR)),
+    )
+  })
+
+  it('offers more than five groups as one labelled pop-up instead of segments, and choosing one redraws its series', async () => {
+    vi.mocked(getClimateTrends).mockImplementation(async (_base, query) => {
+      if (query?.groupBy !== 'department') return whole()
+      const payload = byDepartment()
+      const extra = ['Ingeniería', 'Ventas', 'Operaciones', 'Legal'].map((label, index) => ({
+        ...payload.groups[0],
+        key: `d-${index}`,
+        label,
+      }))
+      return { ...payload, groups: [...payload.groups, ...extra] }
+    })
+    renderAt('company_admin')
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
+    expect(screen.queryByRole('group', { name: copy.breakDownBy })).toBeNull()
+    const select = screen.getByRole('combobox', { name: copy.breakDownBy }) as HTMLSelectElement
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      copy.wholeCompany,
+      'Finanzas',
+      'Ingeniería',
+      'Ventas',
+      'Operaciones',
+      'Legal',
+    ])
+    await userEvent.selectOptions(select, 'd-fin')
+    expect(select.value).toBe('d-fin')
+    const belonging = document.querySelector('[data-slot="trend-card"][data-dimension="belonging"]') as HTMLElement
+    expect(within(belonging).getByRole('img').getAttribute('aria-label')).toContain(`3.1 → ${copy.withheld} → 3.9`)
+    expect(belonging.querySelectorAll('[data-slot="trend-withheld"]')).toHaveLength(1)
+  })
+
   it('redraws from the department series when a segment is chosen, keeping the withheld wave withheld', async () => {
     renderAt('company_admin')
     await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
@@ -362,10 +449,11 @@ describe('ClimateTrendsNextPage', () => {
   })
 
   it('recovers from a failed load without a reload', async () => {
-    vi.mocked(getClimateTrends).mockRejectedValueOnce(new Error('Request failed: 500'))
+    vi.mocked(getClimateTrends).mockRejectedValueOnce(new ApiError(500, 'Request failed: 500'))
     renderAt('company_admin')
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('Request failed: 500')
+    expect(alert.textContent).toContain(en.errors.api.server)
+    expect(alert.textContent).not.toContain('Request failed')
     await userEvent.click(screen.getByRole('button', { name: en.common.retry }))
     await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
     expect(screen.queryByRole('alert')).toBeNull()

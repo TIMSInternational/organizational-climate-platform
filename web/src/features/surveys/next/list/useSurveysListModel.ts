@@ -9,6 +9,7 @@ import { EMPTY_SURVEY_FILTERS, type SurveyFiltersValue } from '../../surveyFilte
 import { filterSurveysByStatus, surveyStatusFacets, type SurveyStatusFacet } from '../../surveyListView'
 import { orderSurveys, waveReadings } from './derive'
 import type { SurveyRow, SurveysListNextModel, WaveReading } from './model'
+import { describeApiError } from '../../../../api/describeApiError'
 
 /** How long typing rests before the search reaches the server — one request, not one per key. */
 export const SEARCH_DEBOUNCE_MS = 350
@@ -75,7 +76,7 @@ export function useSurveysListModel(): SurveysListModelState {
       setRows(await listSurveys(baseUrl, applied, locale))
       setStatus('ready')
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
       setStatus('error')
     }
   }, [baseUrl, applied, locale, t])
@@ -126,7 +127,7 @@ export function useSurveysListModel(): SurveysListModelState {
       setDuplicating(id)
       duplicateSurvey(baseUrl, id, locale)
         .then((copy) => navigate(`/surveys/${copy.id}`))
-        .catch((err: unknown) => setActionError(err instanceof Error ? err.message : t('errors.generic')))
+        .catch((err: unknown) => setActionError(describeApiError(err, t)))
         .finally(() => setDuplicating(null))
     },
     [baseUrl, locale, navigate, t],

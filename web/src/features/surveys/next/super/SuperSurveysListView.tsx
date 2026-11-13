@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { ChevronDown, Download, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import CompanyContextBar from '../../../../components/layout/CompanyContextBar'
 import {
   Alert,
@@ -17,10 +17,11 @@ import {
   Input,
   LoadingRegion,
   NetworkError,
+  SegmentedControl,
   SkeletonText,
   Table,
-  chipVariants,
-  type ChipTone,
+  TableHead,
+  type ChipStatusTone,
 } from '../../../../components/ui'
 import { useCompanyContext, useCompanyScope } from '../../../../company-context'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
@@ -29,6 +30,8 @@ import { calendarDay, calendarDayLong } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { allResponsesFileName, getAllResponsesWorkbook } from '../../api/responseExport'
+import { companyStatusFileName, getDeliveryAuditWorkbook } from '../../api/statusExport'
+import { StatusWorkbookButton } from '../StatusWorkbookButton'
 
 /**
  * The API origin, the same way every other caller reads it. An empty string here is not a
@@ -74,7 +77,9 @@ const FACET_KEY: Record<string, string> = {
 // The canvas's `.label` head over the default hairline, as the company administrator's list draws it.
 // The header row pads only its bottom: the card's `pt-2` is the board's `padding: 8px 0 0`, and
 // the board's header row is `padding: 0 12px 8px` — 31px from the card's edge to the rule.
-const HEAD = 'px-3 pt-0 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+// The head itself is the `TableHead` primitive — the Apple board's `.tbl th`, 13px semibold in
+// sentence case, not the 11px uppercase the type ruling keeps for eyebrows.
+const HEAD = 'h-auto pt-0 pb-2 leading-normal border-b border-line-default'
 
 /**
  * A super administrator acts on any tenant's survey: `CanAdminister` short-circuits on
@@ -115,8 +120,10 @@ function waveOrdinal(t: TranslateFn, place: number): string {
 export default function SuperSurveysListView() {
   const { t, locale } = useTranslation()
   const scope = useCompanyScope()
+  const headerCompanyId = scope.status === 'ready' ? (scope.companyId ?? '') : ''
   const capabilities = useViewerCapabilities()
   const model = useSuperSurveysListModel()
+  const filesCompany = model.company || headerCompanyId
   const { base } = model
   const sections = groupSuperSections(model.visible)
   const facets = [
@@ -130,21 +137,39 @@ export default function SuperSurveysListView() {
       <CompanyContextBar
         note={scope.status === 'ready' ? t('surveys.next.super.barNoteChosen') : t('surveys.next.super.barNoteUnchosen')}
       />
-      <PageTopBar
+      <PageHeader
         eyebrow={t('surveys.next.super.eyebrow')}
         title={t('navigation.surveys')}
         description={t('surveys.next.super.description')}
         actions={
           capabilities.canAuthorSurveys || readViewerClaims().role === 'super_admin' ? (
-            <div className="flex flex-wrap gap-2">
+            <>
             {readViewerClaims().role === 'super_admin' && <AllResponsesButton t={t} />}
+            {/* Once a company is picked: its status workbook (what the client receives) and the
+                delivery audit (what TIMS keeps). A super admin has no company claim, so the
+                tenant page's status button never reached the people who send that file. */}
+            {/* The table's company filter, or else the header's company: the header said a
+                client while these buttons waited for the filter, two notions of "the chosen
+                company" on one page (walkthrough, C). */}
+            {readViewerClaims().role === 'super_admin' && filesCompany && (
+              <CompanyFilesButtons
+                companyId={filesCompany}
+                companyName={model.companyNames.get(filesCompany) ?? ''}
+                t={t}
+              />
+            )}
             <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
-            {capabilities.canAuthorSurveys && <Button asChild variant="primary">
+            </>
+          ) : undefined
+        }
+        primaryAction={
+          capabilities.canAuthorSurveys ? (
+            <Button asChild variant="primary">
               <Link to="/surveys/new">
                 <Plus aria-hidden="true" />
                 {t('surveys.newSurvey')}
               </Link>
-            </Button>}</div>
+            </Button>
           ) : undefined
         }
       />
@@ -158,8 +183,34 @@ export default function SuperSurveysListView() {
           base.apply()
         }}
       >
+        {/* The company list's filter bar, in its order (the review of 12 Nov): the board's
+            `.seg` over the statuses on the platform with the count at the trailing edge, then
+            the search and the selects, every control at the artboard's 32px. The segmented
+            control narrows the rows already read; one line at every width, scrolling in its
+            own box at 390 (the 4px pad keeps the focus ring inside the scroller). */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-65">
+          <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+0.5rem)] overflow-x-auto p-1 [scrollbar-width:none]">
+          <SegmentedControl
+            label={t('surveys.filterByStatus')}
+            value={base.statusFilter}
+            onChange={base.setStatusFilter}
+            options={facets.map((facet) => ({
+              value: facet.status,
+              label: t('surveys.next.list.chipCount', {
+                label: FACET_KEY[facet.status] ? t(FACET_KEY[facet.status]) : statusLabel(t, facet.status),
+                count: facet.count,
+              }),
+            }))}
+          />
+          </div>
+          <p data-slot="list-summary" className="m-0 text-sm tabular-nums sm:whitespace-nowrap text-fg-secondary sm:ml-auto">
+            {companies === 1
+              ? t('surveys.next.super.summaryOneCompany', { count: model.rows.length })
+              : t('surveys.next.super.summary', { count: model.rows.length, companies })}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-75">
             <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-fg-label" />
             <Input
               type="search"
@@ -167,7 +218,7 @@ export default function SuperSurveysListView() {
               placeholder={t('surveys.next.list.searchPlaceholder')}
               value={base.draft.q}
               onChange={(event) => base.setDraft({ ...base.draft, q: event.target.value })}
-              className="pl-8"
+              className="h-control-lg pl-8"
             />
           </div>
           <FilterSelect
@@ -196,31 +247,6 @@ export default function SuperSurveysListView() {
               </option>
             ))}
           </FilterSelect>
-          <p data-slot="list-summary" className="m-0 text-sm whitespace-nowrap text-fg-label sm:ml-auto">
-            {companies === 1
-              ? t('surveys.next.super.summaryOneCompany', { count: model.rows.length })
-              : t('surveys.next.super.summary', { count: model.rows.length, companies })}
-          </p>
-        </div>
-        <div role="group" aria-label={t('surveys.filterByStatus')} className="flex flex-wrap items-center gap-1.5">
-          {facets.map((facet) => {
-            const selected = base.statusFilter === facet.status
-            return (
-              <button
-                key={facet.status}
-                type="button"
-                data-slot="status-pill"
-                aria-pressed={selected}
-                onClick={() => base.setStatusFilter(facet.status)}
-                className={cn(chipVariants({ tone: selected ? 'critical' : 'neutral' }), 'cursor-pointer hover:border-line-hover')}
-              >
-                {t('surveys.next.list.chipCount', {
-                  label: FACET_KEY[facet.status] ? t(FACET_KEY[facet.status]) : statusLabel(t, facet.status),
-                  count: facet.count,
-                })}
-              </button>
-            )
-          })}
         </div>
       </form>
 
@@ -231,7 +257,7 @@ export default function SuperSurveysListView() {
       )}
 
       {base.status === 'error' ? (
-        <NetworkError title={t('errors.generic')} description={base.error ?? undefined} onRetry={base.reload} retryText={t('common.retry')} />
+        <NetworkError title={t('errors.loadFailed')} description={base.error ?? undefined} onRetry={base.reload} retryText={t('common.retry')} />
       ) : (
         <LoadingRegion loading={base.status === 'loading'} label={t('common.loading')}>
           {base.status === 'loading' ? (
@@ -348,18 +374,19 @@ function SectionBlock({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-2.5">
-          <h2 id={`surveys-super-${section}`} className={cn('m-0', archived ? 'font-sans text-base font-semibold text-fg-label' : 'text-2xl')}>
+          <h2 id={`surveys-super-${section}`} className="m-0 text-2xl">
             {heading}
           </h2>
-          <span className="font-mono text-sm tabular-nums text-fg-label">{rows.length}</span>
+          <span className="text-sm tabular-nums text-fg-secondary">{rows.length}</span>
         </div>
         {note && (
-          <p data-slot="section-note" className="m-0 text-sm text-fg-label sm:text-right">
+          <p data-slot="section-note" className="m-0 text-sm text-fg-secondary sm:text-right">
             {note}
           </p>
         )}
       </div>
-      <div className={cn('overflow-hidden rounded-lg border border-line-default bg-surface-card', archived ? 'border-dashed' : 'pt-2 shadow-xs')}>
+      {/* The board's `.card.flush`: 12px radius, the panel hairline, no shadow. */}
+      <div className={cn('overflow-hidden rounded-xl border border-line-panel bg-surface-card', archived ? 'border-dashed' : 'pt-2')}>
         {/* The canvas's grid from xl — `minmax(0,1fr) 170px 96px 110px 160px 104px 140px`, 12px
             between — with each fixed column carrying the gap before it; narrower than that the
             table scrolls inside this card and never pushes the page. */}
@@ -376,15 +403,15 @@ function SectionBlock({
             </colgroup>
             <thead className={archived ? 'sr-only' : undefined}>
               <tr>
-                <th className={HEAD}>{t('surveys.next.list.colSurvey')}</th>
-                <th className={cn(HEAD, 'pl-0')}>{t('surveys.next.super.colCompany')}</th>
-                <th className={cn(HEAD, 'pl-0')}>{t('common.status')}</th>
-                <th className={cn(HEAD, 'pl-0')}>{t('surveys.responses')}</th>
-                <th className={cn(HEAD, 'pl-0')}>{t('surveys.participation')}</th>
-                <th className={cn(HEAD, 'pl-0')}>{t('surveys.next.list.colClose')}</th>
-                <th className={cn(HEAD, 'pl-0 text-right')}>
+                <TableHead className={HEAD}>{t('surveys.next.list.colSurvey')}</TableHead>
+                <TableHead className={cn(HEAD, 'pl-0')}>{t('surveys.next.super.colCompany')}</TableHead>
+                <TableHead className={cn(HEAD, 'pl-0')}>{t('common.status')}</TableHead>
+                <TableHead className={cn(HEAD, 'pl-0')}>{t('surveys.responses')}</TableHead>
+                <TableHead className={cn(HEAD, 'pl-0')}>{t('surveys.participation')}</TableHead>
+                <TableHead className={cn(HEAD, 'pl-0')}>{t('surveys.next.list.colClose')}</TableHead>
+                <TableHead className={cn(HEAD, 'pl-0 text-right')}>
                   <span className="sr-only">{t('common.actions')}</span>
-                </th>
+                </TableHead>
               </tr>
             </thead>
             <tbody>
@@ -395,14 +422,18 @@ function SectionBlock({
           </Table>
         </div>
       </div>
-      {archived && <p className="m-0 text-sm text-fg-label">{t('surveys.next.list.archivedNote')}</p>}
+      {archived && <p className="m-0 text-sm text-fg-secondary">{t('surveys.next.list.archivedNote')}</p>}
     </section>
   )
 }
 
-function statusTone(section: SurveySection): ChipTone {
-  if (section === 'open') return 'good'
-  return section === 'upcoming' ? 'warning' : 'neutral'
+/**
+ * Status chips are gray except the open survey, which wears the blue live chip (the user's
+ * ruling of 11 Nov: green, amber and red are the three result areas and nothing else). The
+ * open row was Fortaleza's green and a draft Oportunidad's amber.
+ */
+function statusTone(section: SurveySection): ChipStatusTone {
+  return section === 'open' ? 'live' : 'neutral'
 }
 
 function closeLine(
@@ -482,7 +513,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           <span className="text-sm text-fg-label">{t('surveys.next.super.unpublished')}</span>
         ) : (
           <span className="flex items-baseline gap-1.5">
-            <span className={cn('font-mono text-lg tabular-nums', ink)}>{counts.count}</span>
+            <span className={cn('text-lg font-semibold tabular-nums', ink)}>{counts.count}</span>
             {section === 'closed' ? (
               <span className="text-sm text-fg-secondary">{t('surveys.next.list.completedUnit')}</span>
             ) : counts.target !== null ? (
@@ -501,13 +532,13 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
             {t('surveys.next.list.noInviteList')}
           </span>
         ) : archived ? (
-          <span className="font-mono text-sm tabular-nums text-fg-label">{formatMetric(counts.percent, { kind: 'percentage' }, locale)}</span>
+          <span className="text-sm tabular-nums text-fg-secondary">{formatMetric(counts.percent, { kind: 'percentage' }, locale)}</span>
         ) : (
           <span className="flex items-center gap-2">
-            <span aria-hidden="true" className="h-1.5 w-22.5 shrink-0 overflow-hidden rounded-full bg-line-light">
+            <span aria-hidden="true" className="h-1.5 w-22.5 shrink-0 overflow-hidden rounded-full bg-surface-fill">
               <span className="block h-full rounded-full bg-accent-blue" style={{ width: `${Math.min(counts.percent, 100)}%` }} />
             </span>
-            <span className="font-mono text-sm tabular-nums text-fg-secondary">{formatMetric(counts.percent, { kind: 'percentage' }, locale)}</span>
+            <span className="text-sm tabular-nums text-fg-secondary">{formatMetric(counts.percent, { kind: 'percentage' }, locale)}</span>
           </span>
         )}
       </td>
@@ -518,7 +549,7 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
           </span>
         ) : (
           <span className="flex flex-col">
-            <span className="font-mono text-base tabular-nums text-fg-primary">{calendarDay(Date.parse(row.endDate), locale)}</span>
+            <span className="text-base tabular-nums text-fg-primary">{calendarDay(Date.parse(row.endDate), locale)}</span>
             {line && (
               <span data-slot={section === 'closed' ? 'wave-move' : 'close-note'} className="text-xs leading-normal text-fg-label">
                 {line}
@@ -564,6 +595,11 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
               {readViewerClaims().role === 'super_admin' && (
                 <OneClimateResponsesItem surveyId={row.id} title={row.title ?? ''} t={t} />
               )}
+              {/* The same rows without a single answer: the list a client asks for to check
+                  demographics before the analysis (Eagle, 2026-11-02). */}
+              {readViewerClaims().role === 'super_admin' && (
+                <OneClimateResponsesItem surveyId={row.id} title={row.title ?? ''} t={t} demographicsOnly />
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -579,15 +615,25 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
  * for it: a menu item that closes the menu and does nothing is indistinguishable from a
  * download the browser is still preparing, and the reader would press it again.
  */
-function OneClimateResponsesItem({ surveyId, title, t }: { surveyId: string; title: string; t: TranslateFn }) {
+function OneClimateResponsesItem({
+  surveyId,
+  title,
+  t,
+  demographicsOnly = false,
+}: {
+  surveyId: string
+  title: string
+  t: TranslateFn
+  demographicsOnly?: boolean
+}) {
   const [failed, setFailed] = useState(false)
 
   async function run() {
     setFailed(false)
     try {
       downloadBlobFile(
-        allResponsesFileName(new Date(), title),
-        await getAllResponsesWorkbook(RESPONSE_EXPORT_BASE_URL, surveyId),
+        allResponsesFileName(new Date(), title, demographicsOnly ? 'demograficos' : 'respuestas'),
+        await getAllResponsesWorkbook(RESPONSE_EXPORT_BASE_URL, surveyId, { answers: !demographicsOnly }),
       )
     } catch {
       setFailed(true)
@@ -601,8 +647,62 @@ function OneClimateResponsesItem({ surveyId, title, t }: { surveyId: string; tit
         void run()
       }}
     >
-      {failed ? t('surveys.next.super.exportFailed') : t('surveys.next.super.exportOne')}
+      {failed
+        ? t('surveys.next.super.exportFailed')
+        : t(demographicsOnly ? 'surveys.next.super.exportOneDemographics' : 'surveys.next.super.exportOne')}
     </DropdownMenuItem>
+  )
+}
+
+/**
+ * The two per-company files, for the company picked in the filter. Each failure is said beside
+ * the buttons, as the platform-wide download does: a fetch that rejects gives no sign otherwise.
+ */
+function CompanyFilesButtons({
+  companyId,
+  companyName,
+  t,
+}: {
+  companyId: string
+  companyName: string
+  t: TranslateFn
+}) {
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  // The delivery audit is one file per company with no sheets to choose between, so it stays a
+  // single press. Only the status workbook asks which surveys.
+  async function downloadAudit() {
+    setBusy(true)
+    setFailed(false)
+    try {
+      const blob = await getDeliveryAuditWorkbook(RESPONSE_EXPORT_BASE_URL, companyId)
+      downloadBlobFile(companyStatusFileName('auditoria-envios', companyName, new Date()), blob)
+    } catch {
+      setFailed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {failed && (
+        <span className="m-0 text-sm text-accent-red-ink" role="alert">
+          {t('surveys.next.super.exportFailed')}
+        </span>
+      )}
+      <StatusWorkbookButton
+        companyId={companyId}
+        companyName={companyName}
+        baseUrl={RESPONSE_EXPORT_BASE_URL}
+        label={t('surveys.next.super.companyStatus')}
+      />
+      <Button type="button" variant="outline" disabled={busy} onClick={() => void downloadAudit()}>
+        <Download aria-hidden="true" />
+        {busy ? t('surveys.next.super.exportBusy') : t('surveys.next.super.deliveryAudit')}
+      </Button>
+    </div>
   )
 }
 

@@ -199,6 +199,23 @@ describe('ResultsCellPanel, when the group has a plan for another dimension', ()
     expect(within(doing).queryByRole('link', { name: new RegExp(T.openPlan) })).toBeNull()
   })
 
+  it('names the plan but links no `/action-plans` page where a tracking service replaces it in the sidebar', () => {
+    vi.stubEnv('VITE_TRACKING_API_BASE_URL', 'http://tracking.test')
+    try {
+      renderPanel(
+        cellOf('d-ops', 'Operaciones', 'workload', {
+          plan: planRef('plan-workload', 'Seguimiento para Operaciones — Carga de trabajo'),
+          cellPlan: planRef('plan-workload', 'Seguimiento para Operaciones — Carga de trabajo'),
+        }),
+      )
+      const doing = screen.getByTestId('cell-doing')
+      expect(doing.textContent).toContain('Seguimiento para Operaciones — Carga de trabajo')
+      expect(within(doing).queryByRole('link', { name: new RegExp(T.openPlan) })).toBeNull()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('opens this cell’s own plan, not the group’s', () => {
     renderPanel(
       cellOf('d-ops', 'Operaciones', 'workload', {
@@ -244,5 +261,57 @@ describe('ResultsCellPanel, when the group has a plan for another dimension', ()
     const doing = screen.getByTestId('cell-doing')
     expect(within(doing).getByRole('button', { name: T.createPlan })).toBeTruthy()
     expect(within(doing).queryByRole('link', { name: new RegExp(T.openPlan) })).toBeNull()
+  })
+})
+
+/**
+ * Review of 12 Nov: the company strip under "La misma pregunta" printed 17 / 37 / 42 and left
+ * a 4 % sliver unlabelled (it reads as answers gone missing), and the panel named the bands
+ * "Crítica" / "Oportunidad" beside tiles and a legend that say "Área crítica".
+ */
+describe('ResultsCellPanel, the company distribution and the band names', () => {
+  beforeEach(() => window.localStorage.setItem('preferredLocale', 'es'))
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+  })
+
+  const question = {
+    questionId: 'q1',
+    text: null,
+    groupScore: 2.6,
+    groupAnswered: 9,
+    surveyScore: 3.4,
+    surveyAnswered: 120,
+    surveyDistribution: [
+      { position: 1, percentage: 0 },
+      { position: 2, percentage: 17 },
+      { position: 3, percentage: 37 },
+      { position: 4, percentage: 42 },
+      { position: 5, percentage: 4 },
+    ],
+    scaleMin: 1,
+    scaleMax: 5,
+    scaleLabelMin: null,
+    scaleLabelMax: null,
+  }
+
+  it('names every drawn segment in words, the thinnest included', () => {
+    renderPanel(cellOf('d-ops', 'Operaciones', 'workload', { questions: [question] }))
+    const items = [...screen.getByTestId('company-distribution-key').querySelectorAll('li')].map((li) => li.textContent)
+    expect(items).toEqual(['2: 17 %', '3: 37 %', '4: 42 %', '5: 4 %'])
+  })
+
+  it('names each band by its one full name, never the short form', () => {
+    renderPanel(
+      cellOf('d-ops', 'Operaciones', 'workload', {
+        questions: [question],
+        others: [{ id: 'd-eng', name: 'Ingeniería', score: 3.5, band: 'opportunity', isProtected: false }],
+      }),
+    )
+    const panel = document.getElementById('panel')!.textContent ?? ''
+    expect(screen.getByTestId('other-d-eng').textContent).toContain('Área de oportunidad')
+    expect(within(screen.getByTestId('company-distribution')).getByText('Área de oportunidad')).toBeTruthy()
+    expect(panel).not.toMatch(/(^|[^a])(Crítica|Oportunidad|Fortaleza)/)
   })
 })

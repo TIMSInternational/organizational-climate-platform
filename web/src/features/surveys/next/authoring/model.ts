@@ -15,12 +15,26 @@ import type { Locale } from '../../../../i18n'
  */
 
 /**
- * Whether the server will accept a content edit. `SurveyEndpoints` refuses twice: a status
+ * Whether the server will accept a QUESTIONS edit. `SurveyEndpoints` refuses twice: a status
  * other than draft/scheduled, and any response at all. `responseCount` is the server's fast
- * path, so a 0 here is a hint and the save's 409 stays the truth.
+ * path, so a 0 here is a hint and the save's 409 stays the truth -- it counts results, so a
+ * survey whose only answer TIMS excluded reads 0 here and is still refused there.
+ *
+ * `operator` (a super admin) also edits an ACTIVE survey nobody has answered (ruled 2026-11-11,
+ * `docs/decisions/operators-edit-a-live-survey.md`); a client's administrator does not.
  */
-export function isEditable(status: string, responseCount: number): boolean {
-  return (status === 'draft' || status === 'scheduled') && responseCount === 0
+export function isEditable(status: string, responseCount: number, operator = false): boolean {
+  return (status === 'draft' || status === 'scheduled' || (operator && status === 'active')) && responseCount === 0
+}
+
+/**
+ * Whether «Editar nombre» is offered: a draft nobody has answered, for anyone who administers
+ * the survey; past draft, a super admin for as long as it is not archived -- with answers too,
+ * because no stored answer points at a survey's name or description (ruled 2026-11-11).
+ */
+export function isTextEditable(status: string, responseCount: number, operator: boolean): boolean {
+  if (status === 'draft') return responseCount === 0
+  return operator && (status === 'scheduled' || status === 'active' || status === 'closed')
 }
 
 /** The locales a question is actually written in — an unauthored locale is not a translation. */
@@ -179,3 +193,13 @@ export function questionFromLibraryItem(item: QuestionLibraryItemDetail, order: 
         : null,
   }
 }
+
+/**
+ * The disabled look for an authoring button whose label the user still has to read: Guardar
+ * borrador and Atrás on the builder, and a status verb («Programar», «Activar») or «Editar
+ * audiencia» that the detail page holds disabled for a reason it states beside it. The Button's
+ * `disabled:opacity-45` faded such a label to #989899 on white, 2.88:1. They keep full opacity
+ * and drop to the label ink instead (#6c6c71, 5.22:1 on white), so disabled still reads quieter
+ * than the primary ink.
+ */
+export const QUIET_DISABLED = 'disabled:opacity-100 disabled:text-fg-label'

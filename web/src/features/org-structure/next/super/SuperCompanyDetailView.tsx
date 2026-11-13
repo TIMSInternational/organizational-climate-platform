@@ -1,54 +1,47 @@
 import { Fragment, useId, useState, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router'
-import { BarChart3, Calendar, Check, Clock, FileText, Filter, Mail, Network, Upload, Users } from 'lucide-react'
-import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { BarChart3, Calendar, Check, FileText, Filter, Mail, Network, Users } from 'lucide-react'
+import { useTranslation } from '../../../../i18n'
+import { PageHeader } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, DEFAULT_RESULT_BANDS } from '../../../../components/charts'
-import { Alert, AlertDescription, Button, Input, LiveRegion, NetworkError, SkeletonText, Switch } from '../../../../components/ui'
+import { Alert, AlertDescription, Button, Input, LiveRegion, NetworkError, SkeletonText } from '../../../../components/ui'
 import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { updateCompany } from '../../api/companies'
-import { updateCompanySettings, type UpdateCompanySettingsInput } from '../../api/companySettings'
+import { updateCompanySettings, uploadCompanyLogo, type UpdateCompanySettingsInput } from '../../api/companySettings'
+import { ApiError } from '../../../../api/authFetch'
 import { CompanyValidation } from '../../components/companyValidation'
-import { surveyFrequencyLabelKey } from '../../labels'
 import { countryOptions } from './countries'
-import { plainTitle, statusMix, waveOf } from '../../../dashboard/next/super/derive'
+import { statusMix } from '../../../dashboard/next/super/derive'
 import {
-  HEX_COLOUR,
   departmentSummary,
   foldCommonPrefix,
   reportWave,
   draftProblems,
-  parseRetention,
   peopleReading,
   profileChanges,
   profileDraftOf,
-  retentionYears,
-  settingsChanges,
-  settingsDraftOf,
-  wavesByMonth,
   type ProfileDraft,
-  type SettingsDraft,
 } from './companyDetail'
+import { HEX_COLOUR, changesOf, draftOf, logoValid, timezoneOptions, utcOffset, type SettingsDraft } from '../settings/derive'
 import { STATUS_COUNT_KEYS, countText, dayWithYear, languageText, sizeText, tierText } from './labels'
 import { CanvasSelect, Field, IconBox, LinkCard, Panel } from './parts'
 import CompanyServiceLicensesPanel from './CompanyServiceLicensesPanel'
 import { useSuperCompanyDetailModel, type SuperCompanyDetailModel } from './useSuperCompanyDetailModel'
+import CompanySetupChecklist from './CompanySetupChecklist'
+import DeleteCompanyCard from './DeleteCompanyCard'
+import { companySetupSteps, needsSetup } from './companySetup'
 import ResultBandsCard from '../settings/ResultBandsCard'
 import CredentialModeCard from '../settings/CredentialModeCard'
 import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from '../settings/bandsDraft'
 import { fromWire, toWire } from '../../../result-bands/api'
 import { rememberResultBands } from '../../../result-bands/useResultBands'
+import { describeApiError } from '../../../../api/describeApiError'
 
-const FREQUENCIES = ['daily', 'weekly', 'monthly', 'quarterly']
 const LANGUAGES = ['es', 'en']
-const CADENCE_KEY: Readonly<Record<string, string>> = {
-  daily: 'superadmin.next.companyDetail.surveys.daily',
-  weekly: 'superadmin.next.companyDetail.surveys.weekly',
-  monthly: 'superadmin.next.companyDetail.surveys.monthly',
-  quarterly: 'superadmin.next.companyDetail.surveys.quarterly',
-}
+/** Configuración de empresa's keys: the two screens make the same statements in the same words. */
+const CA = 'companySettings.next'
 
 /**
  * `/admin/companies/:id` for a super administrator — the canvas's *Detalle de empresa
@@ -57,7 +50,10 @@ const CADENCE_KEY: Readonly<Record<string, string>> = {
  *
  * One form, saved at the end: the tenant's profile (`PUT /admin/companies/{id}`,
  * super-only) and what every new survey inherits (`PUT …/settings`) — the content
- * language the triage's P0 row asked for among them. *Descartar* puts the form back;
+ * language the triage's P0 row asked for among them. The settings it edits are exactly
+ * Configuración de empresa's — language, time zone, sign-in mode, result bands, colour and
+ * logo path — through the same draft (`settings/derive.ts`); anonymity and retention are
+ * stated, because no code reads the company's value for either (audit gap G18). *Descartar* puts the form back;
  * *Guardar cambios* sends only what changed, profile first, as two requests. The
  * company's result bands ride the settings request, judged by the same rules as on
  * Configuración de empresa, and hold *Guardar cambios* while they are not a whole scale.
@@ -73,8 +69,8 @@ export default function SuperCompanyDetailView() {
   if (state.status === 'error') {
     return (
       <div>
-        <PageTopBar
-          eyebrow={t('navigation.systemAdministration')}
+        <PageHeader
+          eyebrow={t('navigation.sectionOrganization')}
           title={t('superadmin.next.companyDetail.title')}
           breadcrumbs={[{ label: t('navigation.companies'), href: '/admin/companies' }, { label: t('superadmin.next.companyDetail.title') }]}
         />
@@ -90,7 +86,7 @@ export default function SuperCompanyDetailView() {
   if (!state.model) {
     return (
       <div>
-        <PageTopBar eyebrow={t('navigation.systemAdministration')} title={t('superadmin.next.companyDetail.title')} />
+        <PageHeader eyebrow={t('navigation.sectionOrganization')} title={t('superadmin.next.companyDetail.title')} />
         <SkeletonText lines={8} />
       </div>
     )
@@ -103,8 +99,11 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const { company, settings } = model
+  // Arriving from "Crear empresa" (`?nueva=1`): the setup shows whatever the counts say.
+  const [searchParams] = useSearchParams()
+  const justCreated = searchParams.get('nueva') === '1'
   const initialProfile = profileDraftOf(company)
-  const initialSettings = settings ? settingsDraftOf(settings) : null
+  const initialSettings = settings ? draftOf(settings) : null
   const [profile, setProfile] = useState<ProfileDraft>(initialProfile)
   const [draft, setDraft] = useState<SettingsDraft | null>(initialSettings)
   const [saving, setSaving] = useState(false)
@@ -119,7 +118,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
   const [bands, setBands] = useState<BandsDraft | null>(initialBands)
 
   const profileDiff = profileChanges(initialProfile, profile)
-  const settingsDiff: UpdateCompanySettingsInput = initialSettings && draft ? settingsChanges(initialSettings, draft) : {}
+  const settingsDiff: UpdateCompanySettingsInput = initialSettings && draft ? changesOf(initialSettings, draft) : {}
   if (savedBands && bands && bandsChanged(savedBands, bands, t)) {
     const next = bandsOut(bands, t)
     if (next) settingsDiff.resultBands = toWire(next)
@@ -149,7 +148,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
       setSaved(true)
       onSaved()
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : t('superadmin.next.companyDetail.saveFailed'))
+      setSaveError(describeApiError(err, t, 'superadmin.next.companyDetail.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -165,23 +164,26 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
 
   return (
     <div className="flex flex-col gap-section">
-      <PageTopBar
-        eyebrow={t('navigation.systemAdministration')}
+      <PageHeader
+        eyebrow={t('navigation.sectionOrganization')}
         title={t('superadmin.next.companyDetail.title')}
         description={t('superadmin.next.companyDetail.description')}
         breadcrumbs={[{ label: t('navigation.companies'), href: '/admin/companies' }, { label: company.name }]}
         actions={
-          <>
-            <Button type="button" variant="outline" onClick={discard} disabled={saving}>
-              {t('superadmin.next.companyDetail.discard')}
-            </Button>
-            <Button type="button" variant="primary" onClick={() => void save()} disabled={blocked || saving}>
-              <Check aria-hidden="true" />
-              {saving ? t('superadmin.next.companyDetail.saving') : t('superadmin.next.companyDetail.save')}
-            </Button>
-          </>
+          <Button type="button" variant="outline" onClick={discard} disabled={saving}>
+            {t('superadmin.next.companyDetail.discard')}
+          </Button>
+        }
+        primaryAction={
+          <Button type="button" variant="primary" onClick={() => void save()} disabled={blocked || saving}>
+            <Check aria-hidden="true" />
+            {saving ? t('superadmin.next.companyDetail.saving') : t('superadmin.next.companyDetail.save')}
+          </Button>
         }
       />
+
+      {/* A client nobody has set up yet, or one just created: its setup, in order. */}
+      {(justCreated || needsSetup(model)) && <CompanySetupChecklist steps={companySetupSteps(model)} />}
       <LiveRegion>
         {saved
           ? t('superadmin.next.companyDetail.saved')
@@ -189,7 +191,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
             ? t('superadmin.next.companyDetail.nothingToSave')
             : ''}
       </LiveRegion>
-      {nothing && !dirty && <p className="m-0 -mt-4 text-xs text-fg-tertiary">{t('superadmin.next.companyDetail.nothingToSave')}</p>}
+      {nothing && !dirty && <p className="m-0 -mt-4 text-sm text-fg-secondary">{t('superadmin.next.companyDetail.nothingToSave')}</p>}
       {saveError && (
         <Alert variant="destructive">
           <AlertDescription>
@@ -204,7 +206,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
         <div className="flex min-w-0 flex-col gap-4 xl:col-span-7">
-          <SurveysCard model={model} draft={draft} setDraft={setDraft} />
+          <SurveysCard draft={draft} setDraft={setDraft} />
           {initialSettings && draft && (
             <CredentialModeCard
               saved={initialSettings.credentialMode}
@@ -231,9 +233,12 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
         </div>
         <div className="flex min-w-0 flex-col gap-4 xl:col-span-5">
           <CompanyCard model={model} profile={profile} setProfile={setProfile} locale={locale} />
-          <BrandCard model={model} draft={draft} setDraft={setDraft} />
+          <BrandCard companyName={company.name} draft={draft} setDraft={setDraft} companyId={company.id} onUploaded={onSaved} />
         </div>
       </div>
+
+      {/* Last, and apart: the one irreversible thing on this page. */}
+      <DeleteCompanyCard companyId={company.id} companyName={company.name} />
     </div>
   )
 }
@@ -248,10 +253,10 @@ function OnlyFromHere({ model }: { model: SuperCompanyDetailModel }) {
   const unread = t('superadmin.next.unavailable')
 
   return (
-    // `-mt-6`: `PageTopBar` keeps 24px under its rule and the page column adds its 24px gap;
+    // `-mt-6`: `PageHeader` keeps 24px under its rule and the page column adds its 24px gap;
     // the canvas has 24 in all between the rule and this strip.
     <section aria-labelledby="detail-only-here" className="-mt-6 flex flex-col gap-2">
-      <p id="detail-only-here" className="m-0 text-xs text-fg-tertiary">
+      <p id="detail-only-here" className="m-0 text-sm text-fg-secondary">
         <span className="font-semibold">{t('superadmin.next.companyDetail.onlyHereLead')}</span>{' '}
         {t('superadmin.next.companyDetail.onlyHereNote')}
       </p>
@@ -309,33 +314,21 @@ function OnlyFromHere({ model }: { model: SuperCompanyDetailModel }) {
   )
 }
 
-function cadenceHelper(t: TranslateFn, frequency: string, model: SuperCompanyDetailModel, locale: string): string | null {
-  const key = CADENCE_KEY[frequency.trim().toLowerCase()]
-  if (!key) return null
-  const cadence = t(key)
-  const waves = model.surveys ? wavesByMonth(model.surveys, locale) : []
-  if (waves.length === 0) return t('superadmin.next.companyDetail.surveys.cadenceOnly', { cadence })
-  const list = waves.map((wave) => t('superadmin.next.companyDetail.surveys.waveMonth', wave)).join(', ')
-  return t('superadmin.next.companyDetail.surveys.wavesSeen', { cadence, list })
+/** A statement in a control's place: what the platform does, which no company value changes. */
+function Statement({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-slot="settings-statement"
+      className="flex h-9 min-w-0 items-center truncate rounded-md border border-line-default bg-surface-fill-subtle px-3 text-base text-fg-primary"
+    >
+      {children}
+    </div>
+  )
 }
 
-function SurveysCard({
-  model,
-  draft,
-  setDraft,
-}: {
-  model: SuperCompanyDetailModel
-  draft: SettingsDraft | null
-  setDraft: (draft: SettingsDraft) => void
-}) {
-  const { t, locale } = useTranslation()
-  const ids = {
-    language: useId(),
-    frequency: useId(),
-    anonymity: useId(),
-    retention: useId(),
-    microclimates: useId(),
-  }
+function SurveysCard({ draft, setDraft }: { draft: SettingsDraft | null; setDraft: (draft: SettingsDraft) => void }) {
+  const { t } = useTranslation()
+  const ids = { language: useId(), timezone: useId() }
   const heading = (
     <h2 id="detail-surveys" className="m-0 text-2xl">
       {t('superadmin.next.companyDetail.surveys.heading')}
@@ -345,15 +338,14 @@ function SurveysCard({
   if (!draft) {
     return (
       <Panel labelledBy="detail-surveys" heading={heading} meta={t('superadmin.next.companyDetail.surveys.meta')}>
-        <p className="m-0 text-xs text-fg-secondary">{t('companySettings.settingsUnavailable')}</p>
+        <p className="m-0 text-sm text-fg-secondary">{t('companySettings.settingsUnavailable')}</p>
       </Panel>
     )
   }
 
-  const retention = parseRetention(draft.dataRetentionDays)
-  const frequencies = FREQUENCIES.includes(draft.surveyFrequency) ? FREQUENCIES : [draft.surveyFrequency, ...FREQUENCIES]
   const languages = LANGUAGES.includes(draft.language) ? LANGUAGES : [draft.language, ...LANGUAGES]
   const set = (patch: Partial<SettingsDraft>) => setDraft({ ...draft, ...patch })
+  const now = new Date()
 
   return (
     <Panel labelledBy="detail-surveys" heading={heading} meta={t('superadmin.next.companyDetail.surveys.meta')} className="gap-4 pb-5">
@@ -372,137 +364,56 @@ function SurveysCard({
             ))}
           </CanvasSelect>
         </Field>
-        <Field
-          fieldLabel={t('superadmin.next.companyDetail.surveys.frequency')}
-          htmlFor={ids.frequency}
-          helper={cadenceHelper(t, draft.surveyFrequency, model, locale) ?? undefined}
-        >
-          <CanvasSelect
-            id={ids.frequency}
-            className="w-full"
-            value={draft.surveyFrequency}
-            onChange={(event) => set({ surveyFrequency: event.target.value })}
-          >
-            {frequencies.map((frequency) => {
-              const key = surveyFrequencyLabelKey(frequency)
+        {/* The time zone Configuración de empresa edits, which this role could not (audit gap
+            G19): the same select, the same zones, the same PUT. */}
+        <Field fieldLabel={t(`${CA}.timezone`)} htmlFor={ids.timezone} helper={t(`${CA}.timezoneHelp`)}>
+          <CanvasSelect id={ids.timezone} className="w-full" value={draft.timezone} onChange={(event) => set({ timezone: event.target.value })}>
+            {timezoneOptions(draft.timezone).map((zone) => {
+              const offset = utcOffset(zone, now)
               return (
-                <option key={frequency} value={frequency}>
-                  {key ? t(key) : frequency}
+                <option key={zone} value={zone}>
+                  {offset && offset !== zone ? `${zone} (${offset})` : zone}
                 </option>
               )
             })}
           </CanvasSelect>
         </Field>
         <Field
-          fieldLabel={t('superadmin.next.companyDetail.surveys.anonymity')}
-          htmlFor={ids.anonymity}
-          helper={
-            model.openSurvey
-              ? t('superadmin.next.companyDetail.surveys.anonymityHelperOpen', {
-                  code: waveOf(model.openSurvey.title) ?? plainTitle(model.openSurvey.title) ?? '',
-                  state: model.openSurvey.anonymous
-                    ? t('superadmin.next.companyDetail.surveys.stateAnonymous')
-                    : t('superadmin.next.companyDetail.surveys.stateNamed'),
-                })
-              : t('superadmin.next.companyDetail.surveys.anonymityHelper')
-          }
-        >
-          <CanvasSelect
-            id={ids.anonymity}
-            className="w-full"
-            value={draft.anonymousSurveys ? 'yes' : 'no'}
-            onChange={(event) => set({ anonymousSurveys: event.target.value === 'yes' })}
-          >
-            <option value="yes">{t('superadmin.next.companyDetail.surveys.anonymous')}</option>
-            <option value="no">{t('superadmin.next.companyDetail.surveys.identified')}</option>
-          </CanvasSelect>
-        </Field>
-        <Field
-          fieldLabel={t('superadmin.next.companyDetail.surveys.retention')}
-          htmlFor={ids.retention}
-          helper={
-            retention === null
-              ? undefined
-              : t('superadmin.next.companyDetail.surveys.retentionHelper', {
-                  days: retention,
-                  years: retentionYears(retention, locale),
-                })
-          }
-        >
-          <InputAffix icon={<Clock />} suffix={t('superadmin.next.companyDetail.surveys.retentionUnit')}>
-            <Input
-              id={ids.retention}
-              inputMode="numeric"
-              value={draft.dataRetentionDays}
-              aria-invalid={retention === null}
-              onChange={(event) => set({ dataRetentionDays: event.target.value })}
-              style={{ width: `${Math.max(String(draft.dataRetentionDays).length, 1)}ch` }}
-              className="w-auto min-w-0 flex-none border-0 bg-transparent px-0 font-mono tabular-nums shadow-none"
-            />
-          </InputAffix>
-        </Field>
-        <Field
           fieldLabel={t('superadmin.next.companyDetail.surveys.floor')}
           helper={t('superadmin.next.companyDetail.surveys.floorHelper', { floor: ANONYMITY_FLOOR })}
         >
-          <div className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-icon-box px-2.5">
-            <span className="font-mono tabular-nums text-fg-primary">{ANONYMITY_FLOOR}</span>
-            <span className="text-fg-tertiary">{t('superadmin.next.companyDetail.surveys.floorValue')}</span>
+          <div className="flex h-9 items-center gap-2 rounded-md border border-line-default bg-surface-fill-subtle px-3 text-base">
+            <span className="tabular-nums text-fg-primary">{ANONYMITY_FLOOR}</span>
+            <span className="text-fg-secondary">{t('superadmin.next.companyDetail.surveys.floorValue')}</span>
           </div>
         </Field>
-        <Field
-          fieldLabel={t('superadmin.next.companyDetail.surveys.microclimates')}
-          htmlFor={ids.microclimates}
-          helper={t('superadmin.next.companyDetail.surveys.microclimatesHelper')}
-        >
-          <ToggleRow
-            id={ids.microclimates}
-            checked={draft.microclimateEnabled}
-            onChange={(microclimateEnabled) => set({ microclimateEnabled })}
-            text={draft.microclimateEnabled ? t('superadmin.next.companyDetail.surveys.on') : t('superadmin.next.companyDetail.surveys.off')}
-          />
+        {/* Statements where a default-anonymity select, a retention input, a frequency select
+            and a microclimate switch stood (audit gap G18): each wrote a company value that no
+            code reads. Every new survey is anonymous (`NewSurveyDefaults.Apply`); the retention
+            sweep runs fixed periods (`RetentionCleanupJob`, `SurveyDraftRetention`). The AI flag
+            is read — by this role's Analítica — and no control here ever offered it. */}
+        <Field fieldLabel={t(`${CA}.anonymityInEffect`)} helper={t(`${CA}.anonymityAlwaysHelp`)}>
+          <Statement>{t(`${CA}.anonymityAlwaysValue`)}</Statement>
+        </Field>
+        <Field fieldLabel={t(`${CA}.retentionInEffect`)} helper={t(`${CA}.retentionFixedHelp`)}>
+          <Statement>{t(`${CA}.retentionFixedValue`)}</Statement>
         </Field>
       </div>
     </Panel>
   )
 }
 
-/** A switch that reads as the canvas's: green when on, with its state in words beside it. */
-function ToggleRow({
-  id,
-  checked,
-  onChange,
-  text,
-}: {
-  id: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-  text: string
-}) {
-  return (
-    <div className="flex h-control-lg items-center gap-2 text-xs text-fg-secondary">
-      <Switch
-        id={id}
-        checked={checked}
-        onCheckedChange={onChange}
-        className="data-[state=checked]:bg-accent-green"
-      />
-      <span>{text}</span>
-    </div>
-  )
-}
-
 /** An input with an icon before it and a unit after it, drawn as one control. */
 function InputAffix({ icon, suffix, children }: { icon?: ReactNode; suffix?: string; children: ReactNode }) {
   return (
-    <div className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-input px-2.5 focus-within:border-line-hover">
+    <div className="flex h-9 items-center gap-2 rounded-md border border-line-control bg-surface-input px-3 focus-within:border-line-hover">
       {icon && (
         <span aria-hidden="true" className="inline-flex shrink-0 text-fg-tertiary [&_svg]:size-3.5">
           {icon}
         </span>
       )}
       {children}
-      {suffix && <span className="shrink-0 font-mono text-fg-primary">{suffix}</span>}
+      {suffix && <span className="shrink-0 text-fg-secondary">{suffix}</span>}
     </div>
   )
 }
@@ -514,15 +425,15 @@ function DepartmentsCard({ model }: { model: SuperCompanyDetailModel }) {
   const summary = model.departments ? departmentSummary(model.departments) : null
 
   return (
-    <section aria-labelledby="detail-departments" className="flex flex-wrap items-center gap-3.5 rounded-xl border border-line-default bg-surface-card px-4 py-3 shadow-sm sm:flex-nowrap">
+    <section aria-labelledby="detail-departments" className="flex flex-wrap items-center gap-3.5 rounded-xl border border-line-panel bg-surface-card px-5 py-4 sm:flex-nowrap">
       <IconBox>
         <Network />
       </IconBox>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <h2 id="detail-departments" className="m-0 font-sans text-base font-semibold">
+      <div className="flex min-w-48 flex-1 flex-col gap-0.5">
+        <h2 id="detail-departments" className="m-0 text-2xl">
           {t('navigation.departments')}
         </h2>
-        <p className="m-0 text-xs text-fg-tertiary">
+        <p className="m-0 text-sm text-fg-secondary">
           {summary === null ? (
             t('superadmin.next.unavailable')
           ) : summary.active.length === 0 && summary.inactive.length === 0 ? (
@@ -532,7 +443,7 @@ function DepartmentsCard({ model }: { model: SuperCompanyDetailModel }) {
               {summary.active.map((department, index) => (
                 <Fragment key={department.id}>
                   {index > 0 && ' · '}
-                  {department.name} <span className="font-mono tabular-nums">{department.employeeCount}</span>
+                  {department.name} <span className="tabular-nums">{department.employeeCount}</span>
                 </Fragment>
               ))}
               {summary.active.length > 0 && '. '}
@@ -691,17 +602,17 @@ function CompanyCard({
           </CanvasSelect>
         </Field>
         <Field fieldLabel={t('superadmin.next.companyDetail.company.added')}>
-          <div className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-input px-2.5">
+          <div className="flex h-9 items-center gap-2 rounded-md border border-line-default bg-surface-fill-subtle px-3 text-base">
             <Calendar aria-hidden="true" className="size-3.5 text-fg-tertiary" />
-            <span className="font-mono tabular-nums text-fg-primary">{dayWithYear(model.company.createdAt, locale)}</span>
+            <span className="tabular-nums text-fg-primary">{dayWithYear(model.company.createdAt, locale)}</span>
           </div>
         </Field>
       </div>
-      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-t border-line-light pt-2.5 text-xs">
+      <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[minmax(7rem,10rem)_minmax(0,1fr)] items-center gap-x-4 gap-y-2.25 border-t border-line-light pt-3 text-ui">
         {readings.map((reading) => (
           <Fragment key={reading.key}>
-            <dt className="text-fg-tertiary">{reading.name}</dt>
-            <dd className="m-0 min-w-0 font-mono tabular-nums text-fg-primary">{reading.value}</dd>
+            <dt className="text-fg-secondary">{reading.name}</dt>
+            <dd className="m-0 min-w-0 tabular-nums text-fg-primary">{reading.value}</dd>
           </Fragment>
         ))}
       </dl>
@@ -710,18 +621,46 @@ function CompanyCard({
 }
 
 function BrandCard({
-  model,
+  companyName,
   draft,
   setDraft,
+  companyId,
+  onUploaded,
 }: {
-  model: SuperCompanyDetailModel
+  companyName: string
   draft: SettingsDraft | null
   setDraft: (draft: SettingsDraft) => void
+  companyId: string
+  /** Reloads the page's model: the upload is saved at once, so the form's baseline must follow. */
+  onUploaded: () => void
 }) {
   const { t } = useTranslation()
+  const uploadId = useId()
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  async function upload(file: File | undefined) {
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      await uploadCompanyLogo(import.meta.env.VITE_API_BASE_URL as string, companyId, file)
+      onUploaded()
+    } catch (error) {
+      const code = error instanceof ApiError ? error.code : undefined
+      setUploadError(
+        t(code === 'logo_too_large' ? `${CA}.uploadTooLarge` : code === 'logo_not_an_image' ? `${CA}.uploadNotImage` : `${CA}.uploadFailed`),
+      )
+    } finally {
+      setUploading(false)
+    }
+  }
   const colourId = useId()
-  const logo = model.settings?.branding.logoUrl ?? null
-  const valid = draft ? HEX_COLOUR.test(draft.primaryColor) : false
+  const logoId = useId()
+  const colourValid = draft ? HEX_COLOUR.test(draft.primaryColor) : false
+  const logoOk = draft ? logoValid(draft.logoUrl) : false
+  // The draft, as on Configuración de empresa: the box previews what the field now says, and
+  // only when the field holds a value the API would accept.
+  const logoUrl = draft && logoOk && draft.logoUrl.trim() !== '' ? draft.logoUrl.trim() : null
 
   return (
     <Panel
@@ -731,42 +670,81 @@ function BrandCard({
           {t('superadmin.next.companyDetail.brand.heading')}
         </h2>
       }
-      meta={t('superadmin.next.companyDetail.brand.meta')}
+      meta={t(`${CA}.brandMetaInEffect`)}
       className="gap-4 pb-5"
     >
       {draft === null ? (
-        <p className="m-0 text-xs text-fg-secondary">{t('companySettings.settingsUnavailable')}</p>
+        <p className="m-0 text-sm text-fg-secondary">{t('companySettings.settingsUnavailable')}</p>
       ) : (
-        <div className="flex flex-wrap items-start gap-4 sm:flex-nowrap">
-          <div className="flex h-22 w-28 shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-default text-center text-2xs text-fg-tertiary">
-            <Upload aria-hidden="true" className="size-4 text-fg-secondary" />
-            {t('superadmin.next.companyDetail.brand.logo')}
-            <span className="text-fg-tertiary">
-              {logo ? t('superadmin.next.companyDetail.brand.logoSet') : t('superadmin.next.companyDetail.brand.logoNone')}
-            </span>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div
+            data-slot="logo-box"
+            className="flex h-22 w-28 shrink-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border border-dashed border-line-default text-center text-xs text-fg-tertiary"
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt={t(`${CA}.logoAlt`, { company: companyName })} className="max-h-full max-w-full object-contain" />
+            ) : (
+              <>
+                <FileText aria-hidden="true" className="size-4 text-fg-tertiary" />
+                {t('superadmin.next.companyDetail.brand.logo')}
+                <span className="text-fg-tertiary">{t(`${CA}.logoFormats`)}</span>
+              </>
+            )}
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <Field
               fieldLabel={t('superadmin.next.companyDetail.brand.primaryColor')}
               htmlFor={colourId}
-              helper={t('superadmin.next.companyDetail.brand.colorHelper')}
+              helper={colourValid ? t(`${CA}.colourEmailHelp`) : <span className="text-accent-red-ink">{t(`${CA}.colourInvalid`)}</span>}
             >
               <div className="flex items-center gap-2">
                 <span
                   aria-hidden="true"
                   className="inline-flex size-8 shrink-0 rounded-md border border-line-default"
-                  style={{ background: valid ? draft.primaryColor : 'transparent' }}
+                  style={{ background: colourValid ? draft.primaryColor : 'transparent' }}
                 />
                 <Input
                   id={colourId}
                   value={draft.primaryColor}
-                  aria-invalid={!valid}
-                  onChange={(event) => setDraft({ ...draft, primaryColor: event.target.value })}
-                  className={cn('w-32 font-mono', !valid && 'border-accent-red')}
+                  aria-invalid={!colourValid}
+                  onChange={(event) => setDraft({ ...draft, primaryColor: event.target.value.trim() })}
+                  className={cn('w-32 font-mono', !colourValid && 'border-accent-red')}
                 />
               </div>
             </Field>
-            <p className="m-0 text-xs text-fg-tertiary">{t('superadmin.next.companyDetail.brand.senderNote')}</p>
+            {/* Upload: until 2026-11-08 every new client's logo was a file a developer committed
+                under web/public/brand/ and deployed (walkthrough B4). Saved at once. */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor={uploadId} className="text-sm font-medium text-fg-primary">
+                {t(`${CA}.upload`)}
+              </label>
+              <input
+                id={uploadId}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={uploading}
+                onChange={(event) => void upload(event.target.files?.[0])}
+                className="text-sm"
+              />
+              <p role={uploadError ? 'alert' : undefined} className={cn('m-0 text-xs', uploadError ? 'text-accent-red-ink' : 'text-fg-secondary')}>
+                {uploadError ?? (uploading ? t(`${CA}.uploading`) : t(`${CA}.uploadHelp`))}
+              </p>
+            </div>
+            {/* The path the upload writes, or a file already published on this site (G19). */}
+            <Field
+              fieldLabel={t(`${CA}.logoPath`)}
+              htmlFor={logoId}
+              helper={logoOk ? t(`${CA}.logoPathHelpPublished`) : <span className="text-accent-red-ink">{t(`${CA}.logoPathInvalid`)}</span>}
+            >
+              <Input
+                id={logoId}
+                value={draft.logoUrl}
+                aria-invalid={!logoOk}
+                onChange={(event) => setDraft({ ...draft, logoUrl: event.target.value })}
+                className={cn('w-full font-mono text-sm', !logoOk && 'border-accent-red')}
+              />
+            </Field>
+            <p className="m-0 text-xs text-fg-secondary">{t('superadmin.next.companyDetail.brand.senderNote')}</p>
           </div>
         </div>
       )}

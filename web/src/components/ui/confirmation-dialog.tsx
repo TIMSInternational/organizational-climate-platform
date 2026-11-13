@@ -10,7 +10,6 @@ import {
   AlertDialogTitle,
 } from './alert-dialog'
 import { Spinner } from './spinner'
-import { cn } from '../../lib/cn'
 
 /**
  * Ported from `climate-project/src/components/ui/confirmation-dialog.tsx`.
@@ -77,12 +76,16 @@ export function ConfirmationDialog({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
+          {/* Cancel is always rendered: HIG `alerts.md` § "Buttons" — "If there's a
+              destructive action, include a Cancel button to give people a clear, safe way to
+              avoid the action." `cancelText` is required for the same reason. */}
           <AlertDialogCancel disabled={busy}>{cancelText}</AlertDialogCancel>
           <AlertDialogAction
             disabled={busy}
-            className={cn(
-              variant === 'destructive' && 'bg-accent-red text-fg-on-accent',
-            )}
+            // Destructive is the danger ink on the bordered button, not a red fill: in dark the
+            // red fill carried its white label at 3.76:1 (see `buttonVariants.ts`), and HIG
+            // keeps the primary role off a destructive action.
+            variant={variant === 'destructive' ? 'destructive' : 'primary'}
             // Radix closes on Action click by default; the async flow above owns
             // closing instead.
             onClick={(event) => {
@@ -90,7 +93,8 @@ export function ConfirmationDialog({
               void handleConfirm()
             }}
           >
-            {busy && <Spinner size="sm" className="text-fg-on-accent" />}
+            {/* The label's own ink: white on the blue fill, the danger ink on a destructive. */}
+            {busy && <Spinner size="sm" className="text-current" />}
             {confirmText}
           </AlertDialogAction>
         </AlertDialogFooter>

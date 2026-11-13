@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { ChevronRight, Plus, Shield } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
-import { KpiTile, formatMetric } from '../../../../components/charts'
+import { PageHeader } from '../../../../components/layout'
+import { formatMetric } from '../../../../components/charts'
 import {
   Button,
   Checkbox,
@@ -17,9 +18,13 @@ import {
   DialogTitle,
   EmptyState,
   ErrorState,
+  KpiCard,
   LoadingRegion,
+  LoadingState,
+  Note,
   SkeletonText,
   Table,
+  TableHead,
 } from '../../../../components/ui'
 import { cn } from '../../../../lib/cn'
 import { QUALITY_SCORE_FORMAT } from '../../benchmarkReadings'
@@ -39,11 +44,17 @@ import {
 } from './derive'
 import type { BenchmarkReference, CohortReadoutModel, ReadoutState } from './model'
 import { useBenchmarksModel } from './useBenchmarksModel'
+import BenchmarkGroupsPage from './BenchmarkGroupsPage'
+import { readViewerClaims } from '../../../../auth/viewerCapabilities'
+import { SUPER_ADMIN } from '../../benchmarkScope'
 
-// The canvas's `.label` head, as on every redesigned table.
-const HEAD =
-  'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+// Each fixed column carries the 12px gap before it, so its head drops the left padding.
 const GAP_CELL = 'pl-0'
+
+/** A 0–100 index as the tiles print it: whole, in the reader's locale, or the dash for none. */
+function indexText(value: number | null, locale: string): string {
+  return value === null ? '—' : formatMetric(value, { kind: 'number' }, locale)
+}
 
 /**
  * `/analytics/benchmarks` — the redesigned Puntos de Referencia, which replaced
@@ -62,8 +73,27 @@ const GAP_CELL = 'pl-0'
  * (`newBenchmarkCompanyId`) and edit only where `CanWriteBenchmark` allows — a
  * company_admin never edits a global reference. Every other role is refused by the list
  * route, so they get a sentence and no request.
+ *
+ * Apple design (11 Nov): `PageHeader` with "Nueva referencia" as the one primary, `KpiCard`
+ * tiles, the table primitive's sentence-case heads, figures in the sans at tabular figures,
+ * bordered cards with no shadow, and the standing in the bars carried by position, delta and
+ * word with no red or green (`CohortDimensionBars`). The climate range bar is not drawn here:
+ * this page reads a 0–100 index against a cohort median, with no departments' spread and no
+ * reading on the company's result-band scale, so the bar would have nothing true to paint.
  */
 export default function BenchmarksNextPage() {
+  const [params] = useSearchParams()
+  // TIMS reads companies against groups computed from the platform's clients (ruled
+  // 3 Nov 2026). Those groups are super admin only, because a median over three companies
+  // is one real company's index; every other role keeps the hand-entered references, and a
+  // super admin reaches them with `?vista=referencias`.
+  if (readViewerClaims().role === SUPER_ADMIN && params.get('vista') !== 'referencias') {
+    return <BenchmarkGroupsPage />
+  }
+  return <ReferencesPage />
+}
+
+function ReferencesPage() {
   const { t, locale } = useTranslation()
   const state = useBenchmarksModel()
   const [creating, setCreating] = useState(false)
@@ -72,14 +102,14 @@ export default function BenchmarksNextPage() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         // The cohort this company is read against: a property of the data, not the route.
         eyebrow={state.cohortName}
-        title={t('navigation.benchmarks')}
+        title={t('navigation.references')}
         description={t('benchmarks.description')}
-        actions={
+        primaryAction={
           state.createCompanyId !== undefined ? (
-            <Button type="button" variant="outline" size="canvas" onClick={() => setCreating(true)}>
+            <Button type="button" variant="primary" size="canvas" onClick={() => setCreating(true)}>
               <Plus aria-hidden="true" />
               {t('benchmarks.newBenchmark')}
             </Button>
@@ -94,7 +124,7 @@ export default function BenchmarksNextPage() {
       ) : (
         <LoadingRegion loading={state.status === 'loading'} label={t('common.loading')}>
           {state.status === 'loading' ? (
-            <SkeletonText lines={6} />
+            <LoadingState rows={6} label={t('common.loading')} />
           ) : state.references.length === 0 ? (
             <EmptyState fill title={t('benchmarks.noBenchmarks')} description={t('benchmarks.noBenchmarksDescription')} />
           ) : (
@@ -105,11 +135,11 @@ export default function BenchmarksNextPage() {
                 open={referencesOpen}
                 onOpenChange={setReferencesOpen}
                 data-slot="references"
-                className="overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-xs"
+                className="overflow-hidden rounded-xl border border-line-panel bg-surface-card"
               >
                 <div
                   className={cn(
-                    'flex flex-wrap items-center justify-between gap-3 bg-surface-outer px-4 py-3',
+                    'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2',
                     referencesOpen && 'border-b border-line-default',
                   )}
                 >
@@ -117,20 +147,19 @@ export default function BenchmarksNextPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
-                      className="h-auto gap-2.5 p-0 text-base font-semibold text-fg-secondary hover:not-disabled:bg-transparent"
+                      className="-ml-2 gap-2 px-2 text-base font-semibold text-fg-primary"
                     >
                       <ChevronRight
                         aria-hidden="true"
-                        className={cn('size-3.5 text-fg-label transition-transform', referencesOpen && 'rotate-90')}
+                        className={cn('size-4 text-fg-tertiary transition-transform', referencesOpen && 'rotate-90')}
                       />
                       {t('benchmarks.allBenchmarks')}
-                      <span className="font-mono text-sm font-normal tabular-nums text-fg-label">
+                      <span className="text-sm font-normal tabular-nums text-fg-tertiary">
                         {state.references.length}
                       </span>
                     </Button>
                   </CollapsibleTrigger>
-                  <p className="m-0 text-sm text-fg-label">{t('benchmarks.next.referencesHint')}</p>
+                  <p className="m-0 text-sm text-fg-tertiary">{t('benchmarks.next.referencesHint')}</p>
                 </div>
                 <CollapsibleContent>
                   {/* No wrapper padding: the canvas's 8px above the head is the head cell's own
@@ -150,12 +179,12 @@ export default function BenchmarksNextPage() {
                       </colgroup>
                       <thead>
                         <tr className="border-b border-line-default">
-                          <th className={HEAD}>{t('benchmarks.next.colReference')}</th>
-                          <th className={cn(HEAD, GAP_CELL)}>{t('benchmarks.next.colType')}</th>
-                          <th className={cn(HEAD, GAP_CELL)}>{t('benchmarks.category')}</th>
-                          <th className={cn(HEAD, GAP_CELL)}>{t('benchmarks.scope')}</th>
-                          <th className={cn(HEAD, GAP_CELL)}>{t('benchmarks.next.colActive')}</th>
-                          <th className={cn(HEAD, GAP_CELL, 'text-right')}>{t('benchmarks.qualityScore')}</th>
+                          <TableHead>{t('benchmarks.next.colReference')}</TableHead>
+                          <TableHead className={GAP_CELL}>{t('benchmarks.next.colType')}</TableHead>
+                          <TableHead className={GAP_CELL}>{t('benchmarks.category')}</TableHead>
+                          <TableHead className={GAP_CELL}>{t('benchmarks.scope')}</TableHead>
+                          <TableHead className={GAP_CELL}>{t('benchmarks.next.colActive')}</TableHead>
+                          <TableHead numeric className={GAP_CELL}>{t('benchmarks.qualityScore')}</TableHead>
                         </tr>
                       </thead>
                       <tbody>
@@ -197,13 +226,9 @@ export default function BenchmarksNextPage() {
               )}
               {single && chain.length > 1 && <BenchmarkTrend chain={chain} />}
 
-              <p
-                data-slot="privacy-note"
-                className="m-0 flex items-start gap-2.5 rounded-lg bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary"
-              >
-                <Shield aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                <span>{t('benchmarks.next.privacyNote')}</span>
-              </p>
+              <Note data-slot="privacy-note" icon={<Shield />}>
+                {t('benchmarks.next.privacyNote')}
+              </Note>
             </div>
           )}
         </LoadingRegion>
@@ -212,7 +237,7 @@ export default function BenchmarksNextPage() {
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent closeLabel={t('common.close')} className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-normal">{t('benchmarks.newBenchmark')}</DialogTitle>
+            <DialogTitle className="text-2xl">{t('benchmarks.newBenchmark')}</DialogTitle>
             <DialogDescription>
               {state.isSuperAdmin ? t('benchmarks.createsGlobalHint') : t('benchmarks.createsCompanyHint')}
             </DialogDescription>
@@ -285,32 +310,26 @@ function Readout({ readout, t, locale }: { readout: CohortReadoutModel; t: Trans
   return (
     <>
       <div data-slot="cohort-readout" className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <KpiTile
-          size="large"
+        <KpiCard
           label={t('benchmarks.yourIndex')}
-          value={readout.yourIndex}
-          locale={locale}
+          value={indexText(readout.yourIndex, locale)}
           unit={readout.yourIndex === null ? undefined : t('benchmarks.next.indexUnit')}
-          sub={<span className="text-fg-label">{surveySub}</span>}
+          footnote={surveySub}
         />
-        <KpiTile
-          size="large"
+        <KpiCard
           label={t('benchmarks.cohortMedianLabel')}
-          value={readout.cohortMedian}
-          locale={locale}
+          value={indexText(readout.cohortMedian, locale)}
           unit={readout.cohortMedian === null ? undefined : t('benchmarks.next.indexUnit')}
-          sub={<span className="text-fg-label">{cohortSub}</span>}
+          footnote={cohortSub}
         />
         {/* "Tu percentil" with no percentile: the payload's only one is the cohort reading's
             own, the same for every tenant, and a company's rank needs the group's
             distribution, which no endpoint returns (`percentileNote`; ruling 9). */}
-        <KpiTile
-          size="large"
+        <KpiCard
           label={t('benchmarks.yourPercentile')}
-          value={null}
-          locale={locale}
+          value="—"
           unit={t('benchmarks.next.percentileUncomputed')}
-          sub={percentileLine ? <span className="text-fg-label">{percentileLine}</span> : undefined}
+          footnote={percentileLine ?? undefined}
         />
       </div>
 
@@ -364,19 +383,19 @@ function ReferenceRow({
       <td className="py-3 pr-3 pl-0 text-base text-fg-primary">{benchmarkTypeLabel(t, reference.type)}</td>
       <td className="py-3 pr-3 pl-0 text-base text-fg-primary">{benchmarkCategoryLabel(t, reference.category)}</td>
       <td className="py-3 pr-3 pl-0">
-        <Chip tone="neutral" label={t(scopeKey(reference.companyId, viewerCompanyId))} className="w-full justify-start" />
+        <Chip tone="neutral" label={t(scopeKey(reference.companyId, viewerCompanyId))} />
       </td>
       <td className="py-3 pr-3 pl-0 text-base text-fg-primary">{reference.isActive ? t('common.yes') : t('common.no')}</td>
       <td data-slot="quality-score" className="py-3 pr-3 pl-0 text-right">
         {quality.kind === 'unscored' ? (
           <span className="inline-flex items-center justify-end gap-1.5">
-            <span aria-hidden="true" className="font-mono text-base text-fg-label">
+            <span aria-hidden="true" className="text-base text-fg-tertiary">
               —
             </span>
-            <span className="text-xs text-fg-label">{t('benchmarks.next.unscored')}</span>
+            <span className="text-sm text-fg-tertiary">{t('benchmarks.next.unscored')}</span>
           </span>
         ) : (
-          <span className="font-mono text-base tabular-nums text-fg-primary">
+          <span className="text-base tabular-nums text-fg-primary">
             {formatMetric(quality.value, QUALITY_SCORE_FORMAT, locale)}
           </span>
         )}

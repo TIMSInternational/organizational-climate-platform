@@ -105,6 +105,21 @@ describe('ClimateMap', () => {
       expect(container.querySelectorAll('[role="img"]')).toHaveLength(DIMENSIONS.length)
     })
 
+    it('says «fewer than the floor» in words, once, on the first cell of the row', () => {
+      // The ruled pattern for a withheld group is the padlock plus «Menos de N».
+      // With the padlock alone the row only meant something to a reader who found
+      // the legend under the card (fix round 2, 12 Nov).
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={suppressed} target={70} />,
+      )
+      const words = en.charts.protectedUnderFloor.replace('{threshold}', String(ANONYMITY_FLOOR))
+      const cells = [...container.querySelectorAll('[role="img"]')]
+      expect(cells[0].textContent).toBe(words)
+      expect(cells[0].querySelector('svg')).not.toBeNull()
+      // One statement per row, not one per cell.
+      expect(cells.slice(1).map((cell) => cell.textContent)).toEqual([''])
+    })
+
     it('does not leak the response count', () => {
       const { container } = render(
         <ClimateMap dimensions={DIMENSIONS} rows={suppressed} target={70} />,
@@ -129,6 +144,15 @@ describe('ClimateMap', () => {
     // ClimateMap renders that legend itself from its own `threshold`, so it is true
     // whatever it forwards.
     const belowRaisedFloor = [{ id: 'sup', label: 'Support', responses: 7, scores: [79, 81] }]
+
+    it('prints the raised floor in the row\'s words, not the default', () => {
+      const { container } = render(
+        <ClimateMap dimensions={DIMENSIONS} rows={belowRaisedFloor} target={70} threshold={10} />,
+      )
+      expect(container.querySelector('[role="img"]')?.textContent).toBe(
+        en.charts.protectedUnderFloor.replace('{threshold}', '10'),
+      )
+    })
 
     it('announces the raised floor on the cell, not the default', () => {
       const { container } = render(
@@ -542,5 +566,62 @@ describe('ClimateMap, the canvas grid', () => {
     for (const head of container.querySelectorAll('thead th')) {
       expect(classes(head)).toEqual(expect.arrayContaining(['p-0', 'pt-1', 'pl-1']))
     }
+  })
+})
+
+describe('ClimateMap, in the company’s areas (the Apple canvas’s table.hm)', () => {
+  const BANDS = { opportunityMin: 3, strengthMin: 4, names: { critical: null, opportunity: null, strength: null }, scale: 'mean' as const }
+  const ROWS: ClimateMapRow[] = [
+    { id: 'ops', label: 'Operations', responses: 118, scores: [4.2, 2.7] },
+    { id: 'fin', label: 'Finance', responses: 2, scores: [1.9, 1.4] },
+  ]
+
+  it('paints a cell in its area’s soft fill and ink, glyph first, with no border and no monospace', () => {
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={ROWS} target={3} bands={BANDS} decimals={1} threshold={3} />,
+    )
+    const cell = container.querySelector('td [data-band="strength"]') as HTMLElement
+    expect(cell.style.backgroundColor).toBe('var(--admin-chip-bg-good)')
+    expect(cell.style.color).toBe('var(--admin-chip-ink-good)')
+    const classes = cell.className.split(/\s+/)
+    expect(classes).toEqual(expect.arrayContaining(['h-11', 'rounded-md', 'font-semibold', 'tabular-nums']))
+    expect(classes).not.toContain('border')
+    expect(classes).not.toContain('font-mono')
+    // The glyph comes before the figure, as the canvas prints "▲4,24".
+    const children = [...cell.childNodes]
+    const glyphAt = children.findIndex((node) => node instanceof Element && node.hasAttribute('data-band-glyph'))
+    const figureAt = children.findIndex((node) => node.nodeType === Node.TEXT_NODE && node.textContent === '4.2')
+    expect(glyphAt).toBeGreaterThan(-1)
+    expect(glyphAt).toBeLessThan(figureAt)
+  })
+
+  it('prints a disclosed group’s size only when asked, and never a withheld group’s', () => {
+    const quiet = render(<ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={ROWS} target={3} bands={BANDS} threshold={3} />)
+    expect(quiet.container.querySelector('tbody')?.textContent).not.toContain('118')
+    cleanup()
+
+    const { container } = render(
+      <ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={ROWS} target={3} bands={BANDS} threshold={3} showGroupSize />,
+    )
+    const [ops, fin] = [...container.querySelectorAll('tbody th[scope="row"]')] as HTMLElement[]
+    expect(ops.textContent).toContain('118')
+    expect(ops.textContent).toContain('118 responses')
+    // Finance is under the floor: its name stays, its count goes nowhere.
+    expect(fin.textContent).toBe('Finance')
+    // The row says exactly two things: the name, and the floor in words. The floor is
+    // not sensitive (it is the same for every withheld group); any other digit would be
+    // the group's count, so the row is pinned whole rather than scanned for digits.
+    expect(container.querySelector('tbody tr:nth-child(2)')?.textContent).toBe(
+      `Finance${en.charts.protectedUnderFloor.replace('{threshold}', '3')}`,
+    )
+  })
+
+  it('keeps the group names in place when the grid scrolls sideways', () => {
+    const { container } = render(<ClimateMap variant="canvas" dimensions={DIMENSIONS} rows={ROWS} target={3} bands={BANDS} threshold={3} />)
+    for (const head of container.querySelectorAll('tbody th[scope="row"]')) {
+      expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['sticky', 'left-0', 'bg-surface-card']))
+    }
+    // And the grid has a floor, so on a phone it scrolls rather than crushing the readings.
+    expect((container.querySelector('table') as HTMLElement).style.minWidth).toBe('calc(var(--admin-space-4) * 82)')
   })
 })

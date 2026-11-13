@@ -51,7 +51,9 @@ const DARK_SELECTOR = ":root[data-admin-theme='dark']"
 /** WCAG AA 1.4.3 below 18.66px bold / 24px regular. These words are 10px. */
 const AA_SMALL_TEXT = 4.5
 
-const HUES = ['green', 'amber', 'red'] as const
+// Blue joined with the Apple design (11 Nov): `--admin-accent-blue-ink` is the canvas's
+// `--tint`, the blue every link and live-chip word is set in, so it carries words too.
+const HUES = ['green', 'amber', 'red', 'blue'] as const
 const THEMES = ['light', 'dark'] as const
 /** Every surface a state word sits on in UI-3: the table/panel, and the live card. */
 const SURFACES = ['--admin-bg-panel', '--admin-bg-icon-box'] as const

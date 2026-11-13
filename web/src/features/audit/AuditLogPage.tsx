@@ -1,0 +1,309 @@
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react'
+import { useTranslation } from '../../i18n'
+import { CATALOGUES } from '../../i18n/locale'
+import type { Locale } from '../../i18n/translate'
+import { PageHeader } from '../../components/layout'
+import {
+  Button,
+  Chip,
+  DatePicker,
+  EmptyState,
+  Label,
+  LoadingState,
+  NetworkError,
+  SelectField,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../components/ui'
+import { ApiError } from '../../api/authFetch'
+import { useCompanyScope } from '../../company-context'
+import { getCompanySettings } from '../org-structure/api/companySettings'
+import { getAuditLogs, type AuditLogPage } from './api'
+import {
+  auditActionLabel,
+  formatAuditInstant,
+  knownAuditActions,
+  safeTimeZone,
+  zonedDayBoundary,
+} from './auditActions'
+
+const PAGE_SIZE = 50
+
+/** Radix `Select` refuses an empty value, so "every action" is a sentinel that is never sent. */
+const ALL_ACTIONS = '__all__'
+
+type LoadState =
+  | { status: 'loading' }
+  | { status: 'ready'; page: AuditLogPage }
+  | { status: 'forbidden' }
+  | { status: 'error' }
+
+/**
+ * `/admin/audit` — "Registro de auditoría" (audit gap G21): who did what, to what, when, in the
+ * company's own trail. Read-only, paged, filterable by action and by day.
+ *
+ * `GET /audit/logs` existed since #143 with no screen. A company_admin reads their own tenant
+ * (the server ignores any other `companyId` they send); a super_admin reads the company chosen in
+ * the header, so one table never mixes two tenants or two time zones. Everyone else is refused by
+ * the server and is never offered the row (`navSections.ts`).
+ *
+ * Every time is in the COMPANY's zone (its settings), not the browser's: an administrator in
+ * Costa Rica reading a row with a support engineer elsewhere must be looking at the same clock.
+ * Every action is a label (`auditActions.ts`), never the code the API stores.
+ */
+export default function AuditLogPage() {
+  const { t, locale } = useTranslation()
+  const scope = useCompanyScope()
+  const baseUrl = import.meta.env.VITE_API_BASE_URL as string
+  const companyId = scope.status === 'ready' ? scope.companyId : undefined
+
+  const [action, setAction] = useState(ALL_ACTIONS)
+  const [fromDay, setFromDay] = useState('')
+  const [toDay, setToDay] = useState('')
+  const [page, setPage] = useState(1)
+  const [timeZone, setTimeZone] = useState<string | null>(null)
+  const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [attempt, setAttempt] = useState(0)
+
+  const actions = useMemo(() => knownAuditActions(CATALOGUES[locale as Locale] ?? CATALOGUES.es, t, locale), [locale, t])
+
+  // The company's zone first: a row's time and a day filter both mean nothing without it.
+  useEffect(() => {
+    if (!companyId) return
+    let live = true
+    getCompanySettings(baseUrl, companyId)
+      .then((response) => {
+        if (live) setTimeZone(safeTimeZone(response.settings.timezone))
+      })
+      .catch(() => {
+        // The trail is still worth reading without the zone; UTC is said on screen.
+        if (live) setTimeZone('UTC')
+      })
+    return () => {
+      live = false
+    }
+  }, [baseUrl, companyId])
+
+  useEffect(() => {
+    if (!companyId || timeZone === null) return
+    let live = true
+    setState({ status: 'loading' })
+    getAuditLogs(baseUrl, {
+      companyId,
+      action: action === ALL_ACTIONS ? undefined : action,
+      from: fromDay ? zonedDayBoundary(fromDay, timeZone, false) : undefined,
+      to: toDay ? zonedDayBoundary(toDay, timeZone, true) : undefined,
+      page,
+      pageSize: PAGE_SIZE,
+    })
+      .then((result) => {
+        if (live) setState({ status: 'ready', page: result })
+      })
+      .catch((error: unknown) => {
+        if (!live) return
+        setState(error instanceof ApiError && error.status === 403 ? { status: 'forbidden' } : { status: 'error' })
+      })
+    return () => {
+      live = false
+    }
+  }, [baseUrl, companyId, timeZone, action, fromDay, toDay, page, attempt])
+
+  // The eyebrow is the sidebar section (Sistema), as on every admin screen; the company in
+  // scope is named by the top bar (review 12 Nov).
+  const header = { eyebrow: t('navigation.sectionSystem'), title: t('audit.title'), description: t('audit.description') }
+
+  if (scope.status === 'needs-selection') {
+    return (
+      <div>
+        <PageHeader {...header} />
+        <EmptyState title={t('companyContext.chooseACompany')} description={t('companyContext.chooseACompanyDescription')} />
+      </div>
+    )
+  }
+  if (!companyId || state.status === 'forbidden') {
+    return (
+      <div>
+        <PageHeader {...header} />
+        <EmptyState title={t('audit.notAllowedTitle')} description={t('audit.notAllowedBody')} />
+      </div>
+    )
+  }
+
+  const filtered = action !== ALL_ACTIONS || fromDay !== '' || toDay !== ''
+  const pages = state.status === 'ready' ? Math.max(1, Math.ceil(state.page.total / PAGE_SIZE)) : 1
+
+  function resetTo<T>(set: (value: T) => void) {
+    return (value: T) => {
+      set(value)
+      setPage(1)
+    }
+  }
+
+  return (
+    <div>
+      <PageHeader {...header} />
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+        <SelectField
+          label={t('audit.filterAction')}
+          value={action}
+          onChange={resetTo(setAction)}
+          options={[
+            { value: ALL_ACTIONS, label: t('audit.filterAllActions') },
+            ...actions.map((code) => ({ value: code, label: auditActionLabel(t, code) })),
+          ]}
+        />
+        <DayFilter label={t('audit.filterFrom')} placeholder={t('audit.filterAnyDay')} day={fromDay} onChange={resetTo(setFromDay)} />
+        <DayFilter label={t('audit.filterTo')} placeholder={t('audit.filterAnyDay')} day={toDay} onChange={resetTo(setToDay)} />
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!filtered}
+          onClick={() => {
+            setAction(ALL_ACTIONS)
+            setFromDay('')
+            setToDay('')
+            setPage(1)
+          }}
+        >
+          {t('audit.clearFilters')}
+        </Button>
+      </div>
+
+      {timeZone !== null ? (
+        <p className="mb-3 mt-0 text-sm text-fg-tertiary" data-slot="audit-zone">
+          {t('audit.timeZoneNote', { zone: timeZone })}
+        </p>
+      ) : null}
+
+      {state.status === 'loading' ? (
+        <LoadingState rows={8} />
+      ) : state.status === 'error' ? (
+        <NetworkError
+          title={t('audit.loadFailed')}
+          onRetry={() => setAttempt((n) => n + 1)}
+          retryText={t('common.retry')}
+        />
+      ) : state.page.items.length === 0 ? (
+        <EmptyState title={filtered ? t('audit.emptyFiltered') : t('audit.empty')} />
+      ) : (
+        <>
+          {/* A flush `.card` holding the `.tbl`: the primitive's sentence-case 12px heads, zebra
+              rows, the hairline between them (`occ.css`). */}
+          <div data-slot="audit-table-card" className="overflow-hidden rounded-xl border border-line-panel bg-surface-card">
+            <Table zebra className="text-ui">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col" className="px-4">{t('audit.colWhen')}</TableHead>
+                  <TableHead scope="col" className="px-4">{t('audit.colActor')}</TableHead>
+                  <TableHead scope="col" className="px-4">{t('audit.colAction')}</TableHead>
+                  <TableHead scope="col" className="px-4">{t('audit.colTarget')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {state.page.items.map((item) => (
+                  <TableRow key={item.id} data-audit-id={item.id}>
+                    <TableCell className="whitespace-nowrap px-4 py-2.5 tabular-nums">
+                      {formatAuditInstant(item.timestamp, locale, timeZone ?? 'UTC')}
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
+                      {item.userName === null && item.userId === null ? (
+                        <span className="text-fg-secondary">{t('audit.actorSystem')}</span>
+                      ) : item.userName === null ? (
+                        <span className="text-fg-secondary">{t('audit.actorUnknown')}</span>
+                      ) : (
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate font-medium">{item.userName}</span>
+                          {item.userEmail ? (
+                            <span className="truncate text-sm text-fg-secondary">{item.userEmail}</span>
+                          ) : null}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span>{auditActionLabel(t, item.action)}</span>
+                        {/* A failed operation, not a result area: the gray chip in the danger ink,
+                            with its glyph, so the word is never carried by colour alone. */}
+                        {item.success ? null : (
+                          <Chip tone="neutral" className="text-accent-red-ink" icon={<CircleAlert />} label={t('audit.failed')} />
+                        )}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
+                      {item.resourceId ? (
+                        // An identifier is a token, so it keeps the code face.
+                        <span className="break-all font-mono text-xs text-fg-secondary">{item.resourceId}</span>
+                      ) : (
+                        <span className="text-fg-secondary">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <nav aria-label={t('audit.pagination')} className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm tabular-nums text-fg-secondary">
+              {t('audit.pageOf', { page: state.page.page, pages, total: state.page.total })}
+            </span>
+            <span className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                <ChevronLeft aria-hidden="true" />
+                {t('audit.previous')}
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+                {t('audit.next')}
+                <ChevronRight aria-hidden="true" />
+              </Button>
+            </span>
+          </nav>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** "2026-10-21" as that calendar day at local midnight, the shape the picker holds. */
+function dayToDate(day: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : undefined
+}
+
+/** The picked calendar day back as "2026-10-21" — the day, never an instant. */
+function dateToDay(date: Date | undefined): string {
+  if (!date) return ''
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/**
+ * A day filter in the screen's language. The native `type="date"` field printed the
+ * browser's own «mm/dd/yyyy» on a Spanish screen, and its `lang` attribute does not change
+ * that in Chromium (measured 12 Nov). The shared picker writes the day with the UI's locale
+ * and opens a calendar in it. The day still reaches the request as "2026-10-21", read in
+ * the company's zone by `zonedDayBoundary`, exactly as before.
+ */
+function DayFilter({ label, placeholder, day, onChange }: { label: string; placeholder: string; day: string; onChange: (day: string) => void }) {
+  return (
+    <div data-slot="day-filter" className="grid max-w-field gap-1.5">
+      {/* The trigger names itself with the same words (`aria-label`); this is the visible title. */}
+      <Label aria-hidden="true">{label}</Label>
+      {/* 36px, the height of the action select beside it on the same row (`select.tsx`). */}
+      <DatePicker
+        label={label}
+        placeholder={placeholder}
+        dateFormat="d MMM yyyy"
+        className="h-9 pointer-coarse:min-h-11"
+        value={dayToDate(day)}
+        onChange={(date) => onChange(dateToDay(date))}
+      />
+    </div>
+  )
+}

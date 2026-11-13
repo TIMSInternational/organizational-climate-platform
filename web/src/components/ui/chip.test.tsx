@@ -72,32 +72,38 @@ describe('Chip', () => {
     expect(screen.getByText('Live').className).not.toBe(screen.getByText('Draft').className)
   })
 
-  it('is the canvas chip — 22px tall, 11px at 500, 8px across — in every tone', () => {
-    // The approved canvas's `.chip` (10 Sep): height 22px, radius 6px, padding 0 8px,
-    // 11px at weight 500. It lives in the shared part of the table rather than per
-    // tone; h-5.5 is 5.5 x the 4px --spacing token.
+  it('is the Apple design’s chip — 22px tall, 12px at 600, 8px across — in every tone', () => {
+    // `occ.css` `.chip` (11 Nov): height 22px, padding 0 8px, 12px at weight 600. It lives in
+    // the shared part of the table rather than per tone; h-5.5 is 5.5 x the 4px --spacing
+    // token, `rounded-lg` the token layer's chip radius.
     for (const tone of ['good', 'warning', 'critical', 'accent', 'neutral'] as const) {
       const classes = chipVariants({ tone }).split(/\s+/)
       expect(classes, tone).toContain('h-5.5')
       expect(classes, tone).toContain('px-2')
       expect(classes, tone).toContain('text-xs')
-      expect(classes, tone).toContain('font-medium')
+      expect(classes, tone).toContain('font-semibold')
       expect(classes, tone).toContain('rounded-lg')
-      expect(classes, tone).not.toContain('font-semibold')
+      expect(classes, tone).not.toContain('font-medium')
     }
   })
 
-  it("borders every tone in its own tint, the canvas's hairline, so all five are one height", () => {
-    // The canvas draws the green chip with rgba(18,148,91,.2), the red with
-    // rgba(221,12,21,.2), the neutral with the default hairline — the `accent-*-ring`
-    // tokens are those tints. Every tone carries a border, so none is 2px shorter.
-    const ring = { good: 'border-accent-green-ring', warning: 'border-accent-amber-ring', critical: 'border-accent-red-ring', accent: 'border-accent-blue-ring', neutral: 'border-line-default' } as const
-    for (const [tone, border] of Object.entries(ring) as [keyof typeof ring, string][]) {
+  it('draws no border on any tone: a chip is a word on a tint, not a control', () => {
+    // The 10 Sep canvas bordered each tone in its own tint; the Apple design's `.chip` has no
+    // border. A border width in the shared table would put one back on every chip.
+    for (const tone of ['good', 'warning', 'critical', 'accent', 'neutral'] as const) {
       const classes = chipVariants({ tone }).split(/\s+/)
-      expect(classes, tone).toContain('border')
-      expect(classes, tone).toContain(border)
-      expect(classes, tone).not.toContain('border-transparent')
+      expect(classes, tone).not.toContain('border')
+      expect(classes.filter((name) => name.startsWith('border-')), tone).toEqual([])
     }
+  })
+
+  it('draws the three result areas on the band colours', () => {
+    // Fortaleza, Oportunidad and Crítica are the only green, amber and red chips. The chip
+    // tokens carry the band values (`tokens.css`); the pairing is measured, per theme and
+    // surface, in `styles/chipVariantContrast.test.ts`.
+    expect(chipVariants({ tone: 'good' })).toContain('bg-chip-good-fill')
+    expect(chipVariants({ tone: 'warning' })).toContain('bg-chip-warning-fill')
+    expect(chipVariants({ tone: 'critical' })).toContain('bg-chip-critical-fill')
   })
 
   it('draws its glyph 13px, as every chip glyph on the canvas', () => {
@@ -123,5 +129,34 @@ describe('Chip', () => {
     const chip = screen.getByText('Active')
     expect(chip.className).toContain('ml-2')
     expect(chip.className).toContain('bg-chip-good-fill')
+  })
+})
+
+describe('the live chip', () => {
+  it('is the accent pair with the live dot', () => {
+    render(<Chip tone="live" label="Activa" />)
+    const chip = screen.getByText('Activa')
+    const classes = chip.className.split(/\s+/)
+    expect(chip.getAttribute('data-live')).toBe('true')
+    expect(classes).toEqual(expect.arrayContaining(['bg-chip-accent-fill', 'text-chip-accent-ink']))
+    // The dot: 6px, in the word's own ink.
+    expect(classes).toEqual(expect.arrayContaining(['before:size-1.5', 'before:rounded-full', 'before:bg-current']))
+  })
+
+  it('keeps the word: the dot never stands alone', () => {
+    render(<Chip tone="live" label="Activa" />)
+    expect(screen.getByText('Activa').textContent).toBe('Activa')
+  })
+
+  it('puts the dot on the live chip only, not on every blue chip', () => {
+    render(<Chip tone="accent" label="Generada con IA" />)
+    const chip = screen.getByText('Generada con IA')
+    expect(chip.getAttribute('data-live')).toBeNull()
+    expect(chip.className).not.toContain('before:')
+  })
+
+  it('leaves every other status gray', () => {
+    render(<Chip label="Borrador" />)
+    expect(screen.getByText('Borrador').className.split(/\s+/)).toContain('bg-chip-neutral-fill')
   })
 })

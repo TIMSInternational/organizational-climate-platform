@@ -191,3 +191,16 @@ export function readConsentRecord(subjectExport: SubjectAccessExport): ConsentRe
   const updatedAt = record.ConsentUpdatedAt
   return { flags, updatedAt: typeof updatedAt === 'string' ? updatedAt : null }
 }
+
+/**
+ * «Eliminar persona» (ruled 2026-11-08): `POST /gdpr/erasure` for SOMEONE ELSE, administrators
+ * only -- the server refuses a caller erasing themselves. Irreversible: name, email and sign-in
+ * are overwritten, the account is closed, and their answers stay in the results with nothing
+ * linking them to anybody (`docs/compliance/gdpr-subject-rights.md`).
+ */
+export async function eraseUser(baseUrl: string, userId: string): Promise<void> {
+  await authFetch(`${baseUrl}${PATH}/erasure`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, confirm: true }),
+  })
+}

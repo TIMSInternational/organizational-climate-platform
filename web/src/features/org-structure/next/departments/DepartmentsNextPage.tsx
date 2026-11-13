@@ -2,9 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { CircleAlert, MoreHorizontal, Network, Plus, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, BandChip, bandOf, scoreText, type ResultBands } from '../../../../components/charts'
-import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import {
   Button,
   Card,
@@ -17,12 +16,12 @@ import {
   DropdownMenuTrigger,
   EmptyState,
   NetworkError,
+  ProtectedState,
   SkeletonText,
   Switch,
   Table,
 } from '../../../../components/ui'
-import { useCompanyScope } from '../../../../company-context'
-import { useCompanyName } from '../../../../company-context/useCompanyName'
+import { useCompanyNameFor, useCompanyScope } from '../../../../company-context'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
 import { useResultBands } from '../../../result-bands/useResultBands'
@@ -37,7 +36,7 @@ const K = 'departments.next'
 const DASH = '—'
 // Cells take 8px a side below xl and the artboard's 12px from it: the seven columns then fit
 // the 744px a 1024 viewport leaves the page, with no scroll and no cell wrapping to two lines.
-const HEAD = 'px-2 py-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap xl:px-3'
+const HEAD = 'px-2 py-2.5 text-left text-xs font-semibold leading-normal text-fg-secondary whitespace-nowrap xl:px-3'
 const CELL = 'px-2 py-2.5 xl:px-3'
 
 /** A department's mean on the company's scale; 1–5 while the bands are unknown. */
@@ -63,7 +62,9 @@ export default function DepartmentsNextPage() {
   const { t } = useTranslation()
   const capabilities = useViewerCapabilities()
   const scope = useCompanyScope()
-  const companyName = useCompanyName()
+  // The client the page is about -- the header's selection for a super administrator -- not the
+  // viewer's own company, which for a TIMS operator named nobody (walkthrough, C).
+  const companyName = useCompanyNameFor(scope.companyId)
   const companyId = capabilities.canManageOrg ? (scope.companyId ?? null) : null
   const superScope = readViewerClaims().role === 'super_admin' ? (scope.companyId ?? undefined) : undefined
   const state = useDepartmentsModel(companyId, superScope)
@@ -72,12 +73,12 @@ export default function DepartmentsNextPage() {
   // band — never the product default in the company's name.
   const bandsState = useResultBands()
   const bands = bandsState.bands
-  const header = { eyebrow: companyName, title: t('navigation.departments'), description: t(`${K}.description`, { threshold: ANONYMITY_FLOOR }) }
+  const header = { eyebrow: t('navigation.sectionOrganization'), title: t('navigation.departments'), description: t(`${K}.description`, { threshold: ANONYMITY_FLOOR }) }
 
   if (scope.status === 'needs-selection') {
     return (
       <div>
-        <PageTopBar {...header} />
+        <PageHeader {...header} />
         <EmptyState title={t('companyContext.chooseACompany')} description={t('companyContext.chooseACompanyDescription')} />
       </div>
     )
@@ -85,7 +86,7 @@ export default function DepartmentsNextPage() {
   if (!companyId) {
     return (
       <div>
-        <PageTopBar {...header} />
+        <PageHeader {...header} />
         <EmptyState title={t(`${K}.notAllowedTitle`)} description={t(`${K}.notAllowedBody`)} />
       </div>
     )
@@ -93,7 +94,7 @@ export default function DepartmentsNextPage() {
   if (state.status === 'error') {
     return (
       <div>
-        <PageTopBar {...header} />
+        <PageHeader {...header} />
         <NetworkError
           title={t('departments.failedLoadDepartments')}
           description={state.error ?? undefined}
@@ -106,7 +107,7 @@ export default function DepartmentsNextPage() {
   if (!state.model) {
     return (
       <div>
-        <PageTopBar {...header} />
+        <PageHeader {...header} />
         <SkeletonText lines={8} />
       </div>
     )
@@ -173,8 +174,8 @@ function DepartmentsView({
 
   return (
     <div>
-      <PageTopBar
-        eyebrow={companyName}
+      <PageHeader
+        eyebrow={t('navigation.sectionOrganization')}
         title={t('navigation.departments')}
         description={t(`${K}.description`, { threshold: ANONYMITY_FLOOR })}
         actions={
@@ -263,7 +264,7 @@ function DepartmentsView({
               summary.plans === null ? (
                 <span className="text-xs text-fg-tertiary">{t(`${K}.plansUnavailable`)}</span>
               ) : summary.plans.overdue > 0 ? (
-                <span data-slot="overdue-line" className="inline-flex items-center gap-1.5 text-xs text-accent-red">
+                <span data-slot="overdue-line" className="inline-flex items-center gap-1.5 text-xs text-fg-secondary">
                   <CircleAlert aria-hidden="true" className="size-3.5" />
                   {summary.plans.firstOverdue
                     ? t(byCount(summary.plans.overdue, `${K}.overdueIn`, `${K}.overdueInMany`), {
@@ -284,16 +285,17 @@ function DepartmentsView({
             <h2 id="departments-chart" className="m-0 text-2xl">
               {t(`${K}.chartHeading`)}
             </h2>
-            <span className="text-xs text-fg-tertiary">{t(`${K}.chartMeta`)}</span>
+            <span className="text-sm text-fg-tertiary">{t(`${K}.chartMeta`)}</span>
           </div>
           <div className="flex flex-col items-center">
-            <div className="flex items-center gap-3 rounded-xl border border-line-default bg-surface-icon-box px-4.5 py-2.5 shadow-sm">
+            <div className="flex items-center gap-3 rounded-xl border border-line-panel bg-surface-card px-4.5 py-2.5">
               <span className="inline-flex size-7 items-center justify-center rounded-md bg-surface-icon-box text-fg-secondary">
                 <Network aria-hidden="true" className="size-4" />
               </span>
               <span className="flex flex-col">
-                <span className="text-base font-semibold">{companyName ?? DASH}</span>
-                <span className="text-2xs text-fg-tertiary">
+                {/* The company's name when it is known; never a bare dash as a title. */}
+                {companyName && <span className="text-base font-semibold">{companyName}</span>}
+                <span className={companyName ? 'text-xs text-fg-tertiary tabular-nums' : 'text-base font-semibold tabular-nums'}>
                   {`${t(byCount(summary.active, `${K}.rootDepartmentsOne`, `${K}.rootDepartmentsMany`), { count: summary.active })} · ${t(
                     byCount(summary.people, `${K}.rootPeopleOne`, `${K}.rootPeopleMany`),
                     { count: summary.people },
@@ -301,27 +303,16 @@ function DepartmentsView({
                 </span>
               </span>
             </div>
-            <div aria-hidden="true" className="hidden w-full flex-col items-center xl:flex">
-              <span className="h-4.5 w-px bg-line-default" />
-              <span className="h-px w-4/5 bg-line-default" />
-              <span className="grid w-full grid-cols-5">
-                {active.slice(0, 5).map((row) => (
-                  <span key={row.id} className="flex justify-center">
-                    <span className="h-3.5 w-px bg-line-default" />
-                  </span>
-                ))}
-              </span>
-            </div>
           </div>
-          <ul className="m-0 mt-3 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:mt-0 xl:grid-cols-5">
+          {/* No connector rails: the departments are one flat level under the company, and a rail
+              drawn to the first row only read as five children of thirteen (fix round 1). */}
+          <ul className="m-0 mt-3 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {active.map((row) => (
-              <li key={row.id} data-slot="department-card" data-department={row.name} className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-lg font-semibold">{row.name}</span>
-                  <CanvasChip tone="good" label={t(`${K}.active`)} />
-                </div>
+              <li key={row.id} data-slot="department-card" data-department={row.name} className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5">
+                {/* No «Activo» chip: the chart draws active departments only, so it said nothing. */}
+                <span className="min-w-0 break-words text-lg font-semibold leading-tight">{row.name}</span>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="font-mono text-2xl leading-none tabular-nums">{row.people}</span>
+                  <span className="text-2xl font-semibold leading-none tabular-nums">{row.people}</span>
                   <span className="text-xs text-fg-tertiary">{t(byCount(row.people, `${K}.peopleUnitOne`, `${K}.peopleUnit`))}</span>
                 </div>
                 <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs">
@@ -332,7 +323,7 @@ function DepartmentsView({
                     <PlansCell plans={row.plans} t={t} />
                   </dd>
                 </dl>
-                <CardNoteLine row={row} wave={wave} bands={bands} t={t} locale={locale} />
+                <CardNoteLine row={row} wave={wave} floor={model.floor} bands={bands} t={t} locale={locale} />
               </li>
             ))}
           </ul>
@@ -343,13 +334,13 @@ function DepartmentsView({
             <h2 id="departments-list" className="m-0 text-2xl">
               {t(`${K}.listHeading`)}
             </h2>
-            <span className="text-xs text-fg-tertiary">{t(`${K}.listMeta`)}</span>
+            <span className="text-sm text-fg-tertiary">{t(`${K}.listMeta`)}</span>
           </div>
           {/* `relative` makes this box the containing block of the table's `sr-only` spans (the
               actions heading, the Personas label below xl). Without it they are positioned
               against the page, escape the table's scroll container at their static place past
               its right edge, and widen the document: 649px at a 390 viewport. */}
-          <div data-slot="departments-list" className="relative overflow-hidden rounded-lg border border-line-light">
+          <div data-slot="departments-list" className="relative overflow-hidden rounded-xl border border-line-panel bg-surface-card">
             <Table className="m-0 w-full table-auto border-collapse text-sm xl:min-w-215 xl:table-fixed">
                 {/* The artboard's list grid — 3fr 90px 3fr 2fr 3fr 90px 150px, 12px gaps — as
                     columns: each fr track takes its share of what the 90/90/150 tracks and the
@@ -360,21 +351,23 @@ function DepartmentsView({
                     1024 every column — the actions included — is on screen. */}
                 <colgroup>
                   <col style={{ width: '18.15%' }} />
-                  <col style={{ width: '102px' }} />
+                  <col className="w-25.5" />
                   <col style={{ width: '18.15%' }} />
                   <col style={{ width: '12.45%' }} />
                   <col style={{ width: '18.15%' }} />
-                  <col style={{ width: '102px' }} />
-                  <col style={{ width: '174px' }} />
+                  {showInactive && <col className="w-25.5" />}
+                  <col className="w-43.5" />
                 </colgroup>
-                <thead className="bg-surface-icon-box">
+                <thead>
                   <tr>
                     <th scope="col" className={HEAD}>{t(`${K}.colDepartment`)}</th>
                     <th scope="col" className={HEAD}>{t(`${K}.colPeople`)}</th>
                     <th scope="col" className={HEAD}>{t(`${K}.leader`)}</th>
                     <th scope="col" className={HEAD}>{t(`${K}.colPlans`)}</th>
-                    <th scope="col" className={HEAD}>{t(`${K}.colClimate`, { wave: waveCode })}</th>
-                    <th scope="col" className={HEAD}>{t(`${K}.colStatus`)}</th>
+                    <th scope="col" className={HEAD}>{wave?.code ? t(`${K}.colClimate`, { wave: waveCode }) : t(`${K}.colClimateNoWave`)}</th>
+                    {/* Estado only while inactive rows are listed: with them hidden every row is
+                        «Activo», a column that says nothing (foundation review, Departamentos). */}
+                    {showInactive && <th scope="col" className={HEAD}>{t(`${K}.colStatus`)}</th>}
                     <th scope="col" className={HEAD}>
                       <span className="sr-only">{t(`${K}.colActions`)}</span>
                     </th>
@@ -384,7 +377,7 @@ function DepartmentsView({
                   {listed.map((row) => (
                     <tr key={row.id} data-department-row={row.name} className="border-t border-line-light">
                       <td className={cn(CELL, 'font-medium')}>{row.name}</td>
-                      <td className={cn(CELL, 'font-mono tabular-nums')}>{row.people}</td>
+                      <td className={cn(CELL, 'tabular-nums')}>{row.people}</td>
                       <td className={cn(CELL, 'text-fg-secondary')}>
                         {row.leaders && row.leaders.length > 0 ? row.leaders.join(', ') : DASH}
                       </td>
@@ -392,11 +385,13 @@ function DepartmentsView({
                         <PlansCell plans={row.plans} t={t} />
                       </td>
                       <td className={cn(CELL, 'whitespace-nowrap')}>
-                        <ClimateCell climate={row.climate} bands={bands} t={t} locale={locale} />
+                        <ClimateCell climate={row.climate} floor={model.floor} bands={bands} t={t} locale={locale} />
                       </td>
-                      <td className={CELL}>
-                        {row.isActive ? <CanvasChip tone="good" label={t(`${K}.active`)} /> : <CanvasChip label={t(`${K}.inactive`)} />}
-                      </td>
+                      {showInactive && (
+                        <td className={CELL}>
+                          {row.isActive ? <CanvasChip tone="neutral" label={t(`${K}.active`)} /> : <CanvasChip label={t(`${K}.inactive`)} />}
+                        </td>
+                      )}
                       <td className={CELL}>
                         <span className="flex justify-end gap-1.5">
                           <Button asChild variant="outline" size="sm">
@@ -428,7 +423,7 @@ function DepartmentsView({
                   ))}
                 </tbody>
             </Table>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light bg-surface-card-hover px-3 py-2.5 text-xs text-fg-tertiary">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light px-4 py-2.5 text-sm text-fg-secondary">
               <span>
                 {summary.inactive === 0
                   ? t(`${K}.noInactive`)
@@ -437,7 +432,7 @@ function DepartmentsView({
                     : t(byCount(summary.inactive, `${K}.inactiveHiddenOne`, `${K}.inactiveHidden`), { count: summary.inactive })}
               </span>
               {summary.inactive > 0 && (
-                <label className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
+                <label className="m-0 inline-flex min-h-11 items-center gap-2 text-sm font-normal text-fg-secondary sm:min-h-0">
                   <Switch checked={showInactive} onCheckedChange={setShowInactive} />
                   {t(`${K}.showInactive`)}
                 </label>
@@ -452,10 +447,10 @@ function DepartmentsView({
 
 function Tile({ label, value, unit, sub }: { label: string; value: number | null; unit: string; sub?: ReactNode }) {
   return (
-    <div data-slot="departments-tile" className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm">
+    <div data-slot="departments-tile" className="flex min-w-0 flex-col gap-1.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5">
       <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
       <span className="flex flex-wrap items-baseline gap-1.5">
-        <span className="font-mono text-kpi-lg leading-none tabular-nums">{value ?? DASH}</span>
+        <span className="text-kpi-lg font-semibold leading-none tabular-nums">{value ?? DASH}</span>
         <span className="text-xs text-fg-tertiary">{unit}</span>
       </span>
       {sub}
@@ -464,48 +459,52 @@ function Tile({ label, value, unit, sub }: { label: string; value: number | null
 }
 
 function PlansCell({ plans, t }: { plans: PlansReading | null; t: TranslateFn }) {
-  if (!plans || plans.open === 0) return <span className="font-mono text-fg-tertiary">{DASH}</span>
+  if (!plans || plans.open === 0) return <span className="text-fg-tertiary">{DASH}</span>
   if (plans.overdue > 0) {
     return (
-      <span className="font-mono text-accent-red">
+      <span className="tabular-nums text-fg-primary">
         {t(byCount(plans.overdue, `${K}.plansOverdue`, `${K}.plansOverdueMany`), { open: plans.open, overdue: plans.overdue })}
       </span>
     )
   }
   if (plans.notStarted === plans.open) {
-    return <span className="font-mono text-accent-amber-ink">{t(`${K}.plansNotStarted`, { open: plans.open })}</span>
+    return <span className="tabular-nums text-fg-secondary">{t(`${K}.plansNotStarted`, { open: plans.open })}</span>
   }
-  return <span className="font-mono">{plans.open}</span>
+  return <span className="tabular-nums">{plans.open}</span>
 }
 
 function ClimateCell({
   climate,
+  floor,
   bands,
   t,
   locale,
 }: {
   climate: ClimateReading
+  /** The floor the server applied to the climate payload (`DepartmentsModel.floor`). */
+  floor: number
   bands: ResultBands | null
   t: TranslateFn
   locale: string
 }) {
   if (climate.kind === 'protected') {
     return (
-      <span
-        data-slot="protected-cell"
-        className={cn('inline-flex h-5.5 w-17.5 items-center justify-center rounded bg-surface-panel font-mono text-2xs text-fg-tertiary', PROTECTED_HATCH)}
-      >
-        {t(`${K}.protected`)}
+      // The one protected mark (user ruling, 11 Nov): a padlock and «Menos de {floor}», never a
+      // number of respondents. The floor is the one the model withheld at — the server's own
+      // `minimumGroupSize` for this payload — not a constant: an administrator sees a single
+      // department from 1, and a cell that said «Menos de 3» would contradict the header.
+      <span data-slot="protected-cell">
+        <ProtectedState floor={floor} />
       </span>
     )
   }
-  if (climate.kind === 'none') return <span className="font-mono text-fg-tertiary">{DASH}</span>
+  if (climate.kind === 'none') return <span className="text-fg-tertiary">{DASH}</span>
   const band = bands === null ? null : bandOf(climate.mean, bands)
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="font-mono tabular-nums">{score(climate.mean, locale, bands)}</span>
+      <span className="tabular-nums">{score(climate.mean, locale, bands)}</span>
       {band !== null && bands !== null && band !== 'strength' ? (
-        <BandChip band={band} bands={bands} short />
+        <BandChip band={band} bands={bands} />
       ) : (
         // The note is the one thing left to xl: at 1024 it would push the actions off screen.
         <span className="hidden text-fg-tertiary xl:inline">
@@ -519,19 +518,21 @@ function ClimateCell({
 function CardNoteLine({
   row,
   wave,
+  floor,
   bands,
   t,
   locale,
 }: {
   row: DepartmentRow
   wave: Wave | null
+  floor: number
   bands: ResultBands | null
   t: TranslateFn
   locale: string
 }) {
   const note = noteOf(row, wave, bands)
-  const base = 'border-t border-line-light pt-1.5 text-2xs'
-  if (note.kind === 'protected') return <span className={cn(base, 'text-fg-tertiary')}>{t(`${K}.noteProtected`, { wave: note.wave, threshold: ANONYMITY_FLOOR })}</span>
+  const base = 'border-t border-line-light pt-1.5 text-xs'
+  if (note.kind === 'protected') return <span className={cn(base, 'text-fg-tertiary')}>{t(byCount(floor, `${K}.noteProtectedOne`, `${K}.noteProtected`), { wave: note.wave, threshold: floor })}</span>
   if (note.kind === 'lowest') {
     const key = `surveyRespond.dimensions.${note.key}`
     const name = t(key)

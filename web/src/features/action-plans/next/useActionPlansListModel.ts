@@ -12,6 +12,7 @@ import {
 import { listActionPlanTemplates, type ActionPlanTemplate } from '../api/actionPlanTemplates'
 import type { ActionPlanFormValues } from '../components/ActionPlanForm'
 import { listDepartments } from '../../org-structure/api/departments'
+import { listUsers } from '../../org-structure/api/users'
 import { isTrackingEnabled } from '../../tracking/api/config'
 import { listPlanesAccion, type PlanAccion } from '../../tracking/api/trackingApi'
 import { getNodoNames } from '../../tracking/api/trackingPickers'
@@ -20,6 +21,7 @@ import { sortPlans } from '../../tracking/planOrder'
 import { semaforoPresentation, toSemaforoEstado } from '../../tracking/semaforo'
 import { firstOverdue, groupOf } from './derive'
 import type { ActionPlansListModel, OverdueReading, PlanFinding, PlanRow } from './model'
+import { describeApiError } from '../../../api/describeApiError'
 
 export interface ActionPlansListState {
   /** `idle` while there is no company to ask about — the page says why instead. */
@@ -28,6 +30,8 @@ export interface ActionPlansListState {
   error: string | null
   reload: () => void
   templates: readonly ActionPlanTemplate[]
+  /** Who a new plan can be handed to: the company's users, by name. Empty for an owner's view. */
+  owners: readonly { id: string; name: string }[]
   /** `POST /action-plans`; rejects with the server's message so the form can show it. */
   create: (values: ActionPlanFormValues) => Promise<{ id: string; title: string }>
   /** `PUT /action-plans/{id}` with `status: cancelled`; rejects with the server's message. */
@@ -152,6 +156,7 @@ export function useActionPlansListModel(administers = true): ActionPlansListStat
   const [departmentNames, setDepartmentNames] = useState<ReadonlyMap<string, string>>(new Map())
   const [tracking, setTracking] = useState<OverdueReading | null>(null)
   const [templates, setTemplates] = useState<ActionPlanTemplate[]>([])
+  const [owners, setOwners] = useState<readonly { id: string; name: string }[]>([])
   const [status, setStatus] = useState<ActionPlansListState['status']>(companyId ? 'loading' : 'idle')
   const [error, setError] = useState<string | null>(null)
   // Read once per load so every "in N days" on the screen counts from the same day.
@@ -185,7 +190,7 @@ export function useActionPlansListModel(administers = true): ActionPlansListStat
     } else {
       const reason: unknown = plansResult.reason
       setPlans([])
-      setError(reason instanceof Error ? reason.message : t('errors.generic'))
+      setError(describeApiError(reason, t))
       setStatus('error')
     }
   }, [administers, baseUrl, companyId, locale, t])
@@ -204,10 +209,25 @@ export function useActionPlansListModel(administers = true): ActionPlansListStat
       .catch(() => {
         if (!cancelled) setTemplates([])
       })
+    // The owner picker on the create form. Silent on failure like the templates: without it
+    // the plan is created unassigned and handed over from its own page.
+    listUsers(baseUrl, companyId)
+      .then((users) => {
+        if (!cancelled)
+          setOwners(
+            users
+              .filter((user) => user.name.trim() !== '')
+              .map((user) => ({ id: user.id, name: user.name }))
+              .sort((a, b) => a.name.localeCompare(b.name, locale)),
+          )
+      })
+      .catch(() => {
+        if (!cancelled) setOwners([])
+      })
     return () => {
       cancelled = true
     }
-  }, [administers, baseUrl, companyId])
+  }, [administers, baseUrl, companyId, locale])
 
   const rows = useMemo(() => plans.map((plan) => toRow(plan, departmentNames)), [plans, departmentNames])
 
@@ -234,6 +254,7 @@ export function useActionPlansListModel(administers = true): ActionPlansListStat
         objectives: values.objectives,
       }
       if (values.templateId) input.templateId = values.templateId
+      if (values.ownerId) input.ownerId = values.ownerId
       const plan = await createActionPlan(baseUrl, input)
       await reload()
       return { id: plan.id, title: plan.title }
@@ -257,6 +278,7 @@ export function useActionPlansListModel(administers = true): ActionPlansListStat
       void reload()
     },
     templates,
+    owners,
     create,
     cancelPlan,
   }

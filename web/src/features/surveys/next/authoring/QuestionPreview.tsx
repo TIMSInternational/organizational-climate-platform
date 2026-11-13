@@ -35,11 +35,14 @@ export function PreviewSection({
       <div className="flex items-center gap-2.5">
         {/* `leading-normal` throughout: the artboards set these 10-11px lines on the body's 1.5
             (15px, 16.5px), where the type scale's snug 1.35 made every preview card 3px short. */}
-        <span className="text-2xs font-bold uppercase leading-normal tracking-[0.16em] text-fg-label">
+        <span className="text-2xs font-semibold uppercase leading-normal tracking-eyebrow text-fg-label">
           {category ? dimensionLabel(category, t) : t('surveys.next.preview.noDimension')}
         </span>
         <span aria-hidden="true" className="h-px flex-1 bg-line-light" />
-        <span className="font-mono text-xs leading-normal text-fg-secondary tabular-nums">
+        {/* The section's place ("2 de 6"), visible at the end of the rule as the SurveyDetail
+            artboard draws it (`.xs.muted.num` beside the eyebrow). Set at the 13px secondary size:
+            the type ruling keeps anything smaller for uppercase eyebrows. */}
+        <span data-slot="preview-section-count" className="text-sm leading-normal text-fg-secondary tabular-nums">
           {t('surveys.next.preview.sectionOf', { index, count })}
         </span>
       </div>
@@ -68,28 +71,32 @@ export function PreviewQuestion({
   return (
     <div
       data-slot="preview-question"
-      className="flex flex-col gap-2.5 rounded-lg border border-line-default bg-surface-card px-3.5 py-3"
+      className="flex flex-col gap-2.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5"
     >
-      {/* `items-center`, the artboards' `align-items: center`: baseline alignment pushed the row
-          1px past its 19.5px line, and every preview card 1px past the artboard's 118. */}
-      <p className="m-0 flex items-center gap-2 text-base font-semibold text-fg-primary">
+      {/* The question in the UI face, semibold at body size: the SurveyDetail and SurveyBuilder
+          artboards draw a preview card's question as `<b>`, not in the serif. The serif stays on
+          the Respond flow itself, where the question is the page's subject; six 20px serif lines
+          made this list far heavier than the board (typography.md › Conveying hierarchy). */}
+      <p data-slot="preview-question-text" className="m-0 flex items-baseline gap-2 text-base font-semibold leading-snug text-fg-primary">
         <span
           aria-hidden="true"
-          className="shrink-0 rounded bg-surface-icon-box px-1.5 py-px font-mono text-xs font-medium leading-normal text-fg-secondary tabular-nums"
+          className="relative -top-px shrink-0 rounded-md bg-surface-fill-subtle px-1.5 py-px font-sans text-xs font-medium leading-normal tracking-normal text-fg-secondary tabular-nums"
         >
           {`${position}/${total}`}
         </span>
         <span className="min-w-0">
           {question.text?.trim() ? question.text : t('surveys.next.preview.noText')}{' '}
-          <span className="font-normal text-fg-secondary">
+          <span className="font-sans text-sm font-normal tracking-normal text-fg-secondary">
             {question.required ? t('surveys.next.preview.required') : t('surveys.next.preview.optional')}
           </span>
         </span>
       </p>
       {shape === 'text' ? (
-        <div aria-hidden="true" className="h-16 rounded border border-line-default bg-surface-card" />
+        <div aria-hidden="true" className="h-16 rounded-md bg-surface-fill-subtle" />
       ) : shape === 'unsupported' ? null : (
-        <div className={numeric ? 'flex gap-2' : 'flex flex-wrap gap-2'}>
+        // A picture of the answer points, not a control: flat pills with no border, hidden from
+        // assistive tech, so nothing here reads as tappable beside "Solo lectura".
+        <div aria-hidden="true" className={numeric ? 'flex gap-2' : 'flex flex-wrap gap-2'}>
           {choices.map((choice, index) => (
             <span
               key={choice.value}
@@ -98,7 +105,7 @@ export function PreviewQuestion({
               // row never wraps, so its cells may shrink (`min-w-0`): at 390px five 40px cells ran
               // past the card's right edge (builder-390.png).
               className={cn(
-                'inline-flex h-9 flex-1 items-center justify-center rounded border border-line-default bg-surface-card px-2 text-base text-fg-secondary',
+                'inline-flex h-9 flex-1 select-none items-center justify-center rounded-md bg-surface-fill-subtle px-2 text-base tabular-nums text-fg-secondary',
                 numeric ? 'min-w-0' : 'min-w-10',
               )}
             >

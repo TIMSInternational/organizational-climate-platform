@@ -77,3 +77,37 @@ describe('ConfirmationDialog', () => {
     expect(onConfirm).not.toHaveBeenCalled()
   })
 })
+
+describe('ConfirmationDialog, as HIG asks for a destructive answer', () => {
+  it('always offers Cancel beside a destructive action', async () => {
+    render(<Harness onConfirm={vi.fn()} />)
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog.querySelector('[data-slot="alert-dialog-cancel"]')?.textContent).toBe('Cancel')
+  })
+
+  it('draws a destructive confirm in the danger ink, not as the primary blue or a red fill', async () => {
+    render(<Harness onConfirm={vi.fn()} />)
+    const confirm = await screen.findByRole('button', { name: /Delete/ })
+    const classes = confirm.className.split(/\s+/)
+    expect(confirm.getAttribute('data-variant')).toBe('destructive')
+    expect(classes).toContain('text-accent-red-ink')
+    expect(classes).not.toContain('bg-accent-blue-fill')
+    expect(classes).not.toContain('bg-accent-red')
+  })
+
+  it('draws a non-destructive confirm as the primary action', async () => {
+    render(
+      <ConfirmationDialog
+        open
+        onOpenChange={() => {}}
+        title="Publicar"
+        description="Se enviará a 486 personas."
+        confirmText="Publicar"
+        cancelText="Cancelar"
+        onConfirm={vi.fn()}
+      />,
+    )
+    const confirm = await screen.findByRole('button', { name: 'Publicar' })
+    expect(confirm.className.split(/\s+/)).toContain('bg-accent-blue-fill')
+  })
+})

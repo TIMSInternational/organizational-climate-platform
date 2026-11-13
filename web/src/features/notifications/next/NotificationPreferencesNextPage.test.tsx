@@ -48,7 +48,7 @@ function renderPage() {
   )
 }
 
-const row = (key: string) => document.querySelector(`tr[data-pref="${key}"]`) as HTMLElement
+const row = (key: string) => document.querySelector(`li[data-pref="${key}"]`) as HTMLElement
 const saveButton = () => screen.getByRole('button', { name: T.save })
 const discardButton = () => screen.getByRole('button', { name: T.discard })
 
@@ -84,33 +84,39 @@ describe('NotificationPreferencesNextPage', () => {
   })
 
   /**
-   * On a phone (G26 follow-up). The page was a 40rem table in a horizontal scroller, and at
-   * 390px the Correo column -- every switch -- sat outside the card: readable, not changeable.
-   * The suite has no layout engine, so this pins the structure that stacks it instead: below
-   * `sm` the header row is hidden, each row and cell is a block, the table drops its minimum
-   * width, and every switch carries its own "Correo" label in its own cell. The pixels are in
-   * the PR's 390px shots.
+   * On a phone (G26 follow-up, #624). The page was a 40rem table in a horizontal scroller, and at
+   * 390px every switch sat outside the card: readable, not changeable, by the employee who opened
+   * it from the footer of a notification email. Since the 11 Nov redesign it is a grouped list.
+   * The suite has no layout engine, so this pins the structure that keeps every switch on the
+   * card: nothing scrolls sideways, and each row wraps its switch under its text instead of
+   * pushing it past the card's clipped edge. Rendered 12 Nov at 390px as an employee
+   * (`npm run shot -- /settings/notifications … --role employee --width 390`): each switch sits
+   * under its text, inside the card.
    */
-  it('stacks each row with its own labelled switch below sm, and is the same table from sm up', async () => {
+  it('keeps every switch on the card at phone width: no sideways scroller, and each row wraps', async () => {
     routeFetch()
     renderPage()
     await screen.findByRole('heading', { name: T.tableHeading })
-
-    const table = document.querySelector('table') as HTMLElement
-    expect(table.className).not.toMatch(/(^|\s)min-w-\[40rem\]/)
-    expect(table.className).toContain('sm:min-w-[40rem]')
-    expect((table.querySelector('thead') as HTMLElement).className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['hidden', 'sm:table-header-group']),
-    )
-
+    expect(document.querySelector('table')).toBeNull()
+    expect(document.querySelector('[class*="overflow-x-"]')).toBeNull()
     for (const key of ['emailSurveys', 'emailMicroclimates', 'emailActionPlans', 'emailReminders']) {
-      const tr = row(key)
-      expect(tr.className.split(/\s+/)).toEqual(expect.arrayContaining(['block', 'sm:table-row']))
-      const cell = within(tr).getByRole('switch').closest('td') as HTMLElement
-      expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['block', 'sm:table-cell']))
-      const label = within(cell).getByText(T.colEmail)
-      expect(label.className.split(/\s+/)).toContain('sm:hidden')
+      const item = row(key)
+      expect(item.className.split(/\s+/)).toContain('flex-wrap')
+      expect(within(item).getByRole('switch')).toBeTruthy()
     }
+  })
+
+  it('titles the page «Cuenta» like its two sibling tabs and saves from the list’s own footer, not the header', async () => {
+    routeFetch()
+    renderPage()
+    await screen.findByRole('heading', { name: T.tableHeading })
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es.profile.next.tabs.label)
+    const header = document.querySelector('[data-slot="page-header"]') as HTMLElement
+    expect(within(header).queryByRole('button')).toBeNull()
+    const footer = document.querySelector('[data-slot="prefs-actions"]') as HTMLElement
+    expect(footer.closest('section')?.getAttribute('aria-labelledby')).toBe('prefs-table')
+    expect(within(footer).getByRole('button', { name: T.save })).toBeTruthy()
+    expect(within(footer).getByRole('button', { name: T.discard })).toBeTruthy()
   })
 
   it('draws Guardar and Descartar live on load, as the board does; Descartar puts back what is saved', async () => {

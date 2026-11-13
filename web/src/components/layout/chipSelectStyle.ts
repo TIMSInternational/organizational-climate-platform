@@ -18,15 +18,35 @@ import type { CSSProperties } from 'react'
  * One module for both pickers so they cannot drift a pixel apart in the one row where
  * they sit side by side.
  */
+/**
+ * ## A picker, and a 44px target, on a phone
+ *
+ * The chip is 22px and on a phone it is the only control in the respond header — HIG
+ * `accessibility.md` › Mobility puts the minimum at 28pt and the default at 44pt, and with
+ * `appearance: none` the platform's arrow was gone too, so it read as a static label. Two
+ * repairs, both in `index.css` (`.chip-select`), on the `<label>` this module's
+ * `CHIP_SELECT_LABEL_CLASS` names:
+ *
+ * - a small chevron, drawn by the label in the chip's own ink, so the chip reads as a menu;
+ * - under `md` or a coarse pointer the `<select>` itself grows to 44px and bleeds 11px above
+ *   and below with negative margins, so the row keeps its height while the target doubles,
+ *   and the label draws the 22px chip behind it. The `--chip-select-*` properties below are
+ *   the switch: the stylesheet sets them on the label for that case, and these fallbacks
+ *   are the desktop chip.
+ */
+export const CHIP_SELECT_LABEL_CLASS = 'chip-select'
+
 export const CHIP_SELECT_STYLE: CSSProperties = {
   // 22px: eleven 2px steps. The chip's height has no token of its own — `ui/chip.tsx`
   // writes it as `h-5.5` on the 4px spacing unit — so it is derived from the spacing
   // scale here rather than typed as a raw length.
-  height: 'calc(var(--admin-space-2) * 11)',
-  padding: '0 var(--admin-space-8)',
+  height: 'var(--chip-select-height, calc(var(--admin-space-2) * 11))',
+  marginBlock: 'var(--chip-select-bleed, 0)',
+  // 18px at the end: the chevron's 8px, inset 6px, plus the chip's gap before it.
+  padding: '0 calc(var(--admin-space-8) + var(--admin-space-10)) 0 var(--admin-space-8)',
   borderRadius: 'var(--admin-radius-lg)',
-  border: '1px solid var(--admin-border-default)',
-  background: 'var(--admin-bg-icon-box)',
+  border: '1px solid var(--chip-select-line, var(--admin-border-default))',
+  background: 'var(--chip-select-ground, var(--admin-bg-icon-box))',
   color: 'var(--admin-font-secondary)',
   fontSize: 'var(--admin-text-xs)',
   fontWeight: 'var(--admin-weight-medium)',

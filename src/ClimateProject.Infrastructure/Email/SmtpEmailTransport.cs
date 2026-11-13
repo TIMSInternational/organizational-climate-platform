@@ -37,6 +37,13 @@ public sealed class SmtpEmailTransport(
     public const string SesConfigurationSetHeader = "X-SES-CONFIGURATION-SET";
 
     /// <summary>
+    /// SES message tags. Every event SES publishes for the message carries them back in
+    /// <c>mail.tags</c>, which is how the bounce webhook tells this product's mail apart: the
+    /// configuration set is shared with five other products (see the infra template).
+    /// </summary>
+    public const string SesMessageTagsHeader = "X-SES-MESSAGE-TAGS";
+
+    /// <summary>
     /// SMTP reply codes that mean "this address will never accept mail from us". Retrying
     /// any of these is how a sending domain's reputation is burned -- see
     /// <c>NotificationDeliveryResult.Permanent</c>.
@@ -217,6 +224,10 @@ public sealed class SmtpEmailTransport(
         }
 
         headers.Add(SesConfigurationSetHeader, configurationSet);
+
+        // Only beside the set: the tag is an SES header and means nothing to MailHog or CI, and
+        // it is the set's event destination that publishes it back to the bounce webhook.
+        headers.Add(SesMessageTagsHeader, $"{SesDeliveryEvents.AppTagName}={SesDeliveryEvents.AppTagValue}");
     }
 
     private MailAddress BuildFromAddress()

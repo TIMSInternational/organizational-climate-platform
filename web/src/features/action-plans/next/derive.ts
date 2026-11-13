@@ -224,6 +224,14 @@ export function isFiltering(filters: PlanFilters): boolean {
 const NBSP = '\u00A0'
 /** A lowercase word of one to three letters: "la", "de", "en", "con", "y", "the", "of". */
 const SHORT_WORD = /^\p{Ll}{1,3}$/u
+/**
+ * The longer prepositions a line must not end on either: "Programa de reconocimiento entre"
+ * read as a cut in the Seguimiento tile (review of 12 Nov). Lowercase only, as `SHORT_WORD`.
+ */
+const BOUND_PREPOSITIONS = new Set([
+  'ante', 'bajo', 'como', 'contra', 'desde', 'durante', 'entre', 'hacia', 'hasta', 'mediante', 'para', 'según', 'sin', 'sobre', 'tras',
+  'from', 'into', 'over', 'with',
+])
 
 /**
  * A plan's title with each short lowercase word ("la", "de", "en", "con", "y") tied to the word
@@ -234,13 +242,14 @@ const SHORT_WORD = /^\p{Ll}{1,3}$/u
  * dirección" stops at "Reuniones abiertas con la" and "Reducir la carga de trabajo en
  * Operaciones" at "…de trabajo en": each reads as a cut rather than a phrase. Tied, the line
  * stops before the short word: "Reuniones abiertas", "Reducir la carga de trabajo". It is the
- * rule Spanish typesetting keeps for short words at a line end. The words printed are the same;
+ * rule Spanish typesetting keeps for short words at a line end, and it holds for the longer
+ * prepositions too ("entre", "sobre", "para": `BOUND_PREPOSITIONS`). The words printed are the same;
  * the plain title still reaches `title` and the screen reader.
  */
 export function bindShortWords(text: string): string {
   const words = text.split(/\s+/).filter(Boolean)
   return words
-    .map((word, index) => (index === words.length - 1 ? word : word + (SHORT_WORD.test(word) ? NBSP : ' ')))
+    .map((word, index) => (index === words.length - 1 ? word : word + (SHORT_WORD.test(word) || BOUND_PREPOSITIONS.has(word) ? NBSP : ' ')))
     .join('')
 }
 

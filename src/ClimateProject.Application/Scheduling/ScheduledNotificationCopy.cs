@@ -90,6 +90,18 @@ public static class ScheduledNotificationCopy
         "An action plan you own is due on {0}. Record progress or move the date before it lapses.",
         "Un plan de acción a tu cargo vence el {0}. Registra un avance o cambia la fecha antes de que venza.");
 
+    // The two above tell the owner to do it themselves, which only an administrator can:
+    // recording progress and changing the date are `Roles.Admin` writes
+    // (`ActionPlanEndpoints.UpdateAsync`, `RecordProgressAsync`). An owner who is not one is
+    // told who can, rather than told to do something the next click refuses (G28).
+    private static readonly Phrase PlanDueSoonBodyNamedAsk = new(
+        "\"{0}\" is due on {1}. Ask whoever administers the platform to record progress or move the date before it lapses.",
+        "\"{0}\" vence el {1}. Pide a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.");
+
+    private static readonly Phrase PlanDueSoonBodyUnnamedAsk = new(
+        "An action plan you own is due on {0}. Ask whoever administers the platform to record progress or move the date before it lapses.",
+        "Un plan de acción a tu cargo vence el {0}. Pide a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.");
+
     private static readonly Phrase PlanOverdueTitle = new(
         "An action plan you own is overdue",
         "Un plan de acción a tu cargo está vencido");
@@ -113,24 +125,30 @@ public static class ScheduledNotificationCopy
     /// <c>ActionPlan</c> stores its title in paired language columns and BOTH are nullable, so
     /// a row imported without one resolves to nothing. Interpolating that would print an empty
     /// pair of quotes, so there is a second phrasing that names no plan at all.
+    ///
+    /// <para><paramref name="recipientAdministers"/> decides what the due-soon body asks for.
+    /// An administrator may record progress or move the date and is told to; anyone else is
+    /// told to ask whoever administers the platform, because those writes are refused to them.
+    /// Required rather than defaulted, so no caller can forget whom it is writing to. The
+    /// overdue body asks for nothing and reads the same for both.</para>
     /// </summary>
-    public static string PlanDueBodyFor(string? locale, string? planTitle, DateTimeOffset dueAtUtc, bool overdue)
+    public static string PlanDueBodyFor(
+        string? locale, string? planTitle, DateTimeOffset dueAtUtc, bool overdue, bool recipientAdministers)
     {
         var due = dueAtUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         if (string.IsNullOrWhiteSpace(planTitle))
         {
-            return string.Format(
-                CultureInfo.InvariantCulture,
-                (overdue ? PlanOverdueBodyUnnamed : PlanDueSoonBodyUnnamed).For(locale),
-                due);
+            var unnamed = overdue
+                ? PlanOverdueBodyUnnamed
+                : recipientAdministers ? PlanDueSoonBodyUnnamed : PlanDueSoonBodyUnnamedAsk;
+            return string.Format(CultureInfo.InvariantCulture, unnamed.For(locale), due);
         }
 
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            (overdue ? PlanOverdueBodyNamed : PlanDueSoonBodyNamed).For(locale),
-            planTitle,
-            due);
+        var named = overdue
+            ? PlanOverdueBodyNamed
+            : recipientAdministers ? PlanDueSoonBodyNamed : PlanDueSoonBodyNamedAsk;
+        return string.Format(CultureInfo.InvariantCulture, named.For(locale), planTitle, due);
     }
 
     /// <summary>Subject line for an invitation reminder.</summary>

@@ -76,10 +76,10 @@ export default function SurveyWizardSetup({
         {dimensionCount !== null && (
           <div className="grid gap-0.5">
             <dt className="text-xs text-fg-secondary">{t('surveyCreate.railDimensions')}</dt>
-            <dd className="m-0 font-mono text-base font-medium tabular-nums">
+            <dd className="m-0 text-base font-medium tabular-nums">
               {dimensionCount}
               {withoutDimensionCount > 0 && (
-                <span className="ml-1.5 text-accent-amber-ink">
+                <span className="ml-1.5 font-normal text-fg-secondary">
                   {t('surveyCreate.railWithoutDimension', { count: withoutDimensionCount })}
                 </span>
               )}

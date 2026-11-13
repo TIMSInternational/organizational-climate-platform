@@ -83,6 +83,15 @@ function renderAs(claims: Record<string, unknown>) {
   )
 }
 
+/**
+ * The protected mark: a padlock and «Fewer than {floor}», where the floor is the one the
+ * PAYLOAD applied (`minimumGroupSize`), and no other figure in the cell.
+ */
+function expectProtected(cell: Element, floor = trends.minimumGroupSize) {
+  expect(cell.querySelector('[data-slot="protected-state"]')).not.toBeNull()
+  expect(cell.textContent).toContain(en.ui.protected.short.replace('{floor}', String(floor)))
+  expect((cell.textContent ?? '').replace(new RegExp(String(floor), 'g'), '')).not.toMatch(/\d/)
+}
 const rowOf = (name: string) => document.querySelector(`tr[data-department-row="${name}"]`) as HTMLElement | null
 const cardOf = (name: string) => document.querySelector(`li[data-department="${name}"]`) as HTMLElement
 
@@ -127,23 +136,41 @@ describe('DepartmentsNextPage (/departments)', () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     const row = await screen.findByText('Ingeniería', { selector: 'td' })
     const cells = row.closest('tr')!.querySelectorAll('td')
-    expect(cells[4].textContent).toBe(copy.protected)
+    expectProtected(cells[4])
     expect(cardOf('Ingeniería').textContent).not.toMatch(/4[.,]4/)
   })
 
   it('re-applies the floor itself: a group under the floor the server did not flag is protected too', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByText('Ventas', { selector: 'td' })
-    expect(rowOf('Ventas')!.querySelectorAll('td')[4].textContent).toBe(copy.protected)
+    expectProtected(rowOf('Ventas')!.querySelectorAll('td')[4])
     expect(rowOf('Ventas')!.textContent).not.toMatch(/4[.,]1/)
     expect(cardOf('Ventas').textContent).toContain('Protected in Q3')
+  })
+
+  it('names the floor the server applied, not a constant: at minimumGroupSize 1 no cell or card says “fewer than 3”', async () => {
+    // Since 2026-10-15 an administrator sees a single department from 1 response, which is what
+    // the header says; a protected cell reading «Fewer than 3» under it would contradict it.
+    vi.mocked(getClimateTrends).mockResolvedValue({ ...trends, minimumGroupSize: 1 })
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByText('Finanzas', { selector: 'td' })
+    // Finanzas is flagged by the server: protected, at the payload's floor.
+    expectProtected(rowOf('Finanzas')!.querySelectorAll('td')[4], 1)
+    expect(cardOf('Finanzas').textContent).toContain(copy.noteProtectedOne.replace('{wave}', 'Q3').replace('{threshold}', '1'))
+    // Ventas (2 respondents, not flagged) is over a floor of 1: its score is shown.
+    expect(rowOf('Ventas')!.querySelectorAll('td')[4].textContent).toMatch(/4[.,]1/)
+    const fewerThanThree = en.ui.protected.short.replace('{floor}', String(ANONYMITY_FLOOR))
+    for (const element of document.querySelectorAll('tbody, li[data-department]')) {
+      expect(element.textContent).not.toContain(fewerThanThree)
+      expect(element.textContent).not.toContain(copy.noteProtected.replace('{wave}', 'Q3').replace('{threshold}', String(ANONYMITY_FLOOR)))
+    }
   })
 
   it('reads a disclosed group as the mean of its dimensions, names its band outside the strength area, and the lowest dimension on the card', async () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByText('Operaciones', { selector: 'td' })
     // 2,8 is in the critical area of the company's bands: the cell names it in a chip.
-    await waitFor(() => expect(rowOf('Operaciones')!.querySelectorAll('td')[4].textContent).toBe('2.8Critical'))
+    await waitFor(() => expect(rowOf('Operaciones')!.querySelectorAll('td')[4].textContent).toBe(`2.8${en.resultBands.name.critical}`))
     expect(cardOf('Operaciones').textContent).toContain('Workload 2.4 in Q3')
   })
 

@@ -6,7 +6,7 @@ import { bindShortWords, timelineLabelSlots, type DueTimeline as DueTimelineData
 
 /**
  * The drawing is laid out in real pixels: the viewBox is as wide as the card measures, so the
- * 11px dates and 10px names stay that size at 1024 as at 1440, instead of shrinking with a
+ * 11px dates and names stay that size at 1024 as at 1440, instead of shrinking with a
  * fixed viewBox (the first build scaled a 1120-unit drawing to fit, and scrolled below 880px).
  * `FALLBACK_WIDTH` is the artboard's own drawing width, used until the card is measured and
  * wherever nothing measures it (the test DOM has no layout).
@@ -49,9 +49,9 @@ function hang(anchor: TimelineAnchor, x: number, width: number): React.CSSProper
 
 /**
  * "Cuándo vence cada plan" — every open plan's due date on one axis from today, drawn
- * as the ActionPlansList artboard draws it: a hairline axis, today as an ink dot, each
- * plan a dot with its date in mono over its name, and a red run from today to the last
- * plan that is due before this month is out.
+ * as the ActionPlansList artboard draws it: a hairline axis, today as an ink dot, and each
+ * plan a blue dot with its date (tabular figures in the UI face) over its name. The caller
+ * passes only plans still ahead of today; the late ones are the Vencidos table.
  *
  * The names are one line each, as the artboard's are: HTML over the drawing, each box as wide
  * as `timelineLabelSlots` leaves it before its neighbour's. The title wraps at word boundaries
@@ -60,8 +60,8 @@ function hang(anchor: TimelineAnchor, x: number, width: number): React.CSSProper
  * "Reducir la carga de trabajo en …" cut mid-word — and never on a short word like "en" or
  * "la", which `bindShortWords` ties to the word after it. The whole title is in `title`.
  *
- * Colour is never the only signal: the run and the red dots are the urgent ones, and
- * the table below says the same thing in words ("en 20 días · este mes"). The list under
+ * No dot is red: the timeline holds nothing late, and "this month" is said in words by the
+ * table below ("en 20 días · este mes"), not by a colour the plans' lateness owns. The list under
  * the drawing is the accessible form of it — a screen reader skips the SVG and the labels
  * and reads the dates and names in order.
  */
@@ -81,7 +81,6 @@ export default function DueTimeline({
   const axisEnd = Math.max(axisStart + 1, width - EDGE)
   const span = axisEnd - axisStart
   const xOf = (position: number) => axisStart + position * span
-  const urgentEnd = timeline.points.filter((point) => point.urgent).reduce((end, point) => Math.max(end, xOf(point.position)), axisStart)
   const xs = timeline.points.map((point) => xOf(point.position))
   const slots = timelineLabelSlots(xs, axisStart, axisEnd, width)
   const todayLabel = calendarDay(Date.parse(asOf), locale)
@@ -101,24 +100,13 @@ export default function DueTimeline({
         data-slot="due-timeline"
       >
         <line x1={axisStart} y1={AXIS_Y} x2={axisEnd} y2={AXIS_Y} className="stroke-line-default" strokeWidth={2} />
-        {urgentEnd > axisStart && (
-          <line
-            x1={axisStart}
-            y1={AXIS_Y}
-            x2={urgentEnd}
-            y2={AXIS_Y}
-            className="stroke-accent-red"
-            strokeWidth={2}
-            data-slot="due-timeline-urgent-run"
-          />
-        )}
         <circle cx={axisStart} cy={AXIS_Y} r={5} className="fill-fg-primary stroke-surface-card" strokeWidth={2} />
         {!planOnToday && (
           <>
-            <text x={axisStart} y={46} fontSize={11} textAnchor="middle" className="fill-fg-primary font-mono" fontWeight={600}>
+            <text x={axisStart} y={46} fontSize={11} textAnchor="middle" className="fill-fg-primary tabular-nums" fontWeight={600}>
               {todayLabel}
             </text>
-            <text x={axisStart} y={60} fontSize={10} textAnchor="middle" className="fill-accent-red" data-slot="due-timeline-today">
+            <text x={axisStart} y={62} fontSize={11} textAnchor="middle" className="fill-fg-tertiary" data-slot="due-timeline-today">
               {t('actionPlans.next.timelineToday')}
             </text>
           </>
@@ -129,10 +117,10 @@ export default function DueTimeline({
               cx={xs[index]}
               cy={AXIS_Y}
               r={6}
-              className={point.urgent ? 'fill-accent-red stroke-surface-card' : 'fill-accent-blue stroke-surface-card'}
+              className="fill-accent-blue stroke-surface-card"
               strokeWidth={2}
             />
-            <text x={xs[index]} y={46} fontSize={11} textAnchor={svgAnchor(slots[index].anchor)} className="fill-fg-primary font-mono">
+            <text x={xs[index]} y={46} fontSize={11} textAnchor={svgAnchor(slots[index].anchor)} className="fill-fg-primary tabular-nums">
               {calendarDay(Date.parse(point.dueDate), locale)}
             </text>
           </g>
@@ -146,7 +134,7 @@ export default function DueTimeline({
           data-slot="due-timeline-label"
           data-anchor={slots[index].anchor}
           className={cn(
-            'pointer-events-auto absolute block max-h-[1lh] overflow-hidden whitespace-normal text-[10px] leading-3 text-fg-label',
+            'pointer-events-auto absolute block max-h-[1lh] overflow-hidden whitespace-normal text-2xs leading-3 text-fg-tertiary',
             ALIGN[slots[index].anchor],
           )}
           style={{ top: NAME_TOP, width: slots[index].room, ...hang(slots[index].anchor, xs[index], width) }}

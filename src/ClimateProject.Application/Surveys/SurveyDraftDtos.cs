@@ -105,7 +105,14 @@ public sealed record CreateSurveyDraftRequest(
     LocalizedInput? Description = null,
     JsonElement? Content = null,
     int? CurrentStep = null,
-    string? LastEditedField = null);
+    string? LastEditedField = null,
+    /// <summary>
+    /// The company the draft is FOR. Optional: absent, the author's own company, as before. A
+    /// super administrator names the client they are building for -- without it a company-less
+    /// operator could never autosave, and one homed in TIMS filed every draft under TIMS
+    /// (docs/audits/2026-11-08-operator-ui-walkthrough.md, B1). Anyone else may name only their own.
+    /// </summary>
+    Guid? CompanyId = null);
 
 /// <param name="ExpectedVersion">
 /// The <c>Version</c> the caller last saw.

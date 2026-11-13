@@ -53,7 +53,13 @@ export default defineConfig({
   // degrade — every request dies on preflight with "No 'Access-Control-Allow-Origin'",
   // which reads as a CORS misconfiguration rather than as port drift. `strictPort`
   // turns that into a loud failure at startup, where the cause is still visible.
-  server: { port: 5173, strictPort: true },
+  server: {
+    port: 5173,
+    strictPort: true,
+    // The uploaded logo, same-origin as in production (vercel.json rewrites /logos/:companyId to
+    // the API's /public/company-logos/:companyId), so the page's img-src 'self' holds locally too.
+    proxy: { '/logos': { target: 'http://127.0.0.1:5080', rewrite: (path) => path.replace(/^\/logos/, '/public/company-logos') } },
+  },
   test: {
     // src/styles/tokens.test.ts imports the stylesheets with `?raw` to assert
     // the ported values; Vitest stubs CSS out of the module graph unless this

@@ -19,7 +19,11 @@ const summary = (over: Partial<Record<string, number>> = {}) => ({
 
 describe('responseRate', () => {
   it('is the whole percent of the stated audience, and null — never 0 — with no audience stated', () => {
-    expect(responseRate(3, 24)).toBe(13)
+    // 12.5 % floors to 12: a share is never rounded up past what happened.
+    expect(responseRate(3, 24)).toBe(12)
+    // 224 of 225 must not print 100 % beside a person who has not started.
+    expect(responseRate(224, 225)).toBe(99)
+    expect(responseRate(225, 225)).toBe(100)
     expect(responseRate(3, null)).toBeNull()
     expect(responseRate(3, 0)).toBeNull()
   })
@@ -50,9 +54,17 @@ describe('targetedDepartments', () => {
 
 describe('remindersSent', () => {
   it('sums the reminders, and is null — not 0 — while the list is unread', () => {
-    expect(remindersSent([{ reminderCount: 2 }, { reminderCount: 1 }] as never[])).toBe(3)
-    expect(remindersSent([])).toBe(0)
+    expect(remindersSent({ invitations: [{ reminderCount: 2 }, { reminderCount: 1 }] })).toBe(3)
+    expect(remindersSent({ invitations: [] })).toBe(0)
     expect(remindersSent(null)).toBeNull()
+  })
+
+  it('counts the reminders recorded on per-survey keys, which the invitations never carry', () => {
+    // ESPH's case: every invitation at 0, two reminders sent from the roster.
+    expect(remindersSent({ invitations: [{ reminderCount: 0 }, { reminderCount: 0 }], summary: { keyReminders: 2 } })).toBe(2)
+    expect(remindersSent({ invitations: [{ reminderCount: 1 }], summary: { keyReminders: 2 } })).toBe(3)
+    // An API older than the field sends no keyReminders: the invitations alone, as before.
+    expect(remindersSent({ invitations: [{ reminderCount: 1 }], summary: {} })).toBe(1)
   })
 })
 

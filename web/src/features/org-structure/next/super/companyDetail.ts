@@ -1,13 +1,13 @@
-import { waveCode } from '../../../dashboard/next/compose'
-import type { SurveyListItem } from '../../../surveys/api/surveys'
 import type { CompanyDetail, UpdateCompanyInput } from '../../api/companies'
-import { credentialModeOf, type CompanySettingsResponse, type CredentialMode, type UpdateCompanySettingsInput } from '../../api/companySettings'
+import { HEX_COLOUR, logoValid, type SettingsDraft } from '../settings/derive'
 import type { Department } from '../../api/departments'
 import type { User } from '../../api/users'
 
 /**
  * The pure half of the super administrator's company detail: the readings it prints and
- * the one form's two diffs. `companyDetail.test.ts` pins each.
+ * the profile diff. The settings half of the form is Configuración de empresa's own draft
+ * (`settings/derive.ts`: `draftOf`, `changesOf`), so both screens edit the same settings by
+ * the same rules. `companyDetail.test.ts` pins each.
  */
 
 export interface DepartmentSummary {
@@ -39,32 +39,6 @@ export function peopleReading(users: readonly User[]): PeopleReading {
   }
 }
 
-/**
- * The waves the cadence helper names — "Q1 en febrero, Q2 en mayo…": every closed or open
- * survey, by close date, one per code (the latest), so an archived rehearsal copy or a
- * draft is not a wave. At most the last four.
- */
-export function wavesByMonth(surveys: readonly SurveyListItem[], locale: string): Array<{ code: string; month: string }> {
-  const month = new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'UTC' })
-  const latest = new Map<string, SurveyListItem>()
-  for (const survey of surveys) {
-    if (survey.status !== 'closed' && survey.status !== 'active') continue
-    const code = waveCode(survey.title, '')
-    if (!/^Q\d$/.test(code)) continue
-    const seen = latest.get(code)
-    if (!seen || Date.parse(survey.endDate) > Date.parse(seen.endDate)) latest.set(code, survey)
-  }
-  return [...latest.entries()]
-    .sort(([, a], [, b]) => Date.parse(a.endDate) - Date.parse(b.endDate))
-    .slice(-4)
-    .map(([code, survey]) => ({ code, month: month.format(new Date(Date.parse(survey.endDate))) }))
-}
-
-/** 2555 days → 7 years; one decimal at most. */
-export function retentionYears(days: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(days / 365)
-}
-
 export interface ProfileDraft {
   name: string
   emailDomain: string
@@ -72,19 +46,6 @@ export interface ProfileDraft {
   size: string
   country: string
   subscriptionTier: string
-}
-
-export interface SettingsDraft {
-  language: string
-  surveyFrequency: string
-  anonymousSurveys: boolean
-  /** As typed; validated by `settingsChanges`. */
-  dataRetentionDays: string
-  microclimateEnabled: boolean
-  aiInsightsEnabled: boolean
-  /** `shared` | `per_survey` — reaches only surveys created after it is saved. */
-  credentialMode: CredentialMode
-  primaryColor: string
 }
 
 export function profileDraftOf(company: CompanyDetail): ProfileDraft {
@@ -95,19 +56,6 @@ export function profileDraftOf(company: CompanyDetail): ProfileDraft {
     size: company.size ?? '',
     country: company.country ?? '',
     subscriptionTier: company.subscriptionTier ?? '',
-  }
-}
-
-export function settingsDraftOf(response: CompanySettingsResponse): SettingsDraft {
-  return {
-    language: response.settings.language,
-    surveyFrequency: response.settings.surveyFrequency,
-    anonymousSurveys: response.settings.anonymousSurveys,
-    dataRetentionDays: String(response.settings.dataRetentionDays),
-    microclimateEnabled: response.settings.microclimateEnabled,
-    aiInsightsEnabled: response.settings.aiInsightsEnabled,
-    credentialMode: credentialModeOf(response.settings),
-    primaryColor: response.branding.primaryColor,
   }
 }
 
@@ -127,39 +75,15 @@ export function profileChanges(initial: ProfileDraft, draft: ProfileDraft): Upda
   return changes
 }
 
-export const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/
-
-/** Whole days, at least one: the retention input's only valid shape. */
-export function parseRetention(value: string): number | null {
-  if (!/^\s*\d+\s*$/.test(value)) return null
-  const days = Number.parseInt(value, 10)
-  return days >= 1 ? days : null
-}
-
-/** The settings half of the same form; an invalid retention or colour is not a change. */
-export function settingsChanges(initial: SettingsDraft, draft: SettingsDraft): UpdateCompanySettingsInput {
-  const changes: UpdateCompanySettingsInput = {}
-  if (draft.language !== initial.language && draft.language.trim()) changes.language = draft.language
-  if (draft.surveyFrequency !== initial.surveyFrequency && draft.surveyFrequency.trim()) {
-    changes.surveyFrequency = draft.surveyFrequency
-  }
-  if (draft.anonymousSurveys !== initial.anonymousSurveys) changes.anonymousSurveys = draft.anonymousSurveys
-  if (draft.microclimateEnabled !== initial.microclimateEnabled) changes.microclimateEnabled = draft.microclimateEnabled
-  if (draft.aiInsightsEnabled !== initial.aiInsightsEnabled) changes.aiInsightsEnabled = draft.aiInsightsEnabled
-  if (draft.credentialMode !== initial.credentialMode) changes.credentialMode = draft.credentialMode
-  const days = parseRetention(draft.dataRetentionDays)
-  if (days !== null && days !== parseRetention(initial.dataRetentionDays)) changes.dataRetentionDays = days
-  if (draft.primaryColor !== initial.primaryColor && HEX_COLOUR.test(draft.primaryColor)) {
-    changes.primaryColor = draft.primaryColor
-  }
-  return changes
-}
-
-/** Whether the draft holds something the form refuses to send — the save is then off. */
+/**
+ * Whether the draft holds something the form refuses to send — the save is then off. The
+ * settings half is judged by the same rules as Configuración de empresa (`settings/derive.ts`,
+ * itself pinned to `BrandingValidation.cs`), because it is the same draft.
+ */
 export function draftProblems(profile: ProfileDraft, settings: SettingsDraft | null): boolean {
   if (!profile.name.trim()) return true
   if (settings === null) return false
-  return parseRetention(settings.dataRetentionDays) === null || !HEX_COLOUR.test(settings.primaryColor)
+  return !HEX_COLOUR.test(settings.primaryColor) || !logoValid(settings.logoUrl)
 }
 
 /**

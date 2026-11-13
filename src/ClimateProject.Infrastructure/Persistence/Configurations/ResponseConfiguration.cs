@@ -25,6 +25,14 @@ public class ResponseConfiguration : IEntityTypeConfiguration<Response>
         builder.Property(r => r.UserAgent).HasColumnName("user_agent").HasMaxLength(500);
         builder.Property(r => r.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(r => r.UpdatedAt).HasColumnName("updated_at").IsRequired();
+        builder.Property(r => r.ExcludedAt).HasColumnName("excluded_at");
+
+        // A response TIMS excluded leaves every result by default. The few readers that must
+        // still see it -- the respond flow, the roster, the "has this survey been answered"
+        // guards, GDPR -- say so with IgnoreQueryFilters([ResponseQueryFilters.Counted]).
+        // Fail-safe in the direction that matters: a results reader written tomorrow that
+        // forgets about exclusions still excludes.
+        builder.HasQueryFilter(ResponseQueryFilters.Counted, r => r.ExcludedAt == null);
 
         builder.HasOne<Survey>().WithMany().HasForeignKey(r => r.SurveyId);
         builder.HasOne<User>().WithMany().HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.SetNull);

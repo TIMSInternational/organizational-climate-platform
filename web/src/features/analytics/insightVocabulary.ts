@@ -47,7 +47,12 @@ import type { TranslateFn } from '../../i18n'
  * "High" is the same word for the same concept an action plan already labels, and
  * `components/AIInsightList.tsx` reached the same conclusion independently. Two keys
  * for one word is how two catalogues drift apart — the Spanish forms are feminine
- * (`Alta`, `Crítica`) because they agree with `prioridad` in both places.
+ * (`Alta`, `Media`) because they agree with `prioridad` in both places.
+ *
+ * The one exception is `critical`, which reads `insights.priorityUrgent` ("Urgente" /
+ * "Urgent"): "Crítica" is the name of a result band (`resultBands.short.critical`), and a
+ * gray priority chip that shared the word could be read as the red result area (Apple
+ * design review, 12 Nov). The wire value stays `critical`; only the label changes.
  */
 
 /**
@@ -103,7 +108,7 @@ const PRIORITY_KEYS: Record<string, string> = {
   low: 'actionPlans.low',
   medium: 'actionPlans.medium',
   high: 'actionPlans.high',
-  critical: 'actionPlans.critical',
+  critical: 'insights.priorityUrgent',
 }
 
 /**

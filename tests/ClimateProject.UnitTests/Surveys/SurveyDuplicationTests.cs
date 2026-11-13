@@ -14,6 +14,8 @@ public class SurveyDuplicationTests
     private static readonly Guid CopySurveyId = Guid.Parse("66666666-6666-6666-6666-666666666666");
     private static readonly Guid TriggerQuestionId = Guid.Parse("77777777-7777-7777-7777-777777777777");
     private static readonly Guid BranchQuestionId = Guid.Parse("88888888-8888-8888-8888-888888888888");
+    private static readonly Guid NamedPersonA = Guid.Parse("99999999-0000-0000-0000-00000000000a");
+    private static readonly Guid NamedPersonB = Guid.Parse("99999999-0000-0000-0000-00000000000b");
     private static readonly DateTimeOffset Now = new(2026, 8, 5, 12, 0, 0, TimeSpan.Zero);
 
     // Deterministic id factory so the remapping assertions name the ids they expect
@@ -40,6 +42,7 @@ public class SurveyDuplicationTests
             DescriptionEs = "Como va el equipo",
             Language = "both",
             Type = "periodic",
+            ServiceType = ClimateServiceTypes.GeneralClimate,
             StartDate = Now,
             EndDate = Now.AddDays(14),
             Status = "closed",
@@ -59,6 +62,7 @@ public class SurveyDuplicationTests
                 InvitationCustomSubjectEn = "Your voice matters",
                 InvitationCustomSubjectEs = "Tu voz importa",
                 InvitationBrandingEnabled = true,
+                CredentialMode = CredentialModes.PerSurvey,
             },
         };
 
@@ -121,7 +125,14 @@ public class SurveyDuplicationTests
             new() { SurveyId = OriginalSurveyId, DepartmentId = DepartmentId },
         };
 
-        return new SurveyStructure(survey, [trigger, branch], options, emoji, logic, targets);
+        return new SurveyStructure(survey, [trigger, branch], options, emoji, logic, targets)
+        {
+            UserTargets =
+            [
+                new() { SurveyId = OriginalSurveyId, UserId = NamedPersonA },
+                new() { SurveyId = OriginalSurveyId, UserId = NamedPersonB },
+            ],
+        };
     }
 
     private static SurveyStructure DuplicateSource(SurveyDuplicateOptions? overrides = null)
@@ -281,6 +292,62 @@ public class SurveyDuplicationTests
         Assert.Equal(DepartmentId, target.DepartmentId);
     }
 
+    // ------------------------------------------------------------------
+    // Audit G14: who it went to, what it metered, how people signed in.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void The_people_the_source_named_are_carried_over_so_the_copy_is_not_widened_to_the_whole_company()
+    {
+        var copy = DuplicateSource();
+
+        // An empty target set means everybody (SurveyQueries.Audience), so a copy that lost
+        // these would not merely lose two people -- it would go to the whole company.
+        Assert.Equal([NamedPersonA, NamedPersonB], copy.UserTargets.Select(t => t.UserId).Order());
+        Assert.All(copy.UserTargets, t => Assert.Equal(CopySurveyId, t.SurveyId));
+    }
+
+    [Fact]
+    public void The_copy_meters_against_the_sources_service()
+    {
+        var copy = DuplicateSource();
+
+        Assert.Equal(ClimateServiceTypes.GeneralClimate, copy.Survey.ServiceType);
+    }
+
+    [Fact]
+    public void The_copy_keeps_the_sources_frozen_credential_mode_not_the_company_default()
+    {
+        // The function is never told the company's mode, so the only place a per_survey
+        // can come from is the source's own frozen value.
+        var copy = DuplicateSource();
+
+        Assert.Equal(CredentialModes.PerSurvey, copy.Survey.Settings.CredentialMode);
+    }
+
+    [Fact]
+    public void A_source_that_never_froze_a_mode_duplicates_with_none_rather_than_an_invented_one()
+    {
+        var source = BilingualSource();
+        source.Survey.Settings.CredentialMode = null;
+        source.Survey.ServiceType = null;
+
+        var copy = SurveyDuplication.Duplicate(source, CopySurveyId, DuplicatingAdminId, Now, Guid.NewGuid);
+
+        Assert.Null(copy.Survey.Settings.CredentialMode);
+        Assert.Null(copy.Survey.ServiceType);
+    }
+
+    [Fact]
+    public void A_source_with_no_named_people_duplicates_with_none()
+    {
+        var source = BilingualSource() with { UserTargets = [] };
+
+        var copy = SurveyDuplication.Duplicate(source, CopySurveyId, DuplicatingAdminId, Now, Guid.NewGuid);
+
+        Assert.Empty(copy.UserTargets);
+    }
+
     [Fact]
     public void The_copys_settings_are_a_separate_instance_so_editing_one_does_not_edit_the_other()
     {
@@ -302,6 +369,7 @@ public class SurveyDuplicationTests
         Assert.Equal(CopySurveyId, copy.Survey.Id);
         Assert.All(copy.Questions, q => Assert.Equal(CopySurveyId, q.SurveyId));
         Assert.All(copy.DepartmentTargets, t => Assert.Equal(CopySurveyId, t.SurveyId));
+        Assert.All(copy.UserTargets, t => Assert.Equal(CopySurveyId, t.SurveyId));
         Assert.DoesNotContain(copy.Questions, q => q.Id == TriggerQuestionId || q.Id == BranchQuestionId);
     }
 

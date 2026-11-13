@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Check } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { PageHeader } from '../../../components/layout'
 import {
   Alert,
   AlertDescription,
@@ -13,6 +13,7 @@ import {
   CanvasFileIcon,
   CanvasLockIcon,
   Chip,
+  ProtectedState,
   ConfirmationDialog,
   EmptyState,
   LoadingRegion,
@@ -20,7 +21,8 @@ import {
   Progress,
   SkeletonText,
 } from '../../../components/ui'
-import { PROTECTED_HATCH } from '../../../components/charts/suppression'
+import { PROTECTED_HATCH, PROTECTED_LABEL } from '../../../components/charts/suppression'
+import { PageMetaSentences } from '../../../components/canvas'
 import { cn } from '../../../lib/cn'
 import type { LiveResults, MicroclimateDetail } from '../api/microclimates'
 import { MINIMUM_RESPONDENTS } from '../microclimatePrivacy'
@@ -39,10 +41,12 @@ import {
 } from './derive'
 import type { MicroclimateLiveNextModel } from './model'
 import { useCopyLink } from './useCopyLink'
+import { displayZone, zoneNote } from './companyZone'
 import { useMicroclimateLiveModel } from './useMicroclimateLiveModel'
+import { describeApiError } from '../../../api/describeApiError'
 
-/** The artboard's `.card`, with its 16/20/18 padding and 12px between blocks. */
-const CARD = 'flex min-w-0 flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-sm'
+/** The Apple design's `.card` (occ.css): 12px corners, the hairline, no shadow; 12px between blocks. */
+const CARD = 'flex min-w-0 flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 pt-4 pb-4.5'
 
 /**
  * `/microclimates/:id/live` — the redesigned live session, drawn as the MicroclimateLive
@@ -87,7 +91,7 @@ export default function MicroclimateLiveNextPage() {
   if (state.status === 'forbidden') {
     return (
       <div>
-        <PageTopBar title={t('microclimates.next.live.crumb')} />
+        <PageHeader title={t('microclimates.next.live.crumb')} />
         <EmptyState
           fill
           title={t('microclimates.next.noAccessTitle')}
@@ -119,11 +123,13 @@ export default function MicroclimateLiveNextPage() {
   const model = state.model
   const { detail } = model
   const title = detail.title ?? t('microclimates.untitled')
+  // Every date and time on the company's clock, or the browser's when it could not be read.
+  const zone = displayZone(state.timeZone)
 
   return (
     <div>
-      <PageTopBar
-        eyebrow={t('microclimates.next.live.eyebrow', { section: t('navigation.sectionWorkspace') })}
+      <PageHeader
+        eyebrow={t('microclimates.next.live.eyebrow', { section: t('navigation.sectionFollowUp') })}
         title={title}
         description={t('microclimates.next.live.description', { minimum: MINIMUM_RESPONDENTS })}
         breadcrumbs={[
@@ -131,9 +137,7 @@ export default function MicroclimateLiveNextPage() {
           { label: title, href: `/microclimates/${detail.id}` },
           { label: t('microclimates.next.live.crumb') },
         ]}
-        tightBreadcrumb
-        meta={<SessionLine detail={detail} />}
-        metaClassName="mt-1 gap-2"
+        meta={<SessionLine detail={detail} zone={zone} note={zoneNote(t, state.timeZone)} />}
         actions={
           <>
             <Button asChild variant="outline" size="canvas">
@@ -160,8 +164,8 @@ export default function MicroclimateLiveNextPage() {
       )}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <ArrivalsCard model={model} />
-        <RespondCard detail={detail} />
+        <ArrivalsCard model={model} zone={zone} />
+        <RespondCard detail={detail} zone={zone} />
       </div>
 
       <ConfirmationDialog
@@ -177,7 +181,7 @@ export default function MicroclimateLiveNextPage() {
           try {
             await state.close()
           } catch (err) {
-            setCloseError(err instanceof Error ? err.message : t('errors.generic'))
+            setCloseError(describeApiError(err, t))
           }
         }}
       />
@@ -185,13 +189,16 @@ export default function MicroclimateLiveNextPage() {
   )
 }
 
-/** "En vivo · abierta hasta el 11 de septiembre a las 21:06", under the description. */
-function SessionLine({ detail }: { detail: MicroclimateDetail }) {
+/**
+ * "En vivo · abierta hasta el 11 de septiembre a las 21:06", under the description, on
+ * `zone`'s clock -- and the sentence naming that zone.
+ */
+function SessionLine({ detail, zone, note }: { detail: MicroclimateDetail; zone: string; note: string }) {
   const { t, locale } = useTranslation()
   const isOpen = detail.status === 'active'
   const instant = detail.status === 'draft' ? detail.startTime : detail.endTime
-  const date = dayMonthLong(instant, locale)
-  const time = clock(instant, locale)
+  const date = dayMonthLong(instant, locale, zone)
+  const time = clock(instant, locale, zone)
   const key =
     detail.status === 'draft'
       ? 'microclimates.next.live.opensOn'
@@ -202,10 +209,18 @@ function SessionLine({ detail }: { detail: MicroclimateDetail }) {
   return (
     <>
       <Chip
-        tone={isOpen ? 'good' : 'neutral'}
+        className="self-start"
+        tone={isOpen ? 'live' : 'neutral'}
         label={isOpen ? t('microclimates.next.chipLive') : statusLabel(t, detail.status)}
       />
-      {date && time && <span className="text-sm text-fg-tertiary">{t(key, { date, time })}</span>}
+      <span className="flex min-w-0 flex-1 basis-0 text-sm text-fg-tertiary">
+        <PageMetaSentences
+          sentences={[
+            ...(date && time ? [{ id: 'when', text: t(key, { date, time }) }] : []),
+            { id: 'zone', text: note },
+          ]}
+        />
+      </span>
     </>
   )
 }
@@ -217,7 +232,7 @@ function SessionLine({ detail }: { detail: MicroclimateDetail }) {
  * The figure is the latest poll's; before the first poll lands it is the detail's own
  * count, which is the same reading fetched a moment earlier, never a placeholder zero.
  */
-function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
+function ArrivalsCard({ model, zone }: { model: MicroclimateLiveNextModel; zone: string }) {
   const { t, locale } = useTranslation()
   const { detail, live } = model
   const isOpen = detail.status === 'active'
@@ -237,7 +252,7 @@ function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
         <h2 id="mc-arrivals" className="m-0 text-2xl">
           {t('microclimates.next.live.arrivalsTitle')}
         </h2>
-        {isOpen && <LiveStamp lastUpdatedAt={model.lastUpdatedAt} isStale={model.isStale} />}
+        {isOpen && <LiveStamp lastUpdatedAt={model.lastUpdatedAt} isStale={model.isStale} zone={zone} />}
       </div>
 
       {/* No wrap, as the artboard draws the row (flex, items at the end): the sentence
@@ -246,7 +261,7 @@ function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
       <div className="flex items-end gap-5 pt-2 pb-1">
         <span
           data-slot="live-figure"
-          className="flex-none whitespace-nowrap font-mono text-[4.5rem] leading-none tabular-nums text-fg-primary"
+          className="flex-none whitespace-nowrap text-[4.5rem] font-semibold leading-none tracking-display tabular-nums text-fg-primary"
         >
           {responses.toLocaleString(locale)}
         </span>
@@ -265,14 +280,14 @@ function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
       {fill !== null && (
         <>
           <Progress
-            value={Math.round(fill)}
+            value={fill}
             className="h-2"
             aria-label={t('charts.participationProgress', {
               current: responses.toLocaleString(locale),
               target: target.toLocaleString(locale),
             })}
           />
-          <div data-slot="live-scale" className="flex justify-between gap-3 font-mono text-xs text-fg-tertiary">
+          <div data-slot="live-scale" className="flex justify-between gap-3 text-xs tabular-nums text-fg-tertiary">
             <span>{(0).toLocaleString(locale)}</span>
             <span>{t('microclimates.next.live.scaleFloor', { minimum: MINIMUM_RESPONDENTS })}</span>
             <span>{target.toLocaleString(locale)}</span>
@@ -286,22 +301,28 @@ function ArrivalsCard({ model }: { model: MicroclimateLiveNextModel }) {
 }
 
 /** "● En vivo · actualizado a las 21:50:42" — or, after a failed read, when the figure was last good. */
-function LiveStamp({ lastUpdatedAt, isStale }: { lastUpdatedAt: Date | null; isStale: boolean }) {
+function LiveStamp({ lastUpdatedAt, isStale, zone }: { lastUpdatedAt: Date | null; isStale: boolean; zone: string }) {
   const { t, locale } = useTranslation()
-  const time = lastUpdatedAt ? clockSeconds(lastUpdatedAt, locale) : null
+  // On the same clock as every other time on the page, so "actualizado a las 21:50:42" and
+  // "abierta hasta las 22:00" are never read in two zones.
+  const time = lastUpdatedAt ? clockSeconds(lastUpdatedAt, locale, zone) : null
 
   if (isStale && time) {
     return (
-      <span data-slot="live-stamp" className="inline-flex items-center gap-1.5 text-sm text-accent-amber-ink">
-        <span aria-hidden="true" className="size-2 rounded-full bg-accent-amber" />
+      // Stalled is not a result area, so not amber: the dot goes hollow and gray, and the
+      // words say it stopped updating — the state is never the colour alone.
+      <span data-slot="live-stamp" data-stale="true" className="inline-flex items-center gap-1.5 text-sm text-fg-secondary">
+        <span aria-hidden="true" className="size-2 rounded-full border-[1.5px] border-fg-tertiary" />
         {t('microclimates.next.live.stalled', { time })}
       </span>
     )
   }
 
   return (
-    <span data-slot="live-stamp" className="inline-flex items-center gap-1.5 text-sm text-accent-green-ink">
-      <span aria-hidden="true" className="size-2 rounded-full bg-accent-green" />
+    // Blue is live in this product (the `live` chip's tint and dot); green is the Fortaleza
+    // result area alone.
+    <span data-slot="live-stamp" className="inline-flex items-center gap-1.5 text-sm text-accent-blue-ink">
+      <span aria-hidden="true" className="size-2 rounded-full bg-accent-blue" />
       {time ? t('microclimates.next.live.updatedAt', { time }) : t('microclimates.next.live.connecting')}
     </span>
   )
@@ -321,13 +342,8 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
     <div data-slot="live-words" className="mt-2 flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="m-0 text-base font-semibold text-fg-primary">{t('microclimates.next.live.wordsTitle')}</h3>
-        {words.isSuppressed && (
-          <Chip
-            tone="neutral"
-            icon={<CanvasLockIcon />}
-            label={t('microclimates.next.live.protectedChip', { minimum: MINIMUM_RESPONDENTS })}
-          />
-        )}
+        {/* The ProtectedState primitive: the padlock and "Menos de {floor}", never a count. */}
+        {words.isSuppressed && <ProtectedState floor={MINIMUM_RESPONDENTS} />}
       </div>
 
       {words.isSuppressed ? (
@@ -342,8 +358,10 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
             PROTECTED_HATCH,
           )}
         >
-          <CanvasLockIcon strokeWidth={1.6} className="size-4.5 text-fg-tertiary" />
-          <span className="text-sm text-fg-tertiary">
+          {/* The padlock and the words on one solid pill (`PROTECTED_LABEL`): straight on
+              the stripes the tertiary ink was 3.97:1. */}
+          <span data-slot="protected-label" className={cn(PROTECTED_LABEL, 'inline-flex items-center gap-1.5 px-2.5 py-1 text-sm')}>
+            <CanvasLockIcon strokeWidth={1.6} className="size-4 shrink-0 text-fg-tertiary" />
             {t('microclimates.next.live.hatchNote', { minimum: MINIMUM_RESPONDENTS })}
           </span>
         </div>
@@ -372,7 +390,7 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
               <span aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-surface-icon-box">
                 <span className="block h-full rounded-full bg-accent-blue" style={{ width: `${bar.share * 100}%` }} />
               </span>
-              <span className="text-right font-mono text-sm tabular-nums text-fg-secondary">
+              <span className="text-right text-sm tabular-nums text-fg-secondary">
                 {bar.value.toLocaleString(locale)}
               </span>
             </li>
@@ -410,15 +428,15 @@ function WordsBlock({ live, responses }: { live: LiveResults | null; responses: 
  * holds 16.90:1 and 18.94:1 on the paper where the red holds 5.08:1. A projector washes contrast
  * out, and the artboard draws this box in its neutral greys with no red in it.
  */
-function RespondCard({ detail }: { detail: MicroclimateDetail }) {
+function RespondCard({ detail, zone }: { detail: MicroclimateDetail; zone: string }) {
   const { t, locale } = useTranslation()
   const { outcome, copy } = useCopyLink()
   const origin = window.location.origin
   const link = respondUrl(origin, detail.id)
   const shareable = detail.status === 'active' && detail.anonymousResponses
   const copied = outcome?.key === detail.id ? outcome : null
-  const opensDate = dayMonthLong(detail.startTime, locale)
-  const opensTime = clock(detail.startTime, locale)
+  const opensDate = dayMonthLong(detail.startTime, locale, zone)
+  const opensTime = clock(detail.startTime, locale, zone)
 
   return (
     <section aria-labelledby="mc-respond" className={CARD}>
@@ -429,7 +447,7 @@ function RespondCard({ detail }: { detail: MicroclimateDetail }) {
       {shareable ? (
         <>
           <div className="flex flex-col gap-1.5">
-            <span id="mc-link-label" className="text-2xs font-bold uppercase tracking-label text-fg-label">
+            <span id="mc-link-label" className="text-sm font-semibold text-fg-primary">
               {t('microclimates.next.live.linkLabel')}
             </span>
             <div className="flex gap-2">
@@ -468,7 +486,7 @@ function RespondCard({ detail }: { detail: MicroclimateDetail }) {
         </p>
       )}
 
-      <Facts detail={detail} t={t} locale={locale} />
+      <Facts detail={detail} t={t} locale={locale} zone={zone} />
     </section>
   )
 }
@@ -498,7 +516,7 @@ function QrPlate({ url, label }: { url: string; label: string }) {
 }
 
 /** Apertura, Cierre, Preguntas, Responden — a definition list, so the pairing is real markup. */
-function Facts({ detail, t, locale }: { detail: MicroclimateDetail; t: TranslateFn; locale: string }) {
+function Facts({ detail, t, locale, zone }: { detail: MicroclimateDetail; t: TranslateFn; locale: string; zone: string }) {
   const kinds = questionKinds(detail.questions)
     .map(({ kindKey, count, optional }) => {
       const kind = t(kindKey, { count })
@@ -510,9 +528,9 @@ function Facts({ detail, t, locale }: { detail: MicroclimateDetail; t: Translate
   return (
     <dl className="m-0 grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-t border-line-light pt-1 text-base">
       <dt className="text-fg-tertiary">{t('microclimates.next.live.factOpens')}</dt>
-      <dd className="m-0 font-mono tabular-nums">{stamp(detail.startTime, locale)}</dd>
+      <dd className="m-0 tabular-nums">{stamp(detail.startTime, locale, zone)}</dd>
       <dt className="text-fg-tertiary">{t('microclimates.next.live.factCloses')}</dt>
-      <dd className="m-0 font-mono tabular-nums">{stamp(detail.endTime, locale)}</dd>
+      <dd className="m-0 tabular-nums">{stamp(detail.endTime, locale, zone)}</dd>
       <dt className="text-fg-tertiary">{t('microclimates.next.live.factQuestions')}</dt>
       <dd className="m-0">
         {kinds ? t('microclimates.next.live.questionsValue', { count, kinds }) : count}

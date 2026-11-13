@@ -72,6 +72,7 @@ describe('AdminDashboardNextView', () => {
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
     expect(headings).toEqual([
       copy.whereHeading,
+      copy.climateHeading,
       copy.movedHeading,
       copy.byGroupHeading.replace('{wave}', 'Q3'),
       copy.attentionHeading,
@@ -98,12 +99,16 @@ describe('AdminDashboardNextView', () => {
     expect(sections?.className.split(/\s+/)).toContain('-mt-1')
   })
 
-  it('prints no digit anywhere on a protected map row', () => {
+  it('prints only the floor, in words, on a protected map row: no count and no score', () => {
     renderView()
     const header = screen.getByRole('rowheader', { name: /Finanzas/ })
     const row = header.closest('tr')
     expect(row).not.toBeNull()
-    expect(row?.textContent ?? '').not.toMatch(/\d/)
+    // The whole row text is pinned: the department name plus «Fewer than {floor}» once.
+    // Any withheld count or reading would change it, so this is stricter than a digit scan.
+    expect(row?.textContent).toBe(
+      'Finanzas' + en.charts.protectedUnderFloor.replace('{threshold}', String(ANONYMITY_FLOOR)),
+    )
     // The disclosed rows do print their readings, so the absence above is the floor's doing.
     const disclosed = screen.getByRole('rowheader', { name: /Operaciones/ }).closest('tr')
     expect(disclosed?.textContent ?? '').toMatch(/2\.4/)
@@ -123,7 +128,7 @@ describe('AdminDashboardNextView', () => {
     // The band is said in words on every card, never by colour alone.
     for (const card of cards) {
       const band = card.getAttribute('data-band') as 'strength' | 'opportunity'
-      expect(within(card).getByText(en.resultBands.short[band])).toBeTruthy()
+      expect(within(card).getByText(en.resultBands.name[band])).toBeTruthy()
     }
   })
 
@@ -156,12 +161,13 @@ describe('AdminDashboardNextView', () => {
     const move = Math.round(latest * 200) / 10 - Math.round(previous * 200) / 10
     const sign = move > 0 ? '+' : ''
     expect(tile.querySelector('[data-slot="climate-move"]')?.textContent).toContain(`${sign}${move.toFixed(1)}`)
-    // Every trend card's headline figure is a whole 0–100 number: no 1–5 reading survives.
+    // Every trend card's headline figure is a 0–100 number at the KPI's own precision (one
+    // decimal on 0–100, the two of 1–5 less one): no 1–5 reading survives.
     const cards = document.querySelectorAll('[data-slot="trend-card"]')
     expect(cards.length).toBeGreaterThan(0)
     for (const card of cards) {
       const figure = card.querySelector('.text-reading')?.textContent ?? ''
-      expect(figure).toMatch(/^\d{2,3}$/)
+      expect(figure).toMatch(/^\d{2,3}\.\d$/)
       expect(Number(figure)).toBeGreaterThanOrEqual(20)
     }
   })
@@ -227,6 +233,10 @@ describe('AdminDashboardNextView', () => {
     expect(current).toHaveLength(1)
     expect(current[0].textContent).toContain('Q4')
     expect(document.querySelectorAll('[data-slot="cycle-step"]')).toHaveLength(5)
+    // Open is live, and live is blue: red belongs to the Crítica area on the same page.
+    const painted = Array.from(current[0].querySelectorAll('*')).map((el) => el.getAttribute('class') ?? '').join(' ')
+    expect(painted).not.toMatch(/accent-red/)
+    expect(painted).toMatch(/accent-blue/)
   })
 
   /**
@@ -272,6 +282,18 @@ describe('AdminDashboardNextView', () => {
     expect(dots.some((node) => node.children.length === small.responses)).toBe(true)
   })
 
+  it('names a withheld group on the participation tile by the padlock and «Fewer than N», never a count or «protected»', () => {
+    renderView()
+    const finance = fullModel.map.rows.find((row) => row.responses < ANONYMITY_FLOOR)!
+    const marks = [...document.querySelectorAll('[data-slot="participation-withheld"]')]
+    expect(marks.length).toBeGreaterThan(0)
+    const mark = marks.find((node) => node.textContent?.startsWith(finance.name))!
+    // The whole text, pinned: the group's name and the floor, as «Quién respondió» says it.
+    expect(mark.textContent).toBe(finance.name + en.charts.range.protected.replace('{floor}', String(ANONYMITY_FLOOR)))
+    expect(mark.querySelector('[data-protected-mark] svg')).not.toBeNull()
+    expect(mark.textContent).not.toMatch(/protected/i)
+  })
+
   it('draws a withheld group a fixed band, never one mark per respondent, and never a count', () => {
     renderView()
     const withheld = document.querySelector('[data-slot="population-withheld"]')
@@ -282,8 +304,10 @@ describe('AdminDashboardNextView', () => {
     // The band's width is a constant of the component, NOT this group's headcount.
     expect(withheld!.children.length).not.toBe(finance.responses)
     const row = withheld!.closest('div')!
-    expect(row.textContent).toContain(copy.protectedWord)
-    expect(row.textContent).not.toMatch(/\d/)
+    // "Fewer than 3": the floor is the one number the row may say, and it is not the count.
+    const said = copy.protectedWord.replace('{floor}', String(ANONYMITY_FLOOR))
+    expect(row.textContent).toContain(said)
+    expect(row.textContent!.replace(said, '')).not.toMatch(/\d/)
 
     // A disclosed group, by contrast, is drawn a mark per person and says its number.
     const disclosed = fullModel.map.rows.find((r) => r.responses >= ANONYMITY_FLOOR)!
@@ -326,14 +350,46 @@ describe('AdminDashboardNextView', () => {
     renderView(fullModel, undefined, live)
     const notices = document.querySelectorAll('[data-slot="region-fallback"]')
     expect(Array.from(notices).map((node) => node.getAttribute('data-region'))).toEqual(['map', 'microclimates'])
-    expect(notices[0].textContent).toBe(
-      copy.unavailableRegion.replace('{region}', copy.regionMap).replace('{error}', 'Service unavailable'),
+    // The sentence names the region; why follows on its own line, in the reader's words —
+    // never the server's own text, which is English and can carry paths and ids.
+    expect(notices[0].querySelector('[data-slot="region-fallback-text"]')?.textContent).toBe(
+      copy.unavailableRegion.replace('{region}', copy.regionMap),
     )
+    expect(notices[0].querySelector('[data-slot="region-fallback-reason"]')?.textContent).toBe(copy.failureOther)
+    expect(notices[0].textContent).not.toContain('Service unavailable')
     expect(notices[1].textContent).toBe(copy.unavailableEmpty.replace('{region}', copy.regionMicroclimates))
+    expect(notices[1].querySelector('[data-slot="region-fallback-reason"]')).toBeNull()
+    // A status notice and nothing to press: the notice is a live region, and a control in it
+    // would be announced as part of the sentence. It also asks the server for nothing.
+    for (const notice of Array.from(notices)) expect(notice.querySelector('button')).toBeNull()
     // The sentence no longer calls anything sample data, because nothing is.
     expect(notices[0].textContent).not.toContain('Sample data')
     // The map notice sits inside the map's own section.
     expect(notices[0].closest('section')?.getAttribute('aria-labelledby')).toBe('next-by-group')
+  })
+
+  it('says why a region failed by the cause, never by the server text', () => {
+    const regions: RegionStatuses = {
+      company: { status: 'live' },
+      surveys: { status: 'live' },
+      trends: { status: 'fallback', reason: 'failed', error: 'shot: no fixture for GET /surveys/climate-trends', cause: 'notFound' },
+      map: { status: 'fallback', reason: 'failed', error: 'Forbidden', cause: 'forbidden' },
+      actionPlans: { status: 'fallback', reason: 'failed', error: 'at Foo.Bar() in /src/x.cs', cause: 'server' },
+      tracking: { status: 'off' },
+      microclimates: { status: 'fallback', reason: 'failed', error: 'Failed to fetch', cause: 'network' },
+    }
+    renderView(fullModel, undefined, regions)
+    const reasons = Object.fromEntries(
+      [...document.querySelectorAll('[data-slot="region-fallback"]')].map((node) => [
+        node.getAttribute('data-region'),
+        node.querySelector('[data-slot="region-fallback-reason"]')?.textContent,
+      ]),
+    )
+    expect(reasons.map).toBe(copy.failureForbidden)
+    expect(reasons.microclimates).toBe(copy.failureNetwork)
+    for (const text of ['no fixture', 'Forbidden', 'Foo.Bar', 'Failed to fetch']) {
+      expect(document.body.textContent).not.toContain(text)
+    }
   })
 
   it('offers to create a plan when none covers the lowest cell, and says only what it knows about reminders', () => {
@@ -352,6 +408,28 @@ describe('AdminDashboardNextView', () => {
     )
     expect(items[2].textContent).not.toContain('no reminder sent yet')
     expect(items[2].textContent).toContain('Q3 closed at 100%')
+  })
+
+  /**
+   * G24: where a tracking service replaces Action Plans in the sidebar, this card used to keep
+   * sending the reader to `/action-plans` anyway. It now follows the sidebar's rule.
+   */
+  it('sends the lowest cell to the tracking plans, and links no generic plan, where tracking replaces Action Plans', () => {
+    vi.stubEnv('VITE_TRACKING_API_BASE_URL', 'http://tracking.test')
+    try {
+      renderView()
+      const covered = document.querySelectorAll('[data-slot="attention-item"]')[0] as HTMLElement
+      expect(within(covered).queryByRole('link', { name: copy.openPlan })).toBeNull()
+      cleanup()
+
+      const attention = fullModel.attention.map((item) => (item.kind === 'lowest-cell' ? { ...item, plan: null } : item))
+      renderView({ ...fullModel, attention })
+      const uncovered = document.querySelectorAll('[data-slot="attention-item"]')[0] as HTMLElement
+      expect(within(uncovered).getByRole('link', { name: copy.createPlan }).getAttribute('href')).toBe('/tracking/planes')
+      expect(linksMatching(/^\/action-plans/)).toEqual([])
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('derives the headline average and its delta from the dimension series', () => {
@@ -382,14 +460,17 @@ describe('AdminDashboardNextView', () => {
     expect(vi.mocked(downloadBlobFile)).not.toHaveBeenCalled()
   })
 
-  it('judges a card’s band at the decimal it prints: a 3.96 reads 4.0 and is in the strength area', () => {
+  it('judges a card’s band at the two decimals it prints: a 3.96 reads 3.96 and is in the opportunity area', () => {
     const dimensions = fullModel.dimensions.map((dimension) =>
       dimension.key === 'confianza' ? { ...dimension, values: [3.3, 3.6, 3.96] } : dimension,
     )
     renderView({ ...fullModel, dimensions })
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
-    expect(card.textContent).toContain('4.0')
-    expect(card.getAttribute('data-band')).toBe('strength')
+    // Two decimals, as the climate range bar above prints the same reading: at one this
+    // card said "4.0" and Fortaleza beside a bar that said 3.96 and Oportunidad.
+    expect(card.querySelector('.text-reading')?.textContent).toBe('3.96')
+    expect(card.getAttribute('data-band')).toBe('opportunity')
+    expect(card.querySelector('[data-slot="trend-end"]')?.getAttribute('data-band')).toBe('opportunity')
   })
 
   it('draws the trend cards highest latest reading first, whatever order the model holds them in', () => {
@@ -399,12 +480,15 @@ describe('AdminDashboardNextView', () => {
     expect(order).toEqual(['pertenencia', 'seguridad', 'desarrollo', 'confianza', 'reconocimiento', 'carga'])
   })
 
-  it('shows the climate move signed and without an arrow, in the good-news ink when it rose', () => {
+  // Ruling 11 Nov: green, amber and red are the three result areas and nothing else, so a
+  // move is told by its sign in the secondary ink — never a green "good news".
+  it('shows the climate move signed and without an arrow, in the neutral ink rather than a result colour', () => {
     renderView()
     const move = document.querySelector('[data-slot="climate-move"]') as HTMLElement
     expect(move.textContent).toContain('+0.32')
     expect(move.textContent).not.toMatch(/[▲▼]/)
-    expect(move.className).toContain('text-accent-green-ink')
+    expect(move.className).toContain('text-fg-secondary')
+    expect(move.className).not.toMatch(/accent-(green|red)/)
   })
 
   it('projects the next quarter as a hollow "to plan" step when nothing is planned after the open wave', () => {
@@ -517,13 +601,14 @@ describe('AdminDashboardNextView', () => {
     expect(heads.map((head) => head.getAttribute('title'))).toEqual(heads.map((head) => head.textContent))
   })
 
-  it('prints each card’s move as the difference of the readings it prints: 3,33 → 3,67 is +0,4', () => {
+  it('prints each card’s move as the difference of the readings it prints: 3,334 → 3,666 is +0,34', () => {
+    // Raw, 3.666 − 3.334 = 0.332 rounds to +0.33 beside two figures that subtract to 0.34.
     const dimensions = fullModel.dimensions.map((dimension) =>
-      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.33, 3.67] } : dimension,
+      dimension.key === 'confianza' ? { ...dimension, values: [2.96, 3.334, 3.666] } : dimension,
     )
     renderView({ ...fullModel, dimensions })
     const card = document.querySelector('[data-slot="trend-card"][data-dimension="confianza"]') as HTMLElement
-    expect(card.querySelector('[data-slot="trend-move"]')?.textContent).toBe('+0.4')
+    expect(card.querySelector('[data-slot="trend-move"]')?.textContent).toBe('+0.34')
   })
 
   it('words the climate tile, the moves legend and the rail as the artboard does', () => {
@@ -563,6 +648,79 @@ describe('AdminDashboardNextView', () => {
     expect(text).toContain(`15${copy.openSurveySubNoAudience.replace('{date}', '')}`)
     expect(text).not.toContain('of —')
     expect(document.querySelector('[role="progressbar"]')).toBeNull()
+  })
+
+  /**
+   * The signature: one climate range bar per dimension. The dot is the organization's mean as
+   * the trends endpoint served it; the range runs over the DISCLOSED departments only. The
+   * fixture's Finanzas sits under the floor but still carries scores (a payload that sent
+   * them beside the flag), so a bar that read them would name it or move its range.
+   */
+  it('draws a climate range bar per dimension over the disclosed departments only, never the withheld one', () => {
+    const map = {
+      ...fullModel.map,
+      // Finanzas, withheld, given the lowest carga of all: it must move nothing.
+      rows: fullModel.map.rows.map((row) =>
+        row.departmentId === 'd-fin' ? { ...row, scores: row.scores.map((score, i) => (i === 1 ? 1.5 : score)) } : row,
+      ),
+    }
+    renderView({ ...fullModel, map })
+    const section = document.querySelector('section[aria-labelledby="next-climate"]') as HTMLElement
+    expect(section).not.toBeNull()
+    const rows = [...section.querySelectorAll('li[data-dimension]')]
+    expect(rows.map((row) => row.getAttribute('data-dimension'))).toEqual(
+      [...document.querySelectorAll('[data-slot="trend-card"]')].map((card) => card.getAttribute('data-dimension')),
+    )
+    const carga = section.querySelector('li[data-dimension="carga"]') as HTMLElement
+    expect(carga.getAttribute('data-range')).toBe('range')
+    const track = carga.querySelector('[role="img"]') as HTMLElement
+    // Operaciones 2,4 is the lowest disclosed carga; Personas 4,0 the highest; the dot is
+    // the organization's latest carga (3,3), not a mean of the rows.
+    expect(track.getAttribute('aria-label')).toContain('2.40')
+    expect(track.getAttribute('aria-label')).toContain('4.00')
+    expect(track.getAttribute('aria-label')).toContain('3.30')
+    expect(section.textContent).not.toContain('Finanzas')
+    expect(section.textContent).not.toContain('1.50')
+    expect(track.getAttribute('aria-label')).not.toContain('1.50')
+  })
+
+  it('lets a single department into the range when the server applies the floor of 1 for an administrator', () => {
+    const map = {
+      ...fullModel.map,
+      rows: fullModel.map.rows.map((row) =>
+        row.departmentId === 'd-fin' ? { ...row, scores: row.scores.map((score, i) => (i === 1 ? 1.5 : score)) } : row,
+      ),
+    }
+    renderView({ ...fullModel, minimumGroupSize: 1, map })
+    const carga = document.querySelector('section[aria-labelledby="next-climate"] li[data-dimension="carga"]') as HTMLElement
+    expect(carga.textContent).toContain('Finanzas')
+    expect(carga.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain('1.50')
+  })
+
+  it('says when an open survey already closed, never a negative count of days to its close', () => {
+    const openSurvey = fullModel.openSurvey ? { ...fullModel.openSurvey, closesAt: '2020-01-01' } : null
+    renderView({ ...fullModel, openSurvey })
+    const item = [...document.querySelectorAll('[data-slot="attention-item"]')].at(-1) as HTMLElement
+    expect(item.textContent).not.toMatch(/[−-]\d/)
+    // 2020-01-01 to 2026-09-10 is 2,444 days.
+    expect(item.textContent).toContain('closed 2,444 days ago')
+  })
+
+  it('says nothing needs attention only when every region an item comes from was read', () => {
+    const live: RegionStatuses = {
+      company: { status: 'live' },
+      surveys: { status: 'live' },
+      trends: { status: 'live' },
+      map: { status: 'live' },
+      actionPlans: { status: 'live' },
+      tracking: { status: 'off' },
+      microclimates: { status: 'live' },
+    }
+    renderView({ ...fullModel, attention: [] }, undefined, live)
+    expect(screen.getByText(copy.attentionNone)).toBeTruthy()
+    cleanup()
+    renderView({ ...fullModel, attention: [] }, undefined, { ...live, actionPlans: { status: 'fallback', reason: 'failed', error: null } })
+    expect(screen.queryByText(copy.attentionNone)).toBeNull()
   })
 
   it('sets the four tiles at the artboard’s hero size', () => {

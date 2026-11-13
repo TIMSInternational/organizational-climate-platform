@@ -3,6 +3,7 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../../i18n'
+import es from '../../../../i18n/es.json'
 import { setToken, clearToken } from '../../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../../company-context'
 import { tokenFor } from '../../../../test/jwtFixture'
@@ -111,11 +112,11 @@ function requested(fragment: string): URL[] {
     .filter((url) => `${url.pathname}${url.search}`.includes(fragment))
 }
 
-function renderAs(claims: Record<string, unknown>) {
+function renderAs(claims: Record<string, unknown>, entry = '/analytics/benchmarks') {
   setToken(tokenFor({ sub: 'u1', nodoId: '', ...claims }))
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={['/analytics/benchmarks']}>
+      <MemoryRouter initialEntries={[entry]}>
         <CompanyContextProvider>
           <BenchmarksNextPage />
         </CompanyContextProvider>
@@ -150,15 +151,15 @@ describe('BenchmarksNextPage — the read-out', () => {
     routeFetch()
     renderAs({ role: 'company_admin', companyId: CID })
 
-    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-tile"]')].map((tile) => tile.textContent)
+    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-card"]')].map((tile) => tile.textContent)
     expect(tiles[0]).toContain('67')
     expect(tiles[0]).toContain('de 100')
     expect(tiles[0]).toContain('Encuesta de Clima Q3 · 24 respuestas')
     expect(tiles[1]).toContain('68')
     expect(tiles[1]).toContain('42 empresas · Manufactura · 500–1000 personas')
-    // "Tu percentil" prints no percentile: the cohort reading's stored 68 is the same for
+    // "Su percentil" prints no percentile: the cohort reading's stored 68 is the same for
     // every tenant, and a company's rank needs a distribution no endpoint returns.
-    expect(tiles[2]).toContain('Tu percentil')
+    expect(tiles[2]).toContain(es.benchmarks.yourPercentile)
     expect(tiles[2]).toContain('—')
     expect(tiles[2]).toContain('sin calcular')
     expect(tiles[2]).toContain('1 punto bajo la mediana · sin la distribución del grupo no hay percentil')
@@ -169,6 +170,12 @@ describe('BenchmarksNextPage — the read-out', () => {
     // carries `safety`, not `psychological_safety`, so that row has no tick and says so.
     const rows = [...document.querySelectorAll('[data-slot="cohort-dimension-row"]')]
     expect(rows.map((row) => row.getAttribute('data-standing'))).toEqual(['none', 'below', 'below', 'below', 'at', 'above'])
+    // No red and no green for a standing (ruling 11 Nov): those three hues are the result
+    // areas only. Every fill is this company's blue, and no chip wears a result tone.
+    const fills = [...document.querySelectorAll('[data-slot="cohort-dimension-fill"]')]
+    expect(fills.length).toBe(6)
+    for (const fill of fills) expect(fill.className.split(/\s+/)).toEqual(expect.arrayContaining(['bg-accent-blue']))
+    for (const row of rows) expect(row.innerHTML).not.toMatch(/accent-red|accent-green|chip-(good|warning|critical)/)
     expect(rows[0].textContent).toContain('Seguridad psicológica')
     expect(rows[0].textContent).toContain('sin mediana del grupo')
     expect(rows[1].textContent).toContain('−8')
@@ -182,7 +189,7 @@ describe('BenchmarksNextPage — the read-out', () => {
       '3 dimensiones bajo la mediana · la mayor distancia: Carga de trabajo',
     )
     // The cohort names the page: the eyebrow is the data's, not the route's.
-    expect(document.querySelector('[data-slot="page-top-bar"]')?.textContent).toContain('Manufactura · 500–1000 personas')
+    expect(document.querySelector('[data-slot="page-header"]')?.textContent).toContain('Manufactura · 500–1000 personas')
     // Every region is real: no sample chip anywhere on this screen.
     expect(screen.queryByText('Datos de muestra')).toBeNull()
   })
@@ -200,7 +207,7 @@ describe('BenchmarksNextPage — the read-out', () => {
       ],
     ])
     renderAs({ role: 'company_admin', companyId: CID })
-    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-tile"]')].map((tile) => tile.textContent ?? '')
+    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-card"]')].map((tile) => tile.textContent ?? '')
     expect(tiles[1]).toContain('60')
     expect(tiles[2]).toContain('7 puntos sobre la mediana')
     expect(tiles[2]).toContain('sin calcular')
@@ -219,8 +226,9 @@ describe('BenchmarksNextPage — the read-out', () => {
       ],
     ])
     renderAs({ role: 'company_admin', companyId: CID })
-    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-tile"]')]
-    const value = (tile: Element) => tile.querySelector('[data-slot="kpi-value"]')?.textContent
+    const tiles = [...(await readout()).querySelectorAll('[data-slot="kpi-card"]')]
+    // The reading's first text: KpiCard sets the unit ("de 100") on the same line.
+    const value = (tile: Element) => tile.querySelector('[data-slot="kpi-value"]')?.firstChild?.textContent
     // 67 and 68 on screen, one point apart — never "67,6" beside "1 punto".
     expect(value(tiles[0])).toBe('67')
     expect(value(tiles[1])).toBe('68')
@@ -385,9 +393,9 @@ describe('BenchmarksNextPage — one test per role that matters', () => {
 
   it('super_admin with no company chosen: the references, a global create, and a sentence where the index would be', async () => {
     routeFetch()
-    renderAs({ role: 'super_admin', companyId: '' })
+    renderAs({ role: 'super_admin', companyId: '' }, '/analytics/benchmarks?vista=referencias')
 
-    expect(await screen.findByText('Elige una empresa para leerla frente a su grupo')).toBeTruthy()
+    expect(await screen.findByText(es.benchmarks.next.pickCompanyTitle)).toBeTruthy()
     expect(document.querySelector('[data-slot="cohort-readout"]')).toBeNull()
     expect(requested('/surveys').length).toBe(0)
     expect(screen.getByRole('table')).toBeTruthy()
@@ -398,15 +406,30 @@ describe('BenchmarksNextPage — one test per role that matters', () => {
   it('super_admin with a company chosen: that company is read against the cohort', async () => {
     window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, CID)
     routeFetch()
-    renderAs({ role: 'super_admin', companyId: '' })
+    renderAs({ role: 'super_admin', companyId: '' }, '/analytics/benchmarks?vista=referencias')
     await readout()
     expect(requested('/surveys?')[0].searchParams.get('companyId')).toBe(CID)
+  })
+
+  it('super_admin without ?vista=referencias: the computed reference groups, and no hand-entered reference is asked for', async () => {
+    routeFetch()
+    renderAs({ role: 'super_admin', companyId: '' })
+    expect(await screen.findByRole('tab', { name: /Grupos de referencia/ })).toBeTruthy()
+    expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes('/admin/benchmark-groups'))).toBe(true)
+    expect(vi.mocked(fetch).mock.calls.filter((call) => /\/admin\/benchmarks(\?|$)/.test(String(call[0])))).toHaveLength(0)
+  })
+
+  it('company_admin never reaches the computed groups, whatever the address says', async () => {
+    routeFetch()
+    renderAs({ role: 'company_admin', companyId: CID }, '/analytics/benchmarks?tab=grupos')
+    await readout()
+    expect(vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes('/admin/benchmark-groups'))).toHaveLength(0)
   })
 
   it.each(['leader', 'supervisor', 'employee'])('%s: no request the server would refuse, and a sentence saying whose screen it is', async (role) => {
     routeFetch()
     renderAs({ role, companyId: CID })
-    expect(await screen.findByText('Los puntos de referencia son de la administración')).toBeTruthy()
+    expect(await screen.findByText('Las referencias son de la administración')).toBeTruthy()
     expect(vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes('/admin/benchmarks'))).toHaveLength(0)
     expect(screen.queryByRole('button', { name: 'Nueva referencia' })).toBeNull()
   })

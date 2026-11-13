@@ -269,7 +269,9 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(nextCopy.unavailableChip)).toBeTruthy()
     expect(screen.getByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 2, name: nextCopy.whereHeading })).toBeTruthy()
-    expect(screen.getAllByText(/Service unavailable/).length).toBeGreaterThan(0)
+    // A 503 says the server failed, in the reader's words; the server's own text never shows.
+    expect(screen.getAllByText(nextCopy.failureServer).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/Service unavailable/)).toHaveLength(0)
     expect(dashboardRequests().filter((url) => url.includes('/dashboard/company-admin'))).toEqual([
       expect.stringContaining('/dashboard/company-admin?companyId=c9'),
     ])
@@ -326,16 +328,19 @@ describe('DashboardPage', () => {
       await waitFor(() => expect(fetch).toHaveBeenCalled())
       // The redesigned team panels (the canvas's LeaderDashboard and SupervisorDashboard):
       // titled after what the page IS, as every screen is, with the department and the role
-      // in the eyebrow — and the supervisor's says first that it is a proposal. Before the
+      // in the eyebrow (no "Propuesta" since review finding 7). Before the
       // first redesign a leader's document heading was "Engineering"; both halves are
       // pinned so neither can quietly move back.
-      expect(await screen.findByRole('heading', { level: 1, name: nextCopy.title })).toBeTruthy()
+      // A leader's page is named for the team, as its rail row "Mi equipo" is; a supervisor's
+      // rail row is "Inicio" (`navSections.ts`), and its page keeps the panel's name.
+      const title = role === 'leader' ? nextCopy.leader.title : nextCopy.title
+      expect(await screen.findByRole('heading', { level: 1, name: title })).toBeTruthy()
       expect(requestedPath()).toContain('/dashboard/department-admin')
       expect(requestedPath()).not.toContain('departmentId')
       const eyebrow =
         role === 'leader'
           ? `Engineering · ${en.users.leader}`
-          : `${nextCopy.supervisor.proposal} · Engineering · ${en.users.supervisor}`
+          : `Engineering · ${en.users.supervisor}`
       expect(screen.getByText(eyebrow)).toBeTruthy()
     },
   )

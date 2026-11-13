@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
-import { buildNavSections, isPerUserOnly, withUnreadBadge } from '../navigation/navSections'
+import { buildNavSections, isPerUserOnly } from '../navigation/navSections'
 import { isRespondentRole } from '../navigation/respondentSurface'
 import { isTrackingEnabled } from '../features/tracking/api/config'
 import { clearToken, getToken } from '../auth/token'
@@ -14,6 +14,7 @@ import {
   CommandPalette,
   CompanyContextSwitcher,
   CompanyLogo,
+  CompanyScopeLabel,
   MobileNav,
   SearchTrigger,
   ShellControls,
@@ -63,7 +64,6 @@ function AdminShell() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
 
   function handleSignOut() {
     clearToken()
@@ -79,18 +79,16 @@ function AdminShell() {
   const claims = token ? decodeJwtPayload(token) : null
   const role = typeof claims?.role === 'string' ? claims.role : undefined
   const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
-  // The bell owns the poll; the rail just reads the number it reports, so the two
-  // can never disagree and nothing is fetched twice. See `withUnreadBadge` for why
-  // Notifications is the only badged row.
   // `trackingEnabled` is a deployment capability, not company scoping -- the
   // tracking service resolves the tenant from the caller's own claim. See
   // `features/tracking/api/config.ts`. Both callers of `buildNavSections` must pass
   // it or the module's rows silently vanish; `navSections.test.ts` reads this file
   // and PageTopBar.tsx to make sure neither stops asking.
-  const sections = withUnreadBadge(
-    buildNavSections(role, companyId, { trackingEnabled: isTrackingEnabled() }),
-    unreadCount,
-  )
+  //
+  // No unread badge on a rail row any more: since the 11 Nov regroup Notificaciones is not a
+  // rail row. The bell in the top bar owns the poll AND shows the count, on every page and at
+  // every width, so the number has exactly one place to be read.
+  const sections = buildNavSections(role, companyId, { trackingEnabled: isTrackingEnabled() })
 
   // A rail is worth 236px only when it reaches somewhere the page does not. For a
   // respondent every row in it IS the page they are on -- `/dashboard` is this page,
@@ -201,7 +199,9 @@ function AdminShell() {
             // whose only remaining children are the search glyph and the bell, `between`
             // would strand the glyph at the far left. The canvas draws them flush right.
             className="on-shell flex shrink-0 items-center"
-            // The canvas's strip: 52px, 20px in from the edge (every artboard).
+            // The Apple-design bar (`occ.css` `.bar`): 52px, 8px from the rail and 16px from the
+            // window's right edge — the content box below sits 12px in, so the bell's glyph
+            // lines up just inside the box's right edge.
             //
             // The RAILLESS shell overrides that to the shell gutter, because its strip has to
             // line up with something the canvas never drew: a CENTRED card. Below, the railless
@@ -210,11 +210,11 @@ function AdminShell() {
             // pixels out, and read as a logo hanging off the card's edge. Matching the gutter
             // here and capping the row below with the same `max-w-content` makes the two edges
             // one line at EVERY width rather than at one.
-            style={{ minHeight: 52, padding: perUserOnly ? '0 var(--spacing-gutter)' : '0 20px' }}
+            style={{ minHeight: 52, padding: perUserOnly ? '0 var(--spacing-gutter)' : '0 var(--admin-space-16) 0 var(--admin-space-8)' }}
           >
             <div
               className={cn(
-                'flex w-full items-center justify-end gap-inline',
+                'flex w-full items-center justify-end gap-2.5',
                 // Railless only. The rail's card is deliberately flush against the rail's edge
                 // and NOT centred -- see the scroll container's note -- so capping its strip
                 // would pull the bell in from a card that never moved.
@@ -239,6 +239,12 @@ function AdminShell() {
                   rail and below `md`: a global scope switch that disappears while
                   the pages it scopes stay visible is worse than none. */}
               <HeaderCompanySwitcher />
+              {/* The company — and a leader's department — the rail roles other than the super
+                  administrator are scoped to, as the CompanyHome and TeamHome boards print it
+                  where the super administrator's selector sits. Not a control: their scope is
+                  their own claim and there is nothing to choose. From `GET /profile`, which the
+                  shell already reads for the tenant mark, so it costs no request. */}
+              {perUserOnly ? null : <CompanyScopeLabel role={role} />}
               {/* ForMaps puts the search glyph and its Cmd+K chip immediately before
                   the bell in this same strip, and so does this. It opens the palette
                   by dispatching a window event rather than by holding shared state —
@@ -255,9 +261,9 @@ function AdminShell() {
                   for deleting the row, not for keeping the bell. And its unread badge puts a red
                   count beside a survey someone is being asked to answer this week.
 
-                  `unreadCount` stays wired for the rail roles; with no rail there is no badge for
-                  it to feed, so it simply stays 0. */}
-              {perUserOnly ? null : <NotificationBell onUnreadCountChange={setUnreadCount} />}
+                  For the rail roles the bell is also the way to the inbox: Notificaciones left the
+                  rail in the 11 Nov regroup, and the bell's own "Ver todas" links there. */}
+              {perUserOnly ? null : <NotificationBell />}
               {perUserOnly ? (
                 /* Sign out as plain words, not an avatar. The avatar went with the bell: it is a
                    circular control that LOOKS like an account surface, and "no tenemos el botón
@@ -287,101 +293,58 @@ function AdminShell() {
             </div>
           </header>
 
-          {/* The scroll container. */}
-          {/* Flush against the rail and under the bar from `md` — every artboard of the
-              10 Sep canvas draws the card at x=236 (the rail's edge) and y=52 (the bar's
-              foot), with the 12px gutter only on the right and the bottom. Below `md` the
-              rail is gone and the gutter keeps the card off the screen's edge. */}
-          {/* `[scrollbar-gutter:stable]`: this is the admin scroller, so a page taller than
-              the viewport otherwise shifts every centred thing in it sideways by the
-              scrollbar's width, and shifts it back on the next short page. `index.css`
-              does the same for the document scroller the auth and respond screens use. */}
-          <main
-            id="main"
-            // `md:pt-0 md:pl-0` is the RAIL's geometry: every artboard of the 10 Sep canvas
-            // draws the card flush against the rail's edge and the bar's foot, with the
-            // gutter only on the right and the bottom. With no rail there is no edge to sit
-            // against, and the card read as shoved into the corner — one gutter on the right,
-            // none on the left. So the railless shell keeps `p-gutter` on all four sides.
-            className={cn(
-              'min-w-0 flex-1 overflow-y-auto p-gutter [scrollbar-gutter:stable]',
-              perUserOnly ? null : 'md:pt-0 md:pl-0',
-            )}
-          >
-          {/* Legacy AppShell inset its content by 12px and put it on a panel:
-              `background: var(--admin-bg-panel)`, `1px solid
-              var(--admin-border-panel)`, `borderRadius: 8`.
-              `pb-20 md:pb-panel` clears the mobile tab bar, which is `fixed` and
-              would otherwise cover the last ~56px of every page.
-
-              **No width cap, and that is a reversal.** This used to be
-              `mx-auto ... max-w-content` (1280px), to stop a full-width control
-              growing with the viewport on a large monitor. Measured across eleven
-              viewports, that cap did something worse than what it prevented: it
-              bites from 1516px up — which is a 1728 MacBook Pro and a 1920 monitor,
-              not an exotic size — and because the column starts *after* the
-              rail, centring the capped card inside it pushed the card away from the
-              rail. At 2560 there were 530px of empty surface between them and at
-              3440 there were 970px, so the navigation read as belonging to nothing
-              and the page as an island.
-
-              The cap was also aimed at the wrong thing. A table, a chart or a KPI
-              row is *better* for having the width; it is prose that becomes
-              unreadable, and the same measurement put the empty-state description
-              at 132 characters per line where about 70 is the limit. So the
-              constraint moved onto the text — `max-w-prose` on the description in
-              `PageTopBar` and in `ui/error-state.tsx` — and the container fills,
-              which is also what ForMaps' own `AppShell` does (no `maxWidth`
-              anywhere in it).
-
-              `--admin-size-content-max` still exists and is still right for its two
-              remaining callers, `PublicSurveyRespondPage` and the dev chart
-              gallery: both are standalone centred pages with no rail beside them,
-              so there is nothing for a centred column to drift away from.
-
-              `overflow-x-auto` was added here as the *table* fix and is no longer
-              that. It was measured rather than guessed: index.css used to give
-              every `table` `width: 100%` and every `th` `white-space: nowrap`, so a
-              table's *min-content* width exceeded the panel on a phone and the
-              table rendered up to 150px past the panel's own rounded border and
-              background — reachable, because `main`'s `overflow-y: auto` computes
-              `overflow-x` to `auto`, but visibly outside the card. Measured in
-              Chrome at 320px and 390px on Users, Companies, Action Plans and
-              Demographic fields; same class of defect as the #79 HeatMap, and the
-              same root cause.
-
-              #218 moved that root cause out of the element layer: `w-full` and the
-              nowrap header now live in `ui/table.tsx`, next to the
-              `overflow-x-auto` container they need, and every table in the app goes
-              through it. The rule is kept here as a *generic* guard, not a
-              table-specific workaround — anything too wide (a long pre, a wide
-              inline SVG) still scrolls inside the card rather than escaping its
-              border. Deliberately not removed: it costs nothing and the failure it
-              catches is invisible to happy-dom. */}
-            {/* `min-h-full` so the panel is at least as tall as the column it sits
-                in. Without it a short page — an empty state, a four-row table —
-                rendered as a stub card stranded at the top of a large grey field,
-                which reads as content that failed to load rather than as a page
-                with little on it. The panel is the page's surface, so it should be
-                the height of the page. */}
-            <div
-              className={cn(
-                'flex min-h-full w-full flex-col overflow-x-auto rounded-xl border border-line-panel bg-surface-panel px-6 pb-20 pt-5 md:pb-8',
-                // The cap this file removed in general, put back for the one shell it is
-                // right for. The note above records why it went: the column starts AFTER
-                // the rail, so centring a capped card inside it pushed the card away from
-                // the rail and left 530px of empty surface between them at 2560.
-                //
-                // With no rail there is nothing to drift away from, and the opposite
-                // defect appears instead — a 1413px card at 1440 with the heading and the
-                // prose pinned to its left edge and the right half empty, which is what
-                // ESPH read as "no padding on the left".
-                perUserOnly ? 'mx-auto max-w-content' : null,
-              )}
+          {perUserOnly ? (
+            /* The railless shell keeps its column as the scroller, with the card centred in
+               it: the card is capped at `max-w-content`, so at 1440 there are 80px of navy on
+               either side of it, and a scroller confined to the card would leave a wheel over
+               those margins doing nothing — on the shell most of a mass-invited workforce uses.
+               `p-gutter` on all four sides: with no rail there is no edge to sit against. */
+            <main
+              id="main"
+              className="min-w-0 flex-1 overflow-y-auto p-gutter [scrollbar-gutter:stable]"
             >
-              <Outlet />
-            </div>
-          </main>
+              <div className="mx-auto flex min-h-full w-full max-w-content flex-col overflow-x-auto rounded-box bg-surface-panel px-4 pb-20 pt-4.5 md:px-box-x md:pb-box-bottom md:pt-box-top">
+                <Outlet />
+              </div>
+            </main>
+          ) : (
+            /* The content box, and the scroller: the Apple-design frame (`occ.css` `.page`).
+
+               The box is `<main>` itself and scrolls INSIDE its rounded edge, so the corners and
+               the 12px of navy around it stay put while the page moves — the box reads as a
+               window onto the page, which is what the boards draw. Until the regroup the navy
+               column scrolled and the card rode up under the bar with it.
+
+               Geometry, from `md`: flush against the rail and under the bar (no top or left
+               margin), 12px of navy on the right and the bottom (`m-gutter`), radius 14px
+               (`rounded-box`), and the boards' 22/28/56px inside (`pt-box-top`, `px-box-x`,
+               `pb-box-bottom`). Below `md` there is no rail, so the gutter goes on all four
+               sides, the padding steps down to the boards' phone values (18px over 16px sides),
+               and `pb-20` clears the fixed tab bar that would otherwise cover the last ~56px.
+               No border: the white box on the navy needs none, and the boards draw none.
+
+               `min-w-0` stops a wide child stretching the flex row and pushing the rail off the
+               screen; `overflow-y-auto` computes `overflow-x` to auto as well, so anything too
+               wide (a long pre, a wide inline SVG) scrolls inside the box rather than escaping
+               its rounded edge — `ui/table.tsx` has its own scroller for tables (#218), and this
+               is the generic guard behind it, invisible to happy-dom.
+               `[scrollbar-gutter:stable]`: a page taller than the box otherwise shifts every
+               centred thing in it sideways by the scrollbar's width, and back on the next page.
+
+               No width cap. Centring a capped card beside a rail pushed it away from the rail
+               (530px of empty surface between them at 2560); a table or a chart is better for
+               the room, and prose carries its own cap (`max-w-measure`). */
+            <main
+              id="main"
+              className="m-gutter min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto rounded-box bg-surface-panel [scrollbar-gutter:stable] md:ml-0 md:mt-0"
+            >
+              {/* `min-h-full` so a short page — an empty state, a four-row table — still fills
+                  the box rather than reading as a stub that failed to load. */}
+              <div className="flex min-h-full w-full flex-col px-4 pb-20 pt-4.5 md:px-box-x md:pb-box-bottom md:pt-box-top">
+                <Outlet />
+              </div>
+            </main>
+          )}
         </div>
       </div>
 

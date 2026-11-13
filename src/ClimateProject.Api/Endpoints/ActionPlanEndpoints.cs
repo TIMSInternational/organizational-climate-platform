@@ -2,6 +2,7 @@ using ClimateProject.Application.Localization;
 using System.Security.Claims;
 using ClimateProject.Application.ActionPlans;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Notifications;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,9 @@ public static class ActionPlanEndpoints
         group.MapPost("", CreateAsync);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
+        group.MapDelete("/{id:guid}", DeleteAsync);
         group.MapPost("/{id:guid}/progress", RecordProgressAsync);
+        group.MapGet("/{id:guid}/progress", ListProgressAsync);
     }
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
@@ -46,10 +49,13 @@ public static class ActionPlanEndpoints
     /// A notification and an authorization rule that disagree is the product lying to a
     /// person about what they may do.</para>
     ///
-    /// <para><b>Read only, and only the plan itself.</b> Creating, editing, deleting and
-    /// recording progress stay <see cref="Roles.Admin"/>, which is what the plan's own screen
-    /// already tells the reader: "Registra avance la administración." This grants exactly the
-    /// access the nudge implies and nothing beyond it.</para>
+    /// <para><b>Read only: the plan and its progress history.</b> Creating, editing
+    /// (<c>PUT /action-plans/{id}</c>), deleting (<c>DELETE /action-plans/{id}</c>) and
+    /// recording progress (<c>POST /action-plans/{id}/progress</c>) stay
+    /// <see cref="Roles.Admin"/>, which is what the plan's own screen already tells the reader:
+    /// "Registra avance la administración." -- and what the due-date nudge tells a non-admin
+    /// owner (<c>ScheduledNotificationCopy.PlanDueBodyFor</c>). This grants exactly the access
+    /// the nudge implies and nothing beyond it.</para>
     ///
     /// <para>Scoped by OWNERSHIP rather than by department, deliberately. "The person
     /// answerable for this plan may read it" is true whatever a leader is eventually allowed
@@ -577,6 +583,113 @@ public static class ActionPlanEndpoints
         plan.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Json(new ProgressUpdateDetail(progressUpdate.Id, progressUpdate.UpdateDate, progressUpdate.OverallNotes, progressUpdate.UpdatedBy), statusCode: 201);
+        return Results.Json(new ProgressUpdateDetail(progressUpdate.Id, progressUpdate.UpdateDate, progressUpdate.OverallNotes, progressUpdate.UpdatedBy, actingUser?.Name), statusCode: 201);
+    }
+
+    /// <summary>
+    /// <c>GET /action-plans/{id}/progress</c> -- every progress note recorded against the plan,
+    /// oldest first, with the name of whoever recorded it.
+    /// </summary>
+    /// <remarks>
+    /// <c>POST .../progress</c> has written <c>action_plan_progress_updates</c> rows since the
+    /// plan shipped and nothing read one back, so the Bitácora could show only the notes
+    /// recorded during the current visit and lost them on reload (G24). Readable by exactly
+    /// the people who may read the plan itself -- an administrator of its company or its
+    /// owner -- because the history is part of the plan, not a separate disclosure. The notes
+    /// are written by administrators about the plan; no respondent text is stored here.
+    /// </remarks>
+    private static async Task<IResult> ListProgressAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var plan = await db.ActionPlans.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (plan is null)
+        {
+            return Results.Json(new { message = "Action plan not found" }, statusCode: 404);
+        }
+
+        if (!CanAccessCompany(currentUser, plan.CompanyId) && !CanReadAsOwner(currentUser, plan))
+        {
+            return Results.Forbid();
+        }
+
+        var updates = await db.ActionPlanProgressUpdates
+            .AsNoTracking()
+            .Where(u => u.ActionPlanId == id)
+            .OrderBy(u => u.UpdateDate)
+            .ThenBy(u => u.Id)
+            .Select(u => new ProgressUpdateDetail(
+                u.Id,
+                u.UpdateDate,
+                u.OverallNotes,
+                u.UpdatedBy,
+                db.Users.Where(user => user.Id == u.UpdatedBy).Select(user => user.Name).FirstOrDefault()))
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new ProgressHistoryResponse(updates));
+    }
+
+    /// <summary>
+    /// <c>DELETE /action-plans/{id}</c> -- remove a plan, administrators only.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Who.</b> The same rule as every other plan write: <see cref="Roles.Admin"/> of
+    /// the plan's company. Owning the plan grants nothing here, as it grants nothing on
+    /// <c>PUT</c>.</para>
+    ///
+    /// <para><b>What goes with it.</b> The plan's KPIs, objectives and progress history are
+    /// the plan's own rows and are removed with it by the database's ON DELETE CASCADE
+    /// (<c>action_plan_kpis</c>, <c>action_plan_objectives</c>,
+    /// <c>action_plan_progress_updates</c>, and through those the KPI and objective readings).
+    /// Nothing outside the plan is touched: its template, source survey, department and owner
+    /// stay exactly as they were.</para>
+    ///
+    /// <para><b>Notifications.</b> A due-date nudge that has not gone out yet
+    /// (<see cref="NotificationStatuses.Retryable"/>) is cancelled, because mailing somebody
+    /// that a plan which no longer exists is about to lapse is the product lying. Nudges
+    /// already sent stay as the record of what was sent; their link now reaches a 404.</para>
+    ///
+    /// <para><b>Audited</b> by <c>AuditWritingMiddleware</c> as <c>action-plans.delete</c>, like
+    /// every mutating route -- no per-endpoint call to forget.</para>
+    /// </remarks>
+    private static async Task<IResult> DeleteAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var plan = await db.ActionPlans.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (plan is null)
+        {
+            return Results.Json(new { message = "Action plan not found" }, statusCode: 404);
+        }
+
+        if (!Roles.Admin.Contains(currentUser.Role) || !CanAccessCompany(currentUser, plan.CompanyId))
+        {
+            return Results.Forbid();
+        }
+
+        // jsonb holds the plan id, so the match is made on the parsed payload rather than in
+        // SQL text; the candidate set is one tenant's undelivered plan alerts, which is small.
+        var undelivered = await db.Notifications
+            .Where(n => n.CompanyId == plan.CompanyId
+                        && n.Type == NotificationTypes.ActionPlanAlert
+                        && NotificationStatuses.Retryable.Contains(n.Status))
+            .ToListAsync(cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var notification in undelivered.Where(n => ActionPlanNotificationData.PlanIdOrNull(n.Data) == id))
+        {
+            notification.Status = NotificationStatuses.Cancelled;
+            notification.UpdatedAt = now;
+        }
+
+        db.ActionPlans.Remove(plan);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.NoContent();
     }
 }

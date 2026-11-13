@@ -141,7 +141,7 @@ export default function DashboardSurveyTable({
                 rests on, and the one this table was missing while the KPI tiles directly
                 above it honoured it. Two faces for the same kind of number on one screen is
                 exactly what stops it reading as an instrument. */}
-            <td className="font-mono tabular-nums">
+            <td className="tabular-nums">
               {survey.responseCount === null ? (
                 <ProtectedCell responses={0} description={survey.title ?? t('surveys.untitled')} showWord={false}>
                   {null}
@@ -153,11 +153,11 @@ export default function DashboardSurveyTable({
             {/* An em dash, not "0": a survey with no invitation total has no target, and
                 printing zero would read as "nobody was invited". */}
             {showTarget && (
-              <td className="font-mono tabular-nums">{survey.targetAudienceCount ?? '—'}</td>
+              <td className="tabular-nums">{survey.targetAudienceCount ?? '—'}</td>
             )}
             {/* UTC, not the browser's zone: these are calendar days, and a reader
                 west of UTC was shown the day before. See `calendarDay`. */}
-            <td className="whitespace-nowrap font-mono tabular-nums">
+            <td className="whitespace-nowrap tabular-nums">
               {calendarDay(Date.parse(survey.endDate), locale)}
             </td>
           </tr>

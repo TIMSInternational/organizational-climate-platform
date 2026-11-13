@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { BookOpen, CircleAlert, Plus, Search } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
-import { Button, EmptyState, Input, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
+import { PageHeader } from '../../../../components/layout'
+import { Button, EmptyState, Input, LoadingRegion, NetworkError, SkeletonText, Table, TableHead } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useCompanyContext } from '../../../../company-context'
 import { calendarDay } from '../../../../lib/calendarDay'
@@ -16,8 +16,10 @@ import { dayWithYear, longDay, sizeText, tierText } from './labels'
 import { CanvasChip, CanvasSelect, Note, Panel } from './parts'
 import { useCompaniesListModel } from './useCompaniesListModel'
 
-const TH =
-  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+/** The spec's `.tbl th`: 12px semibold secondary label, sentence case, on the hairline. */
+const TH = 'h-auto border-b border-line-default px-4 py-2.5 text-xs text-fg-secondary'
+/** The spec's `.tbl td`: 11px by 16px. */
+const TD = 'px-4 py-2.75'
 
 /**
  * The row action stays in view while the columns scroll under it below `xl` (1280): at 1024
@@ -50,6 +52,8 @@ export default function CompaniesListNextPage() {
   const [plan, setPlan] = useState('')
   const state = useCompaniesListModel(capabilities.canManageCompanies)
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
+  const navigateTo = useNavigate()
+  const { selectCompany } = useCompanyContext()
 
   function closeCreate() {
     setCreating(false)
@@ -57,7 +61,7 @@ export default function CompaniesListNextPage() {
   }
 
   async function handleCreate(values: CompanyFormValues) {
-    await createCompany(baseUrl, {
+    const created = await createCompany(baseUrl, {
       name: values.name,
       emailDomain: values.emailDomain,
       industry: values.industry,
@@ -65,16 +69,24 @@ export default function CompaniesListNextPage() {
       country: values.country,
       subscriptionTier: values.subscriptionTier || undefined,
     })
-    closeCreate()
-    state.reload()
+    // Straight into the new client, as "Abrir" does, with its setup steps on top: the form used
+    // to close onto the list with no word, the new company somewhere mid-list
+    // (docs/audits/2026-11-08-operator-ui-walkthrough.md, C).
+    selectCompany(created.id)
+    navigateTo(`/admin/companies/${created.id}?nueva=1`)
   }
 
+  // The Idioma column only when the list says a language for at least one tenant: an API older
+  // than the field answers none, and a column of «en el detalle» on every row carried nothing
+  // (fix round 1). The note card under the table says where the setting lives either way.
+  const showLanguage = state.rows.some((row) => knownLanguage(row.language))
+
   const header = (
-    <PageTopBar
-      eyebrow={t('navigation.systemAdministration')}
+    <PageHeader
+      eyebrow={t('navigation.sectionOrganization')}
       title={t('navigation.companies')}
       description={t('superadmin.next.companies.description')}
-      actions={
+      primaryAction={
         capabilities.canManageCompanies ? (
           <Button type="button" variant="primary" onClick={() => (creating ? closeCreate() : setCreating(true))}>
             <Plus aria-hidden="true" />
@@ -99,7 +111,7 @@ export default function CompaniesListNextPage() {
 
   return (
     <div className="flex flex-col gap-section">
-      {/* `PageTopBar` keeps 24px under its rule (`mb-section`) and this column adds its 24px gap; the canvas has 24 in all before the filters. */}
+      {/* `PageHeader` keeps 24px under its rule (`mb-section`) and this column adds its 24px gap; the canvas has 24 in all before the filters. */}
       <div className="-mb-6">
         {header}
         {creating && (
@@ -147,7 +159,7 @@ export default function CompaniesListNextPage() {
           </CanvasSelect>
         </label>
         {state.status === 'ready' && (
-          <p className="m-0 text-xs text-fg-tertiary sm:ml-auto">
+          <p className="m-0 text-sm text-fg-secondary tabular-nums sm:ml-auto">
             {visible.length === 1
               ? t('superadmin.next.companies.countOne')
               : t('superadmin.next.companies.countMany', { count: visible.length })}
@@ -171,7 +183,7 @@ export default function CompaniesListNextPage() {
           ) : visible.length === 0 ? (
             <EmptyState title={t('superadmin.next.companies.noMatch')} />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card pt-2 shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-line-panel bg-surface-card">
               {/* A table takes no reliable minimum width — Chrome ignores `min-width` on a
                   `<table>` and treats a width with a percentage in `max()` as `auto` — so the minimum
                   sits on a div inside our own scroller, and the table fills that div. At 1024 the columns squeezed and the card clipped the last ones. */}
@@ -180,36 +192,36 @@ export default function CompaniesListNextPage() {
                   becomes the sticky Editar/Abrir cell's containing box, 70rem wide and never scrolled, so the cell
                   never pins. Visible here, the scroller above is the one it pins to. */}
               <div className="min-w-[70rem] [&_[data-slot=table-container]]:overflow-visible">
-              <Table aria-label={t('superadmin.next.companies.tableLabel')} className="table-fixed">
+              <Table zebra aria-label={t('superadmin.next.companies.tableLabel')} className="table-fixed text-ui">
                 <colgroup>
                   <col />
-                  <col className="w-40" />
+                  <col className="w-36" />
                   <col className="w-28" />
-                  <col className="w-24" />
+                  {showLanguage && <col className="w-26" />}
                   <col className="w-28" />
                   <col className="w-22" />
-                  <col className="w-36" />
+                  <col className="w-40" />
                   <col className="w-28" />
                   <col className="w-22" />
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className={TH}>{t('superadmin.next.companies.colCompany')}</th>
-                    <th className={TH}>{t('superadmin.next.companies.colSectorSize')}</th>
-                    <th className={TH}>{t('superadmin.next.companies.colCountry')}</th>
-                    <th className={TH}>{t('superadmin.next.companies.colLanguage')}</th>
-                    <th className={TH}>{t('superadmin.next.companies.colPlan')}</th>
-                    <th className={cn(TH, 'text-right')}>{t('superadmin.next.companies.colPeople')}</th>
-                    <th className={TH}>{t('superadmin.next.companies.colActiveSurveys')}</th>
-                    <th className={TH}>{t('superadmin.next.companies.colAdded')}</th>
-                    <th className={cn(TH, STICKY_ACTION)}>
+                    <TableHead className={TH}>{t('superadmin.next.companies.colCompany')}</TableHead>
+                    <TableHead className={TH}>{t('superadmin.next.companies.colSectorSize')}</TableHead>
+                    <TableHead className={TH}>{t('superadmin.next.companies.colCountry')}</TableHead>
+                    {showLanguage && <TableHead className={TH}>{t('superadmin.next.companies.colLanguage')}</TableHead>}
+                    <TableHead className={TH}>{t('superadmin.next.companies.colPlan')}</TableHead>
+                    <TableHead numeric className={TH}>{t('superadmin.next.companies.colPeople')}</TableHead>
+                    <TableHead className={TH}>{t('superadmin.next.companies.colActiveSurveys')}</TableHead>
+                    <TableHead className={TH}>{t('superadmin.next.companies.colAdded')}</TableHead>
+                    <TableHead className={cn(TH, STICKY_ACTION)}>
                       <span className="sr-only">{t('common.actions')}</span>
-                    </th>
+                    </TableHead>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.map((row) => (
-                    <CompanyRow key={row.id} row={row} />
+                    <CompanyRow key={row.id} row={row} showLanguage={showLanguage} />
                   ))}
                 </tbody>
               </Table>
@@ -246,7 +258,11 @@ function UnconfiguredExample({ row }: { row: CompanyListRow }) {
   return <>{t('superadmin.next.companies.unsetExample', { company: row.name, date: longDay(row.createdAt, locale) })}</>
 }
 
-function CompanyRow({ row }: { row: CompanyListRow }) {
+function knownLanguage(language: string | null): language is 'es' | 'en' {
+  return language === 'es' || language === 'en'
+}
+
+function CompanyRow({ row, showLanguage }: { row: CompanyListRow; showLanguage: boolean }) {
   const { t, locale } = useTranslation()
   const { selectCompany } = useCompanyContext()
   const navigate = useNavigate()
@@ -255,22 +271,22 @@ function CompanyRow({ row }: { row: CompanyListRow }) {
 
   return (
     <tr data-company-id={row.id}>
-      <td className="px-3 py-3">
+      <td className={TD}>
         <Link
           to={`/admin/companies/${row.id}`}
           className="block truncate font-semibold text-fg-primary no-underline hover:underline"
         >
           {row.name}
         </Link>
-        {row.emailDomain && <span className="block truncate text-2xs text-fg-tertiary">{row.emailDomain}</span>}
+        {row.emailDomain && <span className="block truncate text-xs text-fg-tertiary">{row.emailDomain}</span>}
       </td>
-      <td className="px-3 py-3">
+      <td className={TD}>
         <span className={cn('block truncate', row.industry ? 'text-fg-primary' : 'text-fg-tertiary')}>
           {row.industry || t('superadmin.next.companies.noSector')}
         </span>
-        <span className="block truncate text-2xs text-fg-tertiary">{size ?? t('superadmin.next.companies.noSize')}</span>
+        <span className="block truncate text-xs text-fg-tertiary">{size ?? t('superadmin.next.companies.noSize')}</span>
       </td>
-      <td className="px-3 py-3">
+      <td className={TD}>
         {row.country ? (
           <span className="block truncate text-fg-primary">{row.country}</span>
         ) : (
@@ -279,36 +295,46 @@ function CompanyRow({ row }: { row: CompanyListRow }) {
           </span>
         )}
       </td>
-      <td className="px-3 py-3">
-        {/* Not read here: the only read of a tenant's settings is an audited PUT (see
-            `useCompaniesListModel`). The cell says where the language is, never guesses it. */}
-        <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.languageInDetail')}</span>
+      {showLanguage && (
+      <td className={TD}>
+        {/* The list payload carries the setting since 2026-11-08 (`CompanyEndpoints.cs:45`). An
+            unknown value beside a known one says where to read it rather than guessing it. */}
+        {knownLanguage(row.language) ? (
+          <span className="block truncate text-fg-primary">
+            {t(row.language === 'es' ? 'superadmin.next.companies.languageEs' : 'superadmin.next.companies.languageEn')}
+          </span>
+        ) : (
+          <span className="whitespace-nowrap text-sm text-fg-tertiary">{t('superadmin.next.companies.languageInDetail')}</span>
+        )}
       </td>
-      <td className="px-3 py-3">
+      )}
+      <td className={TD}>
         {tier ? (
           <CanvasChip tone="neutral" label={tier} />
         ) : (
-          <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.noPlan')}</span>
+          <span className="text-sm text-fg-tertiary">{t('superadmin.next.companies.noPlan')}</span>
         )}
       </td>
-      <td className="px-3 py-3 text-right font-mono text-sm tabular-nums text-fg-primary">
+      <td className={cn(TD, 'text-right tabular-nums text-fg-primary')}>
         {row.people === null ? <span aria-hidden="true">—</span> : row.people}
       </td>
-      <td className="px-3 py-3">
+      <td className={TD}>
         {row.activeSurveyCount === null ? (
           <span aria-hidden="true" className="text-fg-tertiary">
             —
           </span>
         ) : (
           <>
-            <span className="block font-mono tabular-nums text-fg-primary">{row.activeSurveyCount}</span>
-            <span className="block truncate text-2xs text-fg-tertiary">
+            <span className="block tabular-nums text-fg-primary">{row.activeSurveyCount}</span>
+            <span className="block truncate text-xs text-fg-tertiary">
               {row.openSurvey
                 ? t('superadmin.next.companies.openLine', {
                     code: row.openSurvey.code,
                     date: calendarDay(Date.parse(row.openSurvey.endDate), locale),
                   })
-                : row.surveyCount === 0
+                : row.activeSurveyCount > 0
+                  ? null
+                  : row.surveyCount === 0
                   ? t('superadmin.next.companies.noSurveys')
                   : row.surveyCount === null
                     ? null
@@ -317,10 +343,10 @@ function CompanyRow({ row }: { row: CompanyListRow }) {
           </>
         )}
       </td>
-      <td className="whitespace-nowrap px-3 py-3 font-mono text-xs tabular-nums text-fg-primary">
+      <td className={cn(TD, 'whitespace-nowrap tabular-nums text-fg-secondary')}>
         {dayWithYear(row.createdAt, locale)}
       </td>
-      <td className={cn('px-3 py-3 text-right', STICKY_ACTION)}>
+      <td className={cn(TD, 'py-2 text-right', STICKY_ACTION)}>
         <Button
           type="button"
           variant="outline"

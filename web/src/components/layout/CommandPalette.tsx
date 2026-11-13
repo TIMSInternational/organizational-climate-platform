@@ -366,10 +366,13 @@ export function SearchTrigger() {
       aria-label={label}
       title={label}
       onClick={() => window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT))}
-      className="flex items-center gap-inline rounded-md border-none bg-transparent px-2 py-1 text-fg-tertiary hover:bg-state-hover hover:text-fg-primary"
+      // `pointer-coarse:`: on a touch screen the glyph alone is a 32×24 target. HIG
+      // `buttons.md` asks for 44×44, as every Button size already grows to (`buttonVariants`).
+      className="flex items-center justify-center gap-inline rounded-md border-none bg-transparent px-2 py-1 text-fg-tertiary hover:bg-state-hover hover:text-fg-primary pointer-coarse:min-h-11 pointer-coarse:min-w-11"
     >
       <Search aria-hidden="true" className="size-icon" />
-      <kbd className="hidden items-center rounded-md border border-line-default bg-state-hover px-1.5 py-0.5 text-2xs font-medium text-fg-tertiary sm:inline-flex">
+      {/* The boards' `.kbd`: an outlined 11px semibold chip in the bar's label ink, no fill. */}
+      <kbd className="hidden items-center rounded-md border border-line-default bg-transparent px-1.5 py-0.5 text-2xs font-semibold text-fg-tertiary sm:inline-flex">
         {t('shell.commandKey')}
       </kbd>
     </button>

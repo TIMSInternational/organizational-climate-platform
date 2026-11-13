@@ -112,6 +112,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/** The flow card's four steps, drawn by the journey rail's `JourneySteps`. */
+function flowSteps(): HTMLElement[] {
+  const card = document.getElementById('mc-flow')?.closest('section')
+  return [...(card?.querySelectorAll<HTMLElement>('[data-slot="journey-rail"] > li') ?? [])]
+}
+
 function section(name: string): HTMLElement {
   return screen.getByRole('region', { name })
 }
@@ -121,9 +127,12 @@ describe('the flow card', () => {
     renderPage()
     await screen.findByText('“Pulso semanal” is at step 3')
 
-    const steps = document.querySelectorAll('[data-slot="flow-step"]')
-    expect([...steps].map((step) => step.getAttribute('data-reached'))).toEqual(['true', 'true', 'true', 'false'])
-    expect(steps[2].getAttribute('aria-current')).toBe('step')
+    // The same stepper as the Crear and Detalle rail: the steps passed done, the session's
+    // step current (the blue pill), the rest pending.
+    const steps = flowSteps()
+    expect(steps.map((step) => step.getAttribute('data-state'))).toEqual(['done', 'done', 'current', 'pending'])
+    expect(steps.map((step) => step.getAttribute('aria-current'))).toEqual([null, null, 'step', null])
+    expect(steps[2].querySelector('[data-slot="journey-step"]')?.className.split(/\s+/)).toContain('bg-accent-blue-soft')
   })
 
   it('puts a draft at the first step', async () => {
@@ -132,8 +141,8 @@ describe('the flow card', () => {
     renderPage()
     await screen.findByText('“Pulso semanal” is at step 1')
 
-    const steps = document.querySelectorAll('[data-slot="flow-step"]')
-    expect([...steps].map((step) => step.getAttribute('data-reached'))).toEqual(['true', 'false', 'false', 'false'])
+    const steps = flowSteps()
+    expect(steps.map((step) => step.getAttribute('data-state'))).toEqual(['current', 'pending', 'pending', 'pending'])
   })
 
   it('names the session in progress as the artboard does: its noun behind its article', async () => {
@@ -193,8 +202,24 @@ describe('the sessions', () => {
     expect(meta.textContent).toBe(
       `0 de 20 respuestas · abierto hasta el 11 sept a las 21:06 · 2 preguntas · anónimo · palabras protegidas hasta ${MINIMUM_RESPONDENTS}`,
     )
-    // The counts are readings: the figure face, and nothing else in the line.
-    expect([...meta.querySelectorAll('.font-mono')].map((node) => node.textContent)).toEqual(['0', '20'])
+    // The counts are readings: tabular figures of the UI face, and nothing else in the line.
+    expect([...meta.querySelectorAll('[data-slot="reading"]')].map((node) => node.textContent)).toEqual(['0', '20'])
+    for (const node of meta.querySelectorAll('[data-slot="reading"]')) expect(node.className).toBe('tabular-nums')
+    expect(meta.querySelector('.font-mono')).toBeNull()
+  })
+
+  /**
+   * "En vivo" is a live state, and blue means live (the user's ruling of 11 Nov); green is
+   * Fortaleza's, one of the three result areas, and a session that is open is not a result.
+   * The chip was the `good` tone; it is the `live` chip, the blue tint with its dot.
+   */
+  it('marks an open session with the blue live chip, not a result area’s green', async () => {
+    renderPage()
+    const chip = await screen.findByText(en.microclimates.next.chipLive, { selector: '[data-slot="chip"]' })
+    expect(chip.getAttribute('data-live')).toBe('true')
+    const classes = chip.className.split(/\s+/)
+    expect(classes).toContain('bg-chip-accent-fill')
+    expect(classes).not.toContain('bg-chip-good-fill')
   })
 
   it('leaves the detail’s facts off when that read fails, rather than guessing them', async () => {
@@ -347,5 +372,86 @@ describe('by role', () => {
     expect(await screen.findByText(en.microclimates.next.noAccessTitle)).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'Launch a microclimate' })).toBeNull()
     await waitFor(() => expect(vi.mocked(fetch)).not.toHaveBeenCalled())
+  })
+})
+
+/**
+ * The company's clock (G16 on the list, after #635 gave it to Crear). Every instant here is
+ * fixed in UTC and every expectation names the zone it is read in, so the same assertions hold
+ * on a laptop in America/Chicago and on a CI runner in UTC.
+ */
+describe('the company’s clock', () => {
+  // 02:06 UTC on 12 Sep: 20:06 on 11 Sep in Costa Rica (UTC-6), 11:06 on 12 Sep in Tokyo (UTC+9).
+  const CLOSES_UTC = '2026-09-12T02:06:00Z'
+  const OPENS_UTC = '2026-09-10T02:06:00Z'
+
+  /** `routeFetch`, plus `GET /admin/companies/{id}/settings` answering `settings` (or 500). */
+  function routeWithSettings(rows: Microclimate[], details: Record<string, MicroclimateDetail>, settings: unknown | null) {
+    routeFetch(rows, details)
+    const base = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (/\/admin\/companies\/[^/]+\/settings$/.test(url)) {
+        return Promise.resolve(
+          settings === null
+            ? new Response(JSON.stringify({ message: 'boom' }), { status: 500 })
+            : new Response(JSON.stringify(settings), { status: 200 }),
+        )
+      }
+      return base(input, init)
+    })
+  }
+
+  async function meta(): Promise<HTMLElement> {
+    return screen.findByText((_, node) => node?.getAttribute('data-slot') === 'session-meta' && /preguntas/.test(node.textContent ?? ''))
+  }
+
+  it.each([
+    ['America/Costa_Rica', 'abierto hasta el 11 sept a las 20:06', 'Costa Rica (GMT-6)', '11 de septiembre'],
+    ['Asia/Tokyo', 'abierto hasta el 12 sept a las 11:06', 'Tokyo (GMT+9)', '12 de septiembre'],
+  ])('prints an open session’s close on the company’s zone (%s), whatever the browser’s, and names it', async (zone, close, label, longDate) => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    routeWithSettings([OPEN], { m1: detailFor(OPEN, { startTime: OPENS_UTC, endTime: CLOSES_UTC }) }, { companyId: 'their-co', settings: { timezone: zone } })
+    renderPage()
+    expect((await meta()).textContent).toContain(close)
+    expect(screen.getByTestId('microclimate-zone').textContent).toBe(`Fechas y horas en la zona de la empresa: ${label}.`)
+    // The flow card's sentence reads the same clock.
+    expect(screen.getByText(new RegExp(`cierre el ${longDate}:`))).toBeTruthy()
+    // The settings read is the session's own company's.
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith('/admin/companies/their-co/settings'))).toBe(true)
+  })
+
+  it('prints a draft’s opening and a past session’s creation day on the company’s zone', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    const draft = row({ id: 'd1', status: 'draft' })
+    // 03:00 UTC on 1 Oct is still 30 Sep in Costa Rica.
+    const past = row({ id: 'p1', status: 'closed', title: 'Retro de ingeniería', createdAt: '2026-10-01T03:00:00Z' })
+    routeWithSettings([draft, past], { d1: detailFor(draft, { startTime: OPENS_UTC, endTime: CLOSES_UTC }) }, { settings: { timezone: 'America/Costa_Rica' } })
+    renderPage()
+    expect((await meta()).textContent).toContain('abre el 9 sept a las 20:06')
+    expect(within(section('Sesiones pasadas')).getByText(/creado el 30 sept/)).toBeTruthy()
+  })
+
+  it('falls back to the browser’s zone when the company’s cannot be read, and says which it used', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    routeWithSettings([OPEN], { m1: detailFor(OPEN, { startTime: OPENS_UTC, endTime: CLOSES_UTC }) }, null)
+    renderPage()
+    // The label names the browser zone's place (`Chicago`), not its IANA id.
+    const browser = (Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop() ?? '').replace(/_/g, ' ')
+    const text = (await meta()).textContent ?? ''
+    const expected = new Intl.DateTimeFormat('es', { hour: 'numeric', minute: '2-digit' }).format(new Date(CLOSES_UTC))
+    expect(text).toContain(`a las ${expected}`)
+    const note = screen.getByTestId('microclimate-zone').textContent ?? ''
+    expect(note).toMatch(/^No se pudo leer la zona horaria de la empresa: fechas y horas en la de este navegador, /)
+    expect(note).toContain(browser)
+  })
+
+  it('says nothing about a zone when no row prints an hour', async () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    const past = row({ id: 'p1', status: 'closed' })
+    routeWithSettings([past], {}, { settings: { timezone: 'America/Costa_Rica' } })
+    renderPage()
+    await screen.findByText(/creado el/)
+    expect(screen.queryByTestId('microclimate-zone')).toBeNull()
   })
 })

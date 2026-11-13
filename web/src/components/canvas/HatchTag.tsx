@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Lock } from 'lucide-react'
-import { PROTECTED_HATCH } from '../charts/suppression'
+import { PROTECTED_HATCH, PROTECTED_LABEL } from '../charts/suppression'
 import { cn } from '../../lib/cn'
 
 /**
@@ -18,12 +18,16 @@ export function HatchTag({ label, className }: { label: string; className?: stri
       data-protected="true"
       className={cn(
         PROTECTED_HATCH,
-        'inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-md bg-surface-outer px-2 text-xs text-fg-tertiary',
+        'inline-flex h-6 items-center whitespace-nowrap rounded-md bg-surface-outer px-1 text-xs',
         className,
       )}
     >
-      <Lock aria-hidden="true" className="size-3 shrink-0" />
-      {label}
+      {/* The words on a solid pill inside the hatch (`PROTECTED_LABEL`): straight on the
+          stripes the tertiary ink was 3.97:1. */}
+      <span data-slot="protected-label" className={cn(PROTECTED_LABEL, 'inline-flex h-4.5 items-center gap-1')}>
+        <Lock aria-hidden="true" className="size-3 shrink-0 text-fg-tertiary" />
+        {label}
+      </span>
     </span>
   )
 }

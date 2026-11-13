@@ -23,7 +23,15 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
         builder.Property(a => a.Timestamp).HasColumnName("timestamp").IsRequired();
 
         builder.HasIndex(a => new { a.CompanyId, a.Timestamp });
-        builder.HasOne<Company>().WithMany().HasForeignKey(a => a.CompanyId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<User>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(a => a.UserId);
+
+        // NO foreign keys, to companies or to users (dropped 2026-11-08, migration
+        // OperatorRulings). An audit row must outlive what it describes, unchanged:
+        //  - company_id was RESTRICT, so a company with any audit row could never be deleted
+        //    without deleting its history first -- which the append-only rule forbids;
+        //  - user_id was SET NULL, so deleting a person had the DATABASE rewrite every audit row
+        //    they appear in, past AuditLogAppendOnlyInterceptor, which only sees SaveChanges.
+        // Both ids are kept as written; a reader that joins them must tolerate a row whose
+        // company or person no longer exists (the deletion itself is the last row filed there).
     }
 }

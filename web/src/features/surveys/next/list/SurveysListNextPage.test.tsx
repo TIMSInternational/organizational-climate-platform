@@ -11,8 +11,10 @@ import { duplicateSurvey, listSurveys, type SurveyDetail, type SurveyListItem } 
 import { getClimateTrends, type ClimateTrendsResponse } from '../../api/climateTrends'
 import SurveysListNextPage from './SurveysListNextPage'
 import en from '../../../../i18n/en.json'
+import { ApiError } from '../../../../api/authFetch'
 
 const copy = en.surveys.next.list
+const pickerCopy = en.surveys.next.statusWorkbook
 
 vi.mock('../../api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveys')>()),
@@ -145,6 +147,37 @@ describe('SurveysListNextPage', () => {
     expect(text).not.toContain('1 preguntas')
   })
 
+  it('at phone width sets each survey as one two-line row, the reading and the actions on screen, with no table behind them', async () => {
+    // happy-dom has no viewport, so the compact query is answered here; the geometry is the shot's.
+    const media = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === '(width < 40rem)',
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    )
+    try {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await waitFor(() => expect(document.querySelector('li[data-survey-id="q4"]')).not.toBeNull())
+      expect(document.querySelectorAll('tr[data-survey-id]')).toHaveLength(0)
+      const open = document.querySelector('li[data-survey-id="q4"]') as HTMLElement
+      const reading = open.querySelector('[data-slot="compact-reading"]')?.textContent ?? ''
+      expect(reading.startsWith(`1 ${copy.ofAudience.replace('{target}', '24')} · `)).toBe(true)
+      expect(reading).toContain(` · ${copy.closesOn.replace('{date}', '')}`)
+      // One copy of each link and menu, not a hidden second one.
+      expect(within(open).getAllByRole('link', { name: en.surveys.openNamed.replace('{title}', 'Q4') })).toHaveLength(1)
+      expect(within(open).getAllByRole('button', { name: copy.moreActions.replace('{title}', 'Q4') })).toHaveLength(1)
+    } finally {
+      media.mockRestore()
+    }
+  })
+
   it('sends no companyId and asks for the titles in the reader’s language', async () => {
     renderAs({ role: 'super_admin' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
@@ -162,6 +195,8 @@ describe('SurveysListNextPage', () => {
     // A 32px filter row, as the artboard's: index.css's 4px over a labelled select and an
     // inline select's baseline gap each made it 36px and set the search 2px low.
     expect(select.className.split(/\s+/)).toEqual(expect.arrayContaining(['block', 'mt-0']))
+    // The search beside it at the same 32px: one control height on the bar.
+    expect(screen.getByRole('searchbox').className.split(/\s+/)).toContain('h-control-lg')
     const chevron = select.closest('label')?.querySelector('svg[data-slot="type-chevron"]')
     expect(chevron?.getAttribute('aria-hidden')).toBe('true')
     // The label ink, the one that clears AA here (respondContrast.test.ts bans the tertiary).
@@ -189,6 +224,15 @@ describe('SurveysListNextPage', () => {
     for (const head of heads) {
       expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['leading-normal', 'border-b', 'border-line-default']))
     }
+    // The board's `.tbl th`, the TableHead primitive: sentence case at 13px, never the 11px
+    // uppercase the type ruling keeps for eyebrows.
+    for (const head of heads) {
+      expect(head.getAttribute('data-slot')).toBe('table-head')
+      expect(head.className.split(/\s+/)).not.toContain('uppercase')
+    }
+    // A status chip hugs its word; stretched to the column it read as a form field.
+    const chip = (cells[1] as HTMLElement).querySelector('[data-slot="chip"]') as HTMLElement
+    expect(chip.className.split(/\s+/)).not.toContain('w-full')
     const meta = (cells[0] as HTMLElement).querySelector('span.text-xs') as HTMLElement
     expect(meta.className.split(/\s+/)).toContain('leading-normal')
   })
@@ -227,10 +271,11 @@ describe('SurveysListNextPage', () => {
     expect(vi.mocked(listSurveys).mock.calls[2][1]).toEqual({ status: '', type: '', q: 'clima q3' })
   })
 
-  it('shows the server’s message on a failed load, with a retry that refetches', async () => {
-    vi.mocked(listSurveys).mockRejectedValueOnce(new Error('Boom'))
+  it('says a failed load in the reader’s language, with a retry that refetches', async () => {
+    vi.mocked(listSurveys).mockRejectedValueOnce(new ApiError(500, 'Boom'))
     renderAs({ role: 'company_admin', companyId: 'c1' })
-    expect(await screen.findByText('Boom')).toBeTruthy()
+    expect(await screen.findByText(en.errors.api.server)).toBeTruthy()
+    expect(screen.queryByText('Boom')).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: en.common.retry }))
     expect(await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })).toBeTruthy()
     expect(vi.mocked(listSurveys)).toHaveBeenCalledTimes(2)
@@ -251,8 +296,38 @@ describe('SurveysListNextPage', () => {
     )
     renderAs({ role: 'leader', companyId: 'c1' })
     await waitFor(() => {
-      expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Acme Corporation')
+      expect(document.querySelector('[data-slot="page-header-eyebrow"]')?.textContent).toBe('Acme Corporation')
     })
+  })
+
+  /**
+   * One colour, one meaning (the user's ruling of 11 Nov): blue is selection and live,
+   * green / amber / red are the three result areas and nothing else. The chosen status
+   * pill used to wear the `critical` tone — Crítica's red — and the open survey's Activa
+   * chip the `good` tone — Fortaleza's green — so this screen spent two result colours on
+   * two things that are not results. The chosen pill is the blue `accent` tone, Activa the
+   * `live` chip (the blue tint with its dot), every other status the gray `neutral`.
+   */
+  it('chooses a status segment without a result colour and marks the open survey with the blue live chip, never a result colour', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
+    const chips = screen.getByRole('group', { name: en.surveys.filterByStatus })
+    const chosen = within(chips)
+      .getAllByRole('button')
+      .find((chip) => chip.getAttribute('aria-pressed') === 'true') as HTMLElement
+    // The board's segmented control: the chosen segment is raised and told by `aria-pressed`,
+    // and no segment ever wears a result tone.
+    expect(chosen.getAttribute('data-slot')).toBe('segmented-control-item')
+    for (const segment of within(chips).getAllByRole('button')) {
+      expect(segment.className.split(/\s+/).filter((name) => /chip-(good|warning|critical)|band-/.test(name))).toEqual([])
+    }
+
+    const live = rowOf('q4').querySelector('[data-slot="chip"]') as HTMLElement
+    expect(live.getAttribute('data-live')).toBe('true')
+    expect(live.className.split(/\s+/)).toContain('bg-chip-accent-fill')
+    const closed = rowOf('q3').querySelector('[data-slot="chip"]') as HTMLElement
+    expect(closed.getAttribute('data-live')).toBeNull()
+    expect(closed.className.split(/\s+/)).toContain('bg-chip-neutral-fill')
   })
 
   it('stacks the open survey first, closed newest first, archived last and demoted, and names a missing invitation list', async () => {
@@ -261,6 +336,10 @@ describe('SurveysListNextPage', () => {
     expect(rowIds()).toEqual(['q4', 'q3', 'other', 'q1', 'copy'])
     const archived = document.querySelector('section[data-section="archived"]')
     expect(archived?.getAttribute('data-demoted')).toBe('true')
+    // One section head for every group: the archived block is demoted by its rows, not its heading.
+    const heads = [...document.querySelectorAll('section[data-section] h2')].map((head) => head.className)
+    expect(heads.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(heads).size).toBe(1)
     const q1 = rowOf('q1')
     expect(within(q1).getByText(copy.noInviteList)).toBeTruthy()
     expect(within(q1).queryByText('—')).toBeNull()
@@ -335,13 +414,15 @@ describe('SurveysListNextPage', () => {
     expect(vi.mocked(duplicateSurvey).mock.calls[0]?.[1]).toBe('q3')
   })
 
-  it('shows the server’s refusal when a duplicate fails, and keeps the list', async () => {
-    vi.mocked(duplicateSurvey).mockRejectedValue(new Error('Survey not found'))
+  it('says why a duplicate failed, in the reader’s language, and keeps the list', async () => {
+    vi.mocked(duplicateSurvey).mockRejectedValue(new ApiError(404, 'Survey not found'))
     renderAs({ role: 'company_admin', companyId: 'c1' })
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
     await openMenu('q1')
     await userEvent.click(screen.getByRole('menuitem', { name: en.surveys.duplicate }))
-    expect((await screen.findByRole('alert')).textContent).toContain('Survey not found')
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(en.errors.api.notFound)
+    expect(alert.textContent).not.toContain('Survey not found')
     expect(rowIds()).toHaveLength(5)
   })
 
@@ -389,5 +470,59 @@ describe('SurveysListNextPage', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  /**
+   * The status workbook: every distributed survey, a sheet each — the file the client is sent,
+   * which until now meant downloading each roster and running a script over them.
+   */
+  describe('the status workbook', () => {
+    it('fetches it with the bearer header and hands it over as a file', async () => {
+      const blob = new Blob(['xlsx'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      // Parameters declared so `mock.calls` is typed: a no-arg `vi.fn` gives an empty
+      // tuple, and `call[0]` is then a compile error rather than the URL.
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(blob, { status: 200 }))
+      vi.stubGlobal('fetch', fetchMock)
+      const clicked: { name?: string } = {}
+      const createdUrl = 'blob:status'
+      vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => createdUrl), revokeObjectURL: vi.fn() })
+      const realClick = HTMLAnchorElement.prototype.click
+      HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+        clicked.name = this.download
+      }
+      try {
+        const user = userEvent.setup()
+        renderAs({ role: 'company_admin', companyId: 'c1' })
+        await screen.findByText('Q4')
+
+        await user.click(screen.getByRole('button', { name: copy.statusExport }))
+        // The button opens the picker; every survey starts ticked, so confirming it asks for
+        // the same whole-company file the button used to fetch on its own.
+        await user.click(await screen.findByRole('button', { name: pickerCopy.download }))
+
+        await waitFor(() => expect(clicked.name).toBeDefined())
+        // The company-wide route, not a per-survey one. It names the sheets that were
+        // ticked, so the path carries a `?survey=` list rather than ending at `export`.
+        const urls = fetchMock.mock.calls.map((call) => String(call[0]))
+        expect(urls.some((url) => url.includes('/admin/companies/c1/participation/export?survey='))).toBe(true)
+        expect(urls.some((url) => /\/surveys\/[^/]+\/participation/.test(url))).toBe(false)
+        // Named for the company and the day, and an .xlsx.
+        expect(clicked.name).toMatch(/\.xlsx$/)
+      } finally {
+        HTMLAnchorElement.prototype.click = realClick
+      }
+    })
+
+    it('says so when the download fails, rather than doing nothing visible', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('no', { status: 500 })))
+      const user = userEvent.setup()
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByText('Q4')
+
+      await user.click(screen.getByRole('button', { name: copy.statusExport }))
+      await user.click(await screen.findByRole('button', { name: pickerCopy.download }))
+
+      expect(await screen.findByText(pickerCopy.failed)).toBeTruthy()
+    })
   })
 })

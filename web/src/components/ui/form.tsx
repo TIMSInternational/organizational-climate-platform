@@ -46,8 +46,11 @@ export function FormItem({ className, invalid = false, ...props }: FormItemProps
       <div
         data-slot="form-item"
         // `group/field` is what `Label`'s `group-data-[disabled=true]/field:`
-        // classes hook onto.
-        className={cn('group/field grid gap-1.5', className)}
+        // classes hook onto. `grid-cols-1` is `minmax(0, 1fr)`: without it the grid's
+        // implicit column sizes itself to its widest child, so a select whose longest option
+        // is wider than a 390px card pushed the whole field past the card's edge (review 12
+        // Nov; the builder had fixed it for its own fields only).
+        className={cn('group/field grid grid-cols-1 gap-1.5', className)}
         {...props}
       />
     </FormItemContext.Provider>
@@ -62,7 +65,8 @@ export function FormLabel({ className, ...props }: ComponentProps<typeof Label>)
       data-slot="form-label"
       data-error={invalid || undefined}
       htmlFor={id}
-      className={cn('data-[error=true]:text-accent-red', className)}
+      // The danger ink (the word), not the danger fill: #ff8f8f in dark, 7.92:1 on the panel.
+      className={cn('data-[error=true]:text-accent-red-ink', className)}
       {...props}
     />
   )
@@ -119,7 +123,10 @@ export function FormMessage({ className, children, ...props }: ComponentProps<'p
       data-slot="form-message"
       id={messageId}
       role="alert"
-      className={cn('text-sm text-accent-red', className)}
+      // The canvas's `.err`: 13px in the danger ink, and nothing else. `index.css` boxes every
+      // `[role='alert']` (fill, border, padding) for page-level failures; a field's message
+      // sits under its control as a line of text, so the box is taken back off here.
+      className={cn('rounded-none border-0 bg-transparent p-0 text-sm text-accent-red-ink', className)}
       {...props}
     >
       {children}

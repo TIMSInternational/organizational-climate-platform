@@ -16,10 +16,15 @@ import type { Department } from '../../../org-structure/api/departments'
  */
 export const INVITATION_COLUMNS = ['26.8%', '35.3%', '18.3%', '19.6%'] as const
 
-/** Share of the stated audience that answered, whole percent — or null when no audience was stated. */
+/**
+ * Share of the stated audience that answered, whole percent — or null when no audience was stated.
+ *
+ * FLOORED, never rounded: 224 of 225 rounds to «100 %» beside a person who has not started, and a
+ * percent that claims completion before it happened is the one reading this tile must not print.
+ */
 export function responseRate(responses: number, target: number | null): number | null {
   if (target === null || target <= 0) return null
-  return Math.round((responses / target) * 100)
+  return Math.floor((responses / target) * 100)
 }
 
 const DAY_MS = 86_400_000
@@ -50,12 +55,20 @@ export function targetedDepartments(
 }
 
 /**
- * Reminders sent so far, summed over the invitations — or null while the list is unknown. Null is
- * not zero: "Ningún recordatorio" is a statement about a list we read, never about one we did not.
+ * Reminders sent so far — or null while the list is unknown. Null is not zero: "Ningún
+ * recordatorio" is a statement about a list we read, never about one we did not.
+ *
+ * Two counters, added: each invitation's `reminderCount` (a `shared` survey's resends) and the
+ * summary's `keyReminders` (a `per_survey` survey's Enviar recordatorio, recorded on the key).
+ * Reading only the first left a per-survey survey saying "Ningún recordatorio enviado todavía"
+ * however many had gone out (walkthrough 2026-11-08). Each is 0 on the other kind of survey.
  */
-export function remindersSent(invitations: readonly SurveyInvitationDetail[] | null): number | null {
-  if (invitations === null) return null
-  return invitations.reduce((total, invitation) => total + invitation.reminderCount, 0)
+export function remindersSent(
+  list: { invitations: readonly Pick<SurveyInvitationDetail, 'reminderCount'>[]; summary?: Pick<SurveyInvitationSummary, 'keyReminders'> } | null,
+): number | null {
+  if (list === null) return null
+  const onInvitations = list.invitations.reduce((total, invitation) => total + invitation.reminderCount, 0)
+  return onInvitations + (list.summary?.keyReminders ?? 0)
 }
 
 /**

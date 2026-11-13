@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronDown, Download, MoreHorizontal } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ArrowDown, ArrowRight, Check, ChevronDown, Download, Lock, MoreHorizontal } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { PageHeader } from '../../../components/layout'
 import {
   BandChip,
+  ClimateRangeBar,
   KpiTile,
   WordCloud,
   bandCellStyle,
@@ -13,6 +14,7 @@ import {
   scaleUnitText,
   scoreText,
   type ClimateMapSelection,
+  type ClimateRangeRow,
   type ResultBands,
   type ResultScale,
 } from '../../../components/charts'
@@ -22,6 +24,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  SegmentedControl,
+  type SegmentedOption,
 } from '../../../components/ui'
 import type { ViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDayLong } from '../../../lib/calendarDay'
@@ -42,6 +46,7 @@ import ResultsSuppressionNotice from '../components/ResultsSuppressionNotice'
 import type { ResultsPrevious, SurveyResultsNextModel } from './model'
 import ResultsCellPanel from './ResultsCellPanel'
 import ResultsClimateGrid from './ResultsClimateGrid'
+import ResultsCriticalAreas, { CRITICAL_SECTION_ID } from './ResultsCriticalAreas'
 import SurveyResultsQuestions from './SurveyResultsQuestions'
 import {
   cellDetail,
@@ -60,11 +65,14 @@ import {
   type ResultsFinding,
 } from './derive'
 import { deltaInkOf } from './tint'
+import { describeApiError } from '../../../api/describeApiError'
 
 /** The id the open cell's `aria-controls` names. */
 const PANEL_ID = 'results-next-cell-panel'
-/** The artboard's `.card`: the card surface, the default hairline, 8px radius, a faint lift. */
-const CARD = 'rounded-lg border border-line-default bg-surface-card shadow-sm'
+/** The spec's `.card` (occ.css): the card surface, the panel hairline, 12px radius, no shadow. */
+const CARD = 'rounded-xl border border-line-panel bg-surface-card'
+/** The views the switch offers (Results.dc.html `.seg`); `comments` only when the survey has open text. */
+type ResultsView = 'summary' | 'questions' | 'crosses' | 'comments'
 /** Closed states the header says "cerró" for; anything else is still to close. */
 const CLOSED_STATUSES = new Set(['closed', 'archived'])
 
@@ -74,6 +82,11 @@ interface SurveyResultsNextViewProps {
   /** The API base, for the exports the browser cannot build. */
   baseUrl: string
   onError: (message: string) => void
+  /**
+   * The demographic crosses (`SurveyCrossPanel`), drawn by the page. The view only places it:
+   * under its own segment when the results are readable, after everything when they are not.
+   */
+  crossPanel?: ReactNode
 }
 
 /**
@@ -111,7 +124,7 @@ interface SurveyResultsNextViewProps {
  * withheld row, and (4) the exports are the page's builders over the same payload,
  * which the server already floored, or the server's own files.
  */
-export default function SurveyResultsNextView({ model, capabilities, baseUrl, onError }: SurveyResultsNextViewProps) {
+export default function SurveyResultsNextView({ model, capabilities, baseUrl, onError, crossPanel }: SurveyResultsNextViewProps) {
   const { t, locale } = useTranslation()
   // Opens on the lowest disclosed cell, as the artboard does: the reader lands on the
   // cell the findings name first, with its question already under the map.
@@ -123,6 +136,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   // brings it back into view.
   const [reveal, setReveal] = useState<{ focus: boolean } | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [view, setView] = useState<ResultsView>('summary')
   const panelRef = useRef<HTMLDivElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
@@ -164,6 +178,34 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const themes = useMemo(() => openTextWords(model), [model])
   const withheld = withheldWords(model)
 
+  // "Clima por dimensión" (Results.dc.html): one range bar per map column. The dot is the whole
+  // survey's score for the column (the company row of the map); the range runs over the groups
+  // as the map holds them — a protected group carries no score and `protected: true`, so it never
+  // enters the range, the caption or the label (`climateRangeOf`). Nothing is computed here.
+  // Below the whole-survey floor there is nothing to switch between: the tiles, the notice
+  // and the crosses (which say the same) stand alone, as before.
+  const readable = !model.isSuppressed && climate !== null
+  const viewOptions: SegmentedOption<ResultsView>[] = [
+    { value: 'summary', label: t('surveyResults.next.viewSummary') },
+    { value: 'questions', label: t('surveyResults.next.viewQuestions') },
+    ...(crossPanel !== undefined ? [{ value: 'crosses' as const, label: t('surveyResults.next.viewCrosses') }] : []),
+    ...(openText ? [{ value: 'comments' as const, label: t('surveyResults.next.viewComments') }] : []),
+  ]
+  const rangeRows = useMemo<ClimateRangeRow[]>(
+    () =>
+      (climate?.dimensions ?? []).map((dimension, index) => ({
+        key: dimension.key,
+        label: dimensionName(dimension.key),
+        mean: company.scores[index] ?? null,
+        groups: rows.map((row) => ({
+          name: row.name,
+          mean: row.isProtected ? null : (row.scores[index] ?? null),
+          protected: row.isProtected,
+        })),
+      })),
+    [climate, company, rows, dimensionName],
+  )
+
   // Opening is idempotent: a cell or a finding only ever OPENS its cell. The × is
   // the one way to close it (see the module note on the toggle this replaced).
   const openCell = useCallback((rowId: string, dimensionKey: string, focus: boolean) => {
@@ -184,7 +226,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
       try {
         downloadBlobFile(fileName, await fetchFile())
       } catch (err) {
-        onError(err instanceof Error ? err.message : t('errors.generic'))
+        onError(describeApiError(err, t))
       } finally {
         setExporting(false)
       }
@@ -216,6 +258,25 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
   const criticalName = bandName('critical', bands, t)
   const criticalGroups = new Set(critical.map((cell) => cell.rowId))
   const criticalOneGroup = critical.length > 0 && criticalGroups.size === 1 ? critical[0]?.rowName : null
+  const criticalDimensions = new Set(critical.map((cell) => cell.dimensionKey))
+  // Where the cells fall, for the tile. One group (or the company alone) is already in the
+  // unit ("celdas, todas de Operaciones"), so the line names only the dimensions then.
+  const criticalSpread =
+    companyOnly || criticalGroups.size <= 1
+      ? t('resultBands.results.criticalSpreadDimensions', { dimensions: criticalDimensions.size })
+      : criticalDimensions.size === 1
+        ? t('resultBands.results.criticalSpreadOneDimension', {
+            groups: criticalGroups.size,
+            dimension: dimensionName(critical[0]?.dimensionKey ?? ''),
+          })
+        : t('resultBands.results.criticalSpread', { groups: criticalGroups.size, dimensions: criticalDimensions.size })
+  const criticalRange = t('resultBands.range.under', { value: scoreText(bands.opportunityMin, scale, locale, 2) })
+  const showCritical = () => {
+    const section = document.getElementById(CRITICAL_SECTION_ID)
+    // `?.`: the suite's DOM has no layout engine and no `scrollIntoView`.
+    section?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    section?.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true })
+  }
   const isClosed = CLOSED_STATUSES.has(model.status)
   // The closing day, off `GET /surveys/{id}`'s `endDate` — a calendar day, read in UTC.
   const closingDay = model.closesAt ? calendarDayLong(Date.parse(model.closesAt), locale) : null
@@ -234,7 +295,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         title={t('surveyResults.next.title', { name })}
         eyebrow={eyebrow}
         description={
@@ -243,7 +304,9 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             : t('surveyResults.next.description')
         }
         breadcrumbs={[
-          { label: t('surveys.title'), href: '/surveys' },
+          // The sidebar's own name for the list («Todas las encuestas»), as every other survey page's
+          // trail starts (review 12 Nov).
+          { label: t('navigation.surveys'), href: '/surveys' },
           { label: name, href: `/surveys/${model.surveyId}` },
           { label: t('surveys.results') },
         ]}
@@ -255,22 +318,27 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
         // The suppression half is not cosmetic: below the whole-survey floor
         // `questions` and `breakdowns` arrive empty, and a download holding a header
         // row and nothing else invites the reader to conclude the data was lost.
+        // The header's ONE primary is the PDF; the CSVs are secondary (PageHeader's slot).
+        primaryAction={
+          !model.isSuppressed ? (
+            <Button
+              variant="primary"
+              disabled={exporting}
+              onClick={() =>
+                download(
+                  () => getSurveyResultsPdf(baseUrl, model.surveyId, locale),
+                  surveyResultsPdfFileName(model.surveyId),
+                )
+              }
+            >
+              <Download aria-hidden="true" />
+              {t('surveyResults.next.exportPdf')}
+            </Button>
+          ) : undefined
+        }
         actions={
           !model.isSuppressed ? (
             <>
-              <Button
-                variant="primary"
-                disabled={exporting}
-                onClick={() =>
-                  download(
-                    () => getSurveyResultsPdf(baseUrl, model.surveyId, locale),
-                    surveyResultsPdfFileName(model.surveyId),
-                  )
-                }
-              >
-                <Download aria-hidden="true" />
-                {t('surveyResults.next.exportPdf')}
-              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline">
@@ -343,6 +411,20 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           fallbackFields={model.fallbackFields}
         />
 
+        {/* One view at a time (Results.dc.html `.seg`), over the views this survey has. Every
+            view stays mounted and is only hidden, so switching asks the server for nothing and
+            each panel keeps its state; the crosses panel's requests are the same as before. */}
+        {readable && (
+          <SegmentedControl
+            label={t('surveyResults.next.viewLabel')}
+            value={view}
+            options={viewOptions}
+            onChange={setView}
+            className="self-start max-w-full overflow-x-auto"
+          />
+        )}
+
+        <div hidden={readable && view !== 'summary'} className="flex flex-col gap-section">
         <section aria-labelledby="results-next-tiles" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <h2 id="results-next-tiles" className="sr-only">
             {t('surveyResults.next.tilesHeading')}
@@ -398,9 +480,21 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
           />
           <KpiTile
             label={t('surveyResults.next.groupsLabel')}
-            value={groups.legible}
+            // Below the whole-survey floor the groups are withheld, not absent: no figure,
+            // a padlock and the floor. "0 de 0 legibles" read as "there are no groups".
+            value={model.isSuppressed ? null : groups.legible}
+            valueText={model.isSuppressed ? t('surveyResults.next.groupsReserved') : undefined}
             locale={locale}
-            unit={t('surveyResults.next.groupsSub', { total: groups.total })}
+            unit={
+              model.isSuppressed ? (
+                <span className="inline-flex items-center gap-1" data-testid="groups-reserved">
+                  <Lock aria-hidden="true" className="size-3.5" />
+                  {t('surveyResults.next.groupsReservedUnit', { floor: model.minimumGroupSize })}
+                </span>
+              ) : (
+                t('surveyResults.next.groupsSub', { total: groups.total })
+              )
+            }
             sub={
               <span className="text-fg-label">
                 {groups.total === 0
@@ -433,25 +527,54 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
             sub={
               critical.length === 0 ? (
                 <span className="text-fg-label">{t('resultBands.results.criticalNone', { band: criticalName })}</span>
+              ) : critical.length === 1 && critical[0] ? (
+                // One cell reads in a line. Two or more never go in the tile: joined by `·`,
+                // the mark that also joins a group to its dimension, twelve of them were a
+                // paragraph nobody could parse (ESPH Clima, 3 Nov 2026). Section below.
+                <span className="text-fg-primary" data-testid="critical-cells">
+                  {criticalOneGroup || companyOnly
+                    ? `${dimensionName(critical[0].dimensionKey)} ${score(critical[0].score)}`
+                    : `${critical[0].rowName} · ${dimensionName(critical[0].dimensionKey)} ${score(critical[0].score)}`}
+                </span>
               ) : (
-                <span className="text-chip-critical-ink" data-testid="critical-cells">
-                  {critical
-                    .map((cell) =>
-                      criticalOneGroup || companyOnly
-                        ? `${dimensionName(cell.dimensionKey)} ${score(cell.score)}`
-                        : `${cell.rowName} · ${dimensionName(cell.dimensionKey)} ${score(cell.score)}`,
-                    )
-                    .join(' · ')}
+                <span className="flex flex-col items-start gap-1">
+                  <span className="text-fg-secondary" data-testid="critical-spread">
+                    {criticalSpread}
+                  </span>
+                  {climate && !model.isSuppressed && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto gap-1 p-0 text-sm font-normal text-fg-secondary hover:text-fg-primary"
+                      onClick={showCritical}
+                    >
+                      {t('resultBands.results.criticalSeeAll')}
+                      <ArrowDown aria-hidden="true" className="size-3 text-fg-label" />
+                    </Button>
+                  )}
                 </span>
               )
             }
           />
         </section>
 
-        {model.isSuppressed || !climate ? (
+        {!readable || !climate ? (
           <ResultsSuppressionNotice reason={null} minimumGroupSize={model.minimumGroupSize} />
         ) : (
           <>
+            {/* The signature, straight after the tiles as Results.dc.html draws it. */}
+            {!companyOnly && (
+              <section aria-labelledby="results-next-range" className={cn(CARD, 'flex min-w-0 flex-col gap-3 px-5 pt-4 pb-4.5')}>
+                <div className="flex flex-col gap-1">
+                  <h2 id="results-next-range" className="mb-0 text-2xl">
+                    {t('surveyResults.next.rangeHeading')}
+                  </h2>
+                  <p className="m-0 text-sm text-fg-secondary">{t('surveyResults.next.rangeSub')}</p>
+                </div>
+                <ClimateRangeBar rows={rangeRows} bands={bands} floor={climate.threshold} decimals={1} />
+              </section>
+            )}
+
             {!companyOnly && (
               <section aria-labelledby="results-next-where" className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -459,7 +582,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                     <h2 id="results-next-where" className="mb-0 text-2xl">
                       {t('surveyResults.next.whereHeading')}
                     </h2>
-                    <span className="font-mono text-sm tabular-nums text-fg-label">{findings.length}</span>
+                    <span className="text-sm tabular-nums text-fg-label">{findings.length}</span>
                   </div>
                   {findings.length > 0 && (
                     <p className="m-0 text-sm text-fg-label">
@@ -484,7 +607,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                         <div className="flex items-center gap-2.5">
                           <span
                             data-band={finding.band}
-                            className="flex h-7 w-11 shrink-0 items-center justify-center rounded border font-mono text-sm font-semibold tabular-nums"
+                            className="flex h-7 w-11 shrink-0 items-center justify-center rounded-md border text-sm font-semibold tabular-nums"
                             style={bandCellStyle(finding.band)}
                           >
                             {score(finding.score)}
@@ -508,7 +631,7 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                           ) : (
                             // Plans carry a department, not a dimension: the plan covers
                             // the GROUP, and the sentence says no more than that.
-                            <span className="inline-flex items-center gap-1 text-xs text-accent-green-ink">
+                            <span className="inline-flex items-center gap-1 text-xs text-fg-secondary">
                               <Check aria-hidden="true" className="size-3" />
                               {t('surveyResults.next.planCovers')}
                               {finding.plan.status === 'not_started' && ` · ${t('surveyResults.next.planNoProgress')}`}
@@ -532,6 +655,18 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                   </ul>
                 )}
               </section>
+            )}
+
+            {critical.length > 1 && (
+              <ResultsCriticalAreas
+                cells={critical}
+                companyOnly={companyOnly}
+                heading={criticalName}
+                rangeText={criticalRange}
+                dimensionName={dimensionName}
+                score={score}
+                onOpen={(rowId, dimensionKey) => openCell(rowId, dimensionKey, true)}
+              />
             )}
 
             <section aria-labelledby="results-next-map" className={cn(CARD, 'flex min-w-0 flex-col gap-3 px-5 pt-4 pb-4.5')}>
@@ -599,10 +734,21 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
               </div>
             )}
 
-            {/* Gated on the survey HAVING open-text questions, not on the themes being
+          </>
+        )}
+        </div>
+
+        {readable && (
+          <div hidden={view !== 'questions'}>
+            <SurveyResultsQuestions questions={model.questions} dimensionName={dimensionName} scale={scale} bands={bands} />
+          </div>
+        )}
+
+        {/* Gated on the survey HAVING open-text questions, not on the themes being
                 non-empty: a survey whose every word fell under the word floor keeps the
                 section and says so — withheld rendered as absent is the familiar mistake. */}
-            {openText && (
+        {readable && openText && (
+              <div hidden={view !== 'comments'}>
               <section aria-labelledby="results-next-themes" className={cn(CARD, 'flex flex-col gap-3 p-panel')}>
                 <div className="flex flex-wrap items-baseline justify-between gap-inline">
                   <h2 id="results-next-themes" className="mb-0 text-2xl">
@@ -619,11 +765,10 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
                   </p>
                 )}
               </section>
-            )}
-
-            <SurveyResultsQuestions questions={model.questions} dimensionName={dimensionName} scale={scale} />
-          </>
+              </div>
         )}
+
+        {crossPanel !== undefined && <div hidden={readable && view !== 'crosses'}>{crossPanel}</div>}
       </div>
     </div>
   )

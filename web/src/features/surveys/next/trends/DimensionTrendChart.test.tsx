@@ -4,7 +4,7 @@ import { render as rtlRender, cleanup } from '@testing-library/react'
 import { DEFAULT_RESULT_BANDS } from '../../../../components/charts'
 import { TranslationProvider } from '../../../../i18n'
 import en from '../../../../i18n/en.json'
-import DimensionTrendChart from './DimensionTrendChart'
+import DimensionTrendChart, { ZONE_PAD } from './DimensionTrendChart'
 
 /** The zone names are translated, so every chart renders inside the app's provider. */
 function render(ui: ReactElement) {
@@ -72,13 +72,14 @@ describe('DimensionTrendChart', () => {
       'var(--admin-accent-bg-red)',
     ])
     // Colour is never alone: each area is named on the chart (in a corner no point covers).
+    // In sentence case: capitals are the eyebrow's alone.
     const names = [...container.querySelectorAll('[data-slot="trend-zone-label"]')].map((label) => label.textContent)
-    expect(names).toEqual(['STRENGTH', 'OPPORTUNITY', 'CRITICAL'].filter((name) => names.includes(name)))
+    const full = en.resultBands.name
+    expect(names).toEqual([full.strength, full.opportunity, full.critical].filter((name) => names.includes(name)))
     expect(names.length).toBeGreaterThanOrEqual(2)
     const end = container.querySelector('circle[data-slot="trend-end"]')
     expect(end?.getAttribute('data-band')).toBe('opportunity')
     expect(end?.getAttribute('fill')).toBe('var(--admin-accent-amber)')
-    expect(en.resultBands.short.strength.toUpperCase()).toBe('STRENGTH')
   })
 
   it('paints a critical endpoint red', () => {
@@ -108,5 +109,49 @@ describe('DimensionTrendChart', () => {
     // The artboard's own numbers: `<text y="100.5">3,0</text>`, `<circle cy="107.8">` for 2,8.
     expect(Number(three?.getAttribute('y'))).toBeCloseTo(100.5)
     expect(Number(container.querySelector('circle[data-slot="trend-point"]')?.getAttribute('cy'))).toBeCloseTo(107.8)
+  })
+
+  it('names each area at one fixed spot, top left inside its own band and clear of its rule, never two on one rule', () => {
+    // The review's cards: on a 2,5–4,5 axis «Opportunity» and «Critical» met on the 3,0 rule,
+    // and on others «Critical» sat right-aligned under the last point.
+    const axis = { low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] }
+    for (const values of [
+      [3.6, 3.8, 4.0],
+      [3.4, 3.3, 3.3],
+      [3.7, 3.5, 3.2],
+    ]) {
+      const { container } = render(<DimensionTrendChart {...props} values={values} axis={axis} />)
+      const zones = new Map(
+        [...container.querySelectorAll('rect[data-slot="trend-zone"]')].map((zone) => [
+          zone.getAttribute('data-band'),
+          { top: Number(zone.getAttribute('y')), bottom: Number(zone.getAttribute('y')) + Number(zone.getAttribute('height')) },
+        ]),
+      )
+      const labels = [...container.querySelectorAll('text[data-slot="trend-zone-label"]')]
+      expect(labels.length).toBeGreaterThanOrEqual(2)
+      for (const label of labels) {
+        const zone = zones.get(label.getAttribute('data-band'))!
+        const baseline = Number(label.getAttribute('y'))
+        expect(label.getAttribute('text-anchor')).toBe('start')
+        // The plot's left edge (30) plus the pad: the same x on every card.
+        expect(Number(label.getAttribute('x'))).toBe(30 + ZONE_PAD)
+        // The 11px line's top (baseline − 9,5) sits at least ZONE_PAD under the band's top rule,
+        // and its foot above the band's bottom.
+        expect(baseline - 9.5 - zone.top).toBeGreaterThanOrEqual(ZONE_PAD - 1e-9)
+        expect(baseline + 2.5).toBeLessThanOrEqual(zone.bottom - ZONE_PAD + 1e-9)
+        expect(label.getAttribute('letter-spacing')).toBeNull()
+      }
+      cleanup()
+    }
+  })
+
+  it('leaves a name out rather than lay it over a point or the value printed above it', () => {
+    // The first point at 3,9 puts its value label right under the 4,0 rule, on the opportunity spot.
+    const { container } = render(
+      <DimensionTrendChart {...props} values={[3.9, 3.5, 3.4]} axis={{ low: 2.5, high: 4.5, ticks: [3.0, 3.5, 4.0, 4.5] }} />,
+    )
+    const bands = [...container.querySelectorAll('text[data-slot="trend-zone-label"]')].map((label) => label.getAttribute('data-band'))
+    expect(bands).not.toContain('opportunity')
+    expect(bands).toContain('critical')
   })
 })

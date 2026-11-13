@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Lock } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 /**
@@ -187,9 +188,14 @@ export function PopulationGrid({
           )}
           {/* The count, or the word — never both, and never a 0 standing in for the word. */}
           {band.isProtected ? (
-            <span className="text-xs text-fg-tertiary">{protectedLabel}</span>
+            // The padlock before the words: the ruled pattern for a withheld group, the
+            // same one the map draws on that group's row.
+            <span data-slot="population-protected" className="inline-flex items-center gap-1 text-xs text-fg-tertiary">
+              <Lock aria-hidden="true" className="size-3 shrink-0" />
+              {protectedLabel}
+            </span>
           ) : (
-            <span className="font-mono text-sm tabular-nums text-fg-primary">{band.responses}</span>
+            <span className="text-sm tabular-nums text-fg-primary">{band.responses}</span>
           )}
         </div>
       ))}
@@ -295,7 +301,7 @@ export function FactRail({
 }
 
 /**
- * An enumerated list with its ordinals set quiet and monospaced down the left.
+ * An enumerated list with its ordinals set quiet, in tabular figures, down the left.
  *
  * The ordinal is `aria-hidden`: an ordered list already announces position, and a screen
  * reader saying "one, one, Reponer la reunión" is the kind of double-reading that makes
@@ -306,7 +312,7 @@ export function OrdinalList({ items }: { items: readonly ReactNode[] }) {
     <ol data-slot="signal-ordinals" className="m-0 flex list-none flex-col gap-2.5 p-0">
       {items.map((item, index) => (
         <li key={index} className="grid grid-cols-[1.5rem_1fr] items-baseline gap-2">
-          <span aria-hidden="true" className="font-mono text-xs tabular-nums text-fg-tertiary">
+          <span aria-hidden="true" className="text-xs tabular-nums text-fg-tertiary">
             {index + 1}
           </span>
           <span className="text-sm text-fg-secondary">{item}</span>
@@ -374,7 +380,7 @@ export function QuietCard({
         <span className="inline-flex items-baseline gap-2">
           <Eyebrow>{label}</Eyebrow>
           {count !== undefined && (
-            <span className="font-mono text-xs tabular-nums text-fg-tertiary">{count}</span>
+            <span className="text-xs tabular-nums text-fg-tertiary">{count}</span>
           )}
         </span>
         {action}

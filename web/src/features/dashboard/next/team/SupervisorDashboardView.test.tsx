@@ -125,14 +125,17 @@ describe('SupervisorDashboardView', () => {
     window.localStorage.clear()
   })
 
-  it('says it is a proposal, in the eyebrow and in a note, before anything else', () => {
+  // The canvas's "Propuesta" was meta-copy about the design's status and shipped to the
+  // supervisor (review finding 7): the eyebrow names her team and role, and no note says
+  // the screen is a proposal.
+  it('names her team and role in the eyebrow, and ships no proposal note', () => {
     renderSupervisor()
 
     expect(screen.getByRole('heading', { level: 1, name: en.dashboard.next.title })).toBeTruthy()
-    expect(screen.getByText(`${copy.proposal} · Ingeniería · ${en.users.supervisor}`)).toBeTruthy()
-    const note = screen.getByRole('note')
-    expect(note.textContent).toContain(copy.proposalLead)
-    expect(note.textContent).toContain(copy.proposalBody.replace('{floor}', String(ANONYMITY_FLOOR)))
+    expect(screen.getByText(`Ingeniería · ${en.users.supervisor}`)).toBeTruthy()
+    expect(screen.queryByRole('note')).toBeNull()
+    expect(document.body.textContent).not.toContain(copy.proposalLead)
+    expect(document.body.textContent).not.toContain(copy.proposal)
   })
 
   /**
@@ -147,6 +150,10 @@ describe('SupervisorDashboardView', () => {
     const coverage = card(copy.coverageHeading)
     expect(within(coverage).getByRole('img', { name: copy.respondedHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
     expect(within(coverage).getByRole('img', { name: copy.remainingHiddenLabel.replace('{floor}', String(ANONYMITY_FLOOR)) })).toBeTruthy()
+    // The floor promise stays on this surface in visible words, not only in an accessible
+    // name: the proposal note that used to state it was removed on 12 Nov (it was design
+    // meta-copy), and this is now the sentence that tells a supervisor about the floor.
+    expect(coverage.textContent).toContain(copy.respondedHidden.replace('{floor}', String(ANONYMITY_FLOOR)))
     expect(within(coverage).queryByText('0', { exact: true })).toBeNull()
     expect(within(coverage).getByText('14')).toBeTruthy()
     expect(within(coverage).getByText(/^Encuesta de Clima Q4 · closes Oct 10$/)).toBeTruthy()

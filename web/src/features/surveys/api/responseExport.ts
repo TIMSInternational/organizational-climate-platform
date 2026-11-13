@@ -22,8 +22,21 @@ import { authFetch } from '../../../api/authFetch'
 /** What the endpoint serves, and the only thing worth saving under an .xlsx name. */
 const WORKBOOK_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
-export async function getAllResponsesWorkbook(baseUrl: string, surveyId?: string): Promise<Blob> {
-  const query = surveyId ? `?surveyId=${encodeURIComponent(surveyId)}` : ''
+/**
+ * `answers: false` is the demographics-only list: every response and every demographic, no
+ * answer and no question sheet. Asked for by Eagle on 2026-11-02 to check managers'
+ * demographics before the analysis. Same route, same role, same audit row.
+ */
+export async function getAllResponsesWorkbook(
+  baseUrl: string,
+  surveyId?: string,
+  options: { answers?: boolean } = {},
+): Promise<Blob> {
+  const params = new URLSearchParams()
+  if (surveyId) params.set('surveyId', surveyId)
+  if (options.answers === false) params.set('answers', 'false')
+  const search = params.toString()
+  const query = search ? `?${search}` : ''
   const response = await authFetch(`${baseUrl}/admin/exports/responses${query}`)
   if (!response.ok) throw new Error('surveys.next.super.exportFailed')
 
@@ -41,8 +54,11 @@ export async function getAllResponsesWorkbook(baseUrl: string, surveyId?: string
  * The day is in the name, always. Two downloads a week apart are two different pictures of a
  * climate that is still being answered, and a folder of files called `respuestas-clima.xlsx`
  * is a folder in which nobody can tell which one is the later one.
+ *
+ * `prefix` is `demograficos` for the list without answers, so it is never mistaken for the
+ * workbook that has them.
  */
-export function allResponsesFileName(now: Date, label?: string): string {
+export function allResponsesFileName(now: Date, label?: string, prefix = 'respuestas'): string {
   const day = now.toISOString().slice(0, 10)
   const slug = (label ?? '')
     .normalize('NFD')
@@ -51,5 +67,5 @@ export function allResponsesFileName(now: Date, label?: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40)
-  return slug ? `respuestas-${slug}-${day}.xlsx` : `respuestas-clima-${day}.xlsx`
+  return slug ? `${prefix}-${slug}-${day}.xlsx` : `${prefix}-clima-${day}.xlsx`
 }

@@ -163,6 +163,51 @@ describe('capabilitiesFor', () => {
   })
 
   /**
+   * The survey's own company, never the header: a TIMS operator who opened another client's
+   * survey while the header held a third company lost the roster and every per-person button,
+   * silently (docs/audits/2026-11-08-operator-ui-walkthrough.md, A1).
+   */
+  describe('canAdministerSurvey(survey) mirrors CanAdminister on the survey, not the selection', () => {
+    const own = { companyId: 'c1' }
+    const other = { companyId: 'c2' }
+
+    it('super_admin administers a survey of a company other than the one selected', () => {
+      const claims = claimsFor('super_admin', { companyId: undefined })
+      const capabilities = capabilitiesFor(claims, scopeFor(claims, 'c3'))
+      expect(capabilities.canAdministerSurvey(own)).toBe(true)
+      expect(capabilities.canAdministerSurvey(other)).toBe(true)
+      // The control: the header-dependent capability still waits on a selection, so the two
+      // really are different rules.
+      expect(capabilitiesFor(claims, scopeFor(claims, null)).canAuthorSurveys).toBe(false)
+      expect(capabilitiesFor(claims, scopeFor(claims, null)).canAdministerSurvey(own)).toBe(true)
+    })
+
+    it('super_admin homed in a company administers every other company’s survey too', () => {
+      const claims = claimsFor('super_admin', { companyId: 'c1' })
+      expect(capabilitiesFor(claims, scopeFor(claims, null)).canAdministerSurvey(other)).toBe(true)
+    })
+
+    it("company_admin administers only their claim's tenant, whatever is selected", () => {
+      const claims = claimsFor('company_admin')
+      const capabilities = capabilitiesFor(claims, scopeFor(claims, 'c2'))
+      expect(capabilities.canAdministerSurvey(own)).toBe(true)
+      expect(capabilities.canAdministerSurvey(other)).toBe(false)
+    })
+
+    it('company_admin with no tenant claim administers nothing', () => {
+      const claims = claimsFor('company_admin', { companyId: undefined })
+      expect(capabilitiesFor(claims, scopeFor(claims)).canAdministerSurvey(own)).toBe(false)
+    })
+
+    for (const role of ['leader', 'supervisor', 'employee', undefined]) {
+      it(`${role ?? 'no role'} administers no survey, even of their own tenant`, () => {
+        const claims = claimsFor(role, { nodoExternalId: 'n1' })
+        expect(capabilitiesFor(claims, scopeFor(claims)).canAdministerSurvey(own)).toBe(false)
+      })
+    }
+  })
+
+  /**
    * `PUT /microclimates/{id}`, `POST /microclimates/{id}/invitations`, `PUT /action-plans/{id}`
    * and `POST /action-plans/{id}/progress` all refuse unless `Roles.Admin` AND
    * `CanAccessCompany(user, resource.CompanyId)` — the resource's own company, never the

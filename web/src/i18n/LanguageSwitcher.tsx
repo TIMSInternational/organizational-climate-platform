@@ -1,6 +1,6 @@
 import { useTranslation } from './useTranslation'
 import { LOCALES, isLocale } from './locale'
-import { CHIP_SELECT_LABEL_STYLE, CHIP_SELECT_STYLE } from '../components/layout/chipSelectStyle'
+import { CHIP_SELECT_LABEL_CLASS, CHIP_SELECT_LABEL_STYLE, CHIP_SELECT_STYLE } from '../components/layout/chipSelectStyle'
 
 /**
  * Locale picker for the app shell.
@@ -37,6 +37,7 @@ export default function LanguageSwitcher({ compact = false, variant = 'default' 
 
   return (
     <label
+      className={chip ? CHIP_SELECT_LABEL_CLASS : undefined}
       style={
         chip
           ? CHIP_SELECT_LABEL_STYLE

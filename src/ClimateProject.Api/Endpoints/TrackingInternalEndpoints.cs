@@ -332,6 +332,47 @@ public static class TrackingInternalEndpoints
             return error;
         }
 
+        Guid? cicloGuid = null;
+        if (!string.IsNullOrWhiteSpace(cicloId))
+        {
+            if (!Guid.TryParse(cicloId, out var parsedCiclo))
+            {
+                return EmptyHallazgos();
+            }
+
+            cicloGuid = parsedCiclo;
+        }
+
+        var (_, computed) = await ComputeHallazgosAsync(db, companyGuid, cicloGuid, cancellationToken);
+        var hallazgos = computed.ToList();
+
+        if (!string.IsNullOrWhiteSpace(hallazgoId))
+        {
+            hallazgos = hallazgos
+                .Where(h => string.Equals(h.HallazgoId, hallazgoId, StringComparison.Ordinal))
+                .ToList();
+        }
+
+        return Results.Json(new Envelope<HallazgosData>(true, new HallazgosData(hallazgos)), SnakeCaseOptions);
+    }
+
+    /// <summary>
+    /// The findings of <paramref name="companyGuid"/>'s most recent closed or archived surveys
+    /// (at most <see cref="MaxSurveysAggregated"/>), narrowed to one survey when
+    /// <paramref name="cicloGuid"/> is given, together with the surveys they were computed from.
+    /// </summary>
+    /// <remarks>
+    /// Shared by this file's <c>/hallazgos</c> and by <c>TrackingPickerEndpoints</c>'s hallazgo
+    /// picker, so the list a person picks a finding from and the list climate-tracking later
+    /// resolves that finding's id against are one computation and cannot disagree about which
+    /// findings exist.
+    /// </remarks>
+    internal static async Task<(IReadOnlyList<Survey> Surveys, IReadOnlyList<HallazgoInternalDto> Hallazgos)> ComputeHallazgosAsync(
+        ClimateProjectDbContext db,
+        Guid companyGuid,
+        Guid? cicloGuid,
+        CancellationToken cancellationToken)
+    {
         // Closed and archived only. An active survey's scores move under the reader between
         // two loads, and a plan de accion is a commitment written against one finding on one
         // day -- the same argument the leader dashboard's team-climate panel makes for
@@ -341,14 +382,9 @@ public static class TrackingInternalEndpoints
             .Where(s => s.CompanyId == companyGuid
                         && (s.Status == SurveyStatuses.Closed || s.Status == SurveyStatuses.Archived));
 
-        if (!string.IsNullOrWhiteSpace(cicloId))
+        if (cicloGuid is { } ciclo)
         {
-            if (!Guid.TryParse(cicloId, out var cicloGuid))
-            {
-                return EmptyHallazgos();
-            }
-
-            surveys = surveys.Where(s => s.Id == cicloGuid);
+            surveys = surveys.Where(s => s.Id == ciclo);
         }
 
         var candidates = await surveys
@@ -359,7 +395,7 @@ public static class TrackingInternalEndpoints
 
         if (candidates.Count == 0)
         {
-            return EmptyHallazgos();
+            return ([], []);
         }
 
         // Loaded once for the whole request, not per survey: nodo_id is a property of the
@@ -389,14 +425,7 @@ public static class TrackingInternalEndpoints
             hallazgos.AddRange(TrackingHallazgos.ForSurvey(survey.Id, aggregate, nodoIdByDepartmentId));
         }
 
-        if (!string.IsNullOrWhiteSpace(hallazgoId))
-        {
-            hallazgos = hallazgos
-                .Where(h => string.Equals(h.HallazgoId, hallazgoId, StringComparison.Ordinal))
-                .ToList();
-        }
-
-        return Results.Json(new Envelope<HallazgosData>(true, new HallazgosData(hallazgos)), SnakeCaseOptions);
+        return (candidates, hallazgos);
     }
 
     private static IResult EmptyHallazgos()

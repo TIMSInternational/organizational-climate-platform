@@ -62,7 +62,7 @@ const json = { 'Content-Type': 'application/json' }
  * without a session, so it is the one a crash further down must not leave behind.
  */
 export function teardownRequests(created) {
-  const c = { surveys: [], plans: [], departments: [], shares: [], ...(created ?? {}) }
+  const c = { surveys: [], plans: [], departments: [], shares: [], microclimates: [], ...(created ?? {}) }
   return [
     ...c.shares.map(({ reportId, shareId }) => ({
       kind: 'share', id: shareId, method: 'DELETE', path: `/admin/reports/${reportId}/shares/${shareId}`, done: 'revoked',
@@ -73,6 +73,11 @@ export function teardownRequests(created) {
     })),
     ...c.departments.map((id) => ({
       kind: 'department', id, method: 'PUT', path: `/admin/departments/${id}`, body: { isActive: false }, headers: json, done: 'deactivated',
+    })),
+    // A session the run opened because the tenant had none live: closed, never left running on
+    // anyone's pulse. An active microclimate cannot be discarded, only closed.
+    ...c.microclimates.map((id) => ({
+      kind: 'microclimate', id, method: 'PUT', path: `/microclimates/${id}/status`, body: { status: 'closed' }, headers: json, done: 'closed',
     })),
   ]
 }

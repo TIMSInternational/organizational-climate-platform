@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Navigate, useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
+import { useCompanyScope, useFollowCompany } from '../../../company-context'
 import { LoadingRegion, NetworkError, SkeletonText } from '../../../components/ui'
 import SurveyCrossPanel from './SurveyCrossPanel'
 import SurveyResultsNextView from './SurveyResultsNextView'
@@ -33,9 +34,14 @@ export default function SurveyResultsNextPage() {
   const { id } = useParams<{ id: string }>()
   const capabilities = useViewerCapabilities()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-  const allowed = capabilities.seesWholeCompany
+  // A super administrator reads every survey's results (`canOpenResults`), whatever the header
+  // holds; waiting for a selection sent one with none to the dashboard
+  // (docs/audits/2026-11-08-operator-ui-walkthrough.md). Everyone else: an admin with a company.
+  const scope = useCompanyScope()
+  const allowed = capabilities.seesWholeCompany || scope.isSuperAdmin
   // Hooks before the early return: the model hook must be called on every render.
-  const { model, payload, loading, error, reload } = useSurveyResultsModel(allowed ? id : undefined)
+  const { model, payload, loading, error, reload, companyId } = useSurveyResultsModel(allowed ? id : undefined)
+  useFollowCompany(companyId)
   const [actionError, setActionError] = useState<string | null>(null)
 
   if (!allowed) return <Navigate to="/dashboard" replace />
@@ -61,12 +67,15 @@ export default function SurveyResultsNextPage() {
       {loading || !model ? (
         <SkeletonText lines={6} />
       ) : (
-        <>
-          <SurveyResultsNextView model={model} capabilities={capabilities} baseUrl={baseUrl} onError={setActionError} />
-          {/* Below the page rather than inside the view: a cross is a question asked ABOUT
-              the results, and the view above is the results. */}
-          <SurveyCrossPanel surveyId={id} payload={payload} baseUrl={baseUrl} bands={model.bands} />
-        </>
+        <SurveyResultsNextView
+          model={model}
+          capabilities={capabilities}
+          baseUrl={baseUrl}
+          onError={setActionError}
+          // Drawn here and placed by the view under its «Cruces» segment: a cross is a question
+          // asked ABOUT the results, and it keeps its own requests and state.
+          crossPanel={<SurveyCrossPanel surveyId={id} payload={payload} baseUrl={baseUrl} bands={model.bands} />}
+        />
       )}
     </LoadingRegion>
   )

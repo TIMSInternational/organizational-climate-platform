@@ -167,7 +167,19 @@ object and was kept so the two apps stay diffable.
 
 ## Colour
 
-Twenty-CRM's admin palette. Values are the legacy ones unchanged.
+**The Apple design (11 Nov 2026).** The values are the approved canvas
+(`OCC Clima — Apple Design`, `project/occ.css`) translated into this layer:
+Apple's neutrals inside the app's own navy frame (navy rail and top bar, a
+rounded white box with side margins). One colour, one meaning — blue is action,
+selection and live; green, amber and red are the three result areas and nothing
+else; OCC red is the mark only. `tokens.css` names every canvas value it took,
+and every one it had to move to clear a contrast guard, with the ratio.
+
+The frame: `--admin-bg-shell` (rail + bar, `bg-surface-shell`),
+`--admin-shell-bg-raised` (the user menu), `--admin-shell-bg-sunken` (the
+company select's well, `bg-surface-shell-sunken`), and the shell inks
+`--admin-shell-font-strong` / `-font` / `-font-label`, which `.on-shell`
+re-points the generic ink roles at.
 
 ### Surfaces
 
@@ -182,6 +194,9 @@ Twenty-CRM's admin palette. Values are the legacy ones unchanged.
 | `--admin-bg-overlay` | `bg-surface-overlay` | Dialog scrim |
 | `--admin-bg-hover` | `bg-state-hover` | Row/nav hover — translucent, layers over any surface |
 | `--admin-bg-active` | `bg-state-active` | Selected row on a panel |
+| `--admin-bg-fill` | `bg-surface-fill` | A control's track: segmented control, meter, off toggle, skeleton (canvas `--fill`) |
+| `--admin-bg-fill-subtle` | `bg-surface-fill-subtle` | A note, a drop zone, a protected cell (canvas `--fill2`) |
+| `--admin-bg-zebra` | `bg-surface-zebra` | Every other table row (canvas `--zebra`) |
 
 `--admin-bg-hover` / `-active` are deliberately translucent so they read
 correctly on top of whatever surface they land on. Do not swap in a solid.
@@ -214,10 +229,29 @@ strengths:
 | `--admin-accent-bg-<hue>-subtle` | `bg-accent-<hue>-subtle` | Barely-there row tint (green/blue/purple/orange only) |
 | `--admin-accent-border-<hue>` | `border-accent-<hue>-ring` | Hairline around a soft fill |
 
-`blue` is the brand accent (`#0d9488` in light, `#14b8a6` in dark — revalued in
-UI-0 off the legacy `#2E9098`, which measured below the chroma floor and read
-grey), the selected-nav fill and the focus-ring colour. `green` = success,
-`red` = destructive/error, `amber`/`orange` = warning.
+Blue is three tokens: `--admin-accent-blue-fill` #2563eb (`bg-accent-blue-fill`
+— the primary button, the selected rail row; white on it 5.17:1),
+`--admin-accent-blue-ink` #1d4ed8 (`text-accent-blue-ink` — a link, the live
+chip's word; 6.70:1 on white) and `--admin-accent-blue` #3a7af0, the identity
+blue for icons, borders and the focus ring, which is deliberately under 4.5:1 on
+white and so never a text ink. `red` (`--admin-accent-red`, `-red-ink`) =
+destructive/error only.
+
+### The three result areas
+
+Fortaleza ▲, Oportunidad ●, Crítica ▼ — always with the glyph and the name.
+Where a score falls comes from the company's ResultBands
+(`components/charts/resultBands.ts`), never from these tokens.
+
+| Pattern | Utility | Use |
+| --- | --- | --- |
+| `--admin-band-<area>-ink` | `text-band-<area>-ink` | The word and the number (`str` / `opp` / `crit`) |
+| `--admin-band-<area>-bg` | `bg-band-<area>-bg` | The soft ground of a chip or a map cell |
+| `--admin-band-<area>-fill` | `bg-band-<area>-fill`, `fill-band-<area>-fill` | A graphic mark (a bar segment, a dot) |
+| `--admin-band-track` | `bg-band-track` | The climate bar's track outside the departments' range |
+
+The `good` / `warning` / `critical` chip tones are these three areas, value for
+value (`tokens.test.ts` pins it).
 
 ### Status-chip fill and ink
 
@@ -235,41 +269,48 @@ surface under every chip in it and drags a translucent fill down with it.
 | `--admin-chip-ink-<tone>` | `text-chip-<tone>-ink` | The word inside it, measured against that fill |
 
 Five tones — `good`, `warning`, `critical`, `accent`, `neutral` — selected per
-theme, worst measured pairing 5.59:1 against WCAG AA's 4.5. Never separate an ink
+theme, worst measured pairing 5.54:1 against WCAG AA's 4.5. Never separate an ink
 from the fill it was measured against; `chipVariantContrast.test.ts` re-derives
 every pairing from `ui/chipVariants.ts`, on the panel, a hovered row, the icon
 box and a hovered icon box, and fails a fill that is not opaque.
 
 ## Type
 
-13px base, not 16px — the legacy shell (`AppShell.tsx`, `Sidebar.tsx`) sets
-`fontSize: 13` and every legacy control primitive hardcodes `text-[13px]`.
+**Body 15px, secondary 13px, minimum 11px** (the Apple design ruling, 11 Nov;
+it was the legacy console's 13px base). The UI face is the platform's own
+(`--admin-font-sans`); the title serif `--admin-font-display` (`font-display`:
+New York, then the self-hosted Source Serif 4 at 600/700, then Georgia) is for
+page titles, card titles and the respondent's question only, and `index.css`
+sets it on `h1` and `h2`. Use Tailwind's `tabular-nums` for numbers; tables
+already have it.
 
 The scale is in **`rem`**, and `src/index.css` deliberately does **not** override
-the root font size. The 13px is applied to `body`. A user who raises their
+the root font size. The 15px is applied to `body`. A user who raises their
 browser's default font size scales the entire app with it (WCAG 1.4.4), exactly
 as the legacy app did — its scale was `0.75rem` / `0.875rem` / `1.125rem`. The px
 column below is the rendered size at a 16px browser default.
 
 | Token | rem | @16px | Utility | Use |
 | --- | --- | --- | --- | --- |
-| `--admin-text-2xs` | 0.625 | 10px | `text-2xs` | All-caps section labels |
-| `--admin-text-xs` | 0.6875 | 11px | `text-xs` | Badges |
-| `--admin-text-sm` | 0.75 | 12px | `text-sm` | Help text, `<th>` |
-| `--admin-text-base` | 0.8125 | 13px | `text-base` | Shell default |
-| `--admin-text-lg` | 0.875 | 14px | `text-lg` | Labels, alerts, `h5`/`h6` |
-| `--admin-text-xl` | 1 | 16px | `text-xl` | `h3`/`h4` |
-| `--admin-text-2xl` | 1.25 | 20px | `text-2xl` | `h2` |
-| `--admin-text-3xl` | 1.5 | 24px | `text-3xl` | `h1` — a page title, not a hero |
+| `--admin-text-2xs` | 0.6875 | 11px | `text-2xs` | The floor: uppercase tracked labels and eyebrows only |
+| `--admin-text-xs` | 0.75 | 12px | `text-xs` | Chips, badges, key caps, legends |
+| `--admin-text-sm` | 0.8125 | 13px | `text-sm` | Secondary: metadata, `<th>`, help, breadcrumbs, field labels |
+| `--admin-text-base` | 0.9375 | 15px | `text-base` | Body |
+| `--admin-text-lg` | 1 | 16px | `text-lg` | An emphasised value, a small heading in a row |
+| `--admin-text-xl` | 1.0625 | 17px | `text-xl` | `h3`/`h4` |
+| `--admin-text-2xl` | 1.25 | 20px | `text-2xl` | `h2` — a card or section title (serif) |
+| `--admin-text-3xl` | 1.875 | 30px | `text-3xl` | `h1` — the page title (serif) |
 
 Element mapping (`src/index.css`): `h1` → `3xl`, `h2` → `2xl`, `h3`/`h4` → `xl`,
-`h5`/`h6` → `lg`. Control heights are in `rem` for the same reason the type scale
-is — a control is a box around text and has to grow when the text does.
+`h5`/`h6` → `base`, `label` → `sm` semibold. Control heights are in `rem` for the
+same reason the type scale is — a control is a box around text and has to grow
+when the text does.
 
-Leading: `tight` 1.2 (headings) · `snug` 1.35 (dense rows) · `normal` 1.5 (body).
-Weight: `regular` 400 · `medium` 500 (nav, buttons, labels) · `semibold` 600
-(headings) · `bold` 700 (selected parent nav row). Tracking: `tight` -0.025em ·
-`normal` 0 · `label` 0.06em (uppercase labels only).
+Leading: `tight` 1.2 (headings) · `snug` 1.35 (dense rows) · `normal` 1.45 (body).
+Weight: `regular` 400 · `medium` 500 (nav, buttons) · `semibold` 600 (headings,
+field labels, the serif titles) · `bold` 700. Tracking: `tight` -0.025em (sans
+headings) · `display` -0.015em (`h1`) · `title` -0.01em (`h2`) · `normal` 0 ·
+`label` 0.09em, `eyebrow` 0.1em, `tile`/`kpi` 0.08em (uppercase labels only).
 
 ## Space
 
@@ -320,9 +361,12 @@ utility. `--spacing-*` generates the full set.
 
 ## Radius, elevation, motion, stacking
 
-Radius: `sm` 2px (hairline joins) · `md` 4px (controls — legacy
-`rounded-[4px]`) · `lg` 6px (badges, chips) · `xl` 8px (panels, cards, dialogs,
-alerts — legacy `borderRadius: 8`) · `full` 999px.
+Radius (the canvas's): `sm` 2px (hairline joins) · `md` 8px (controls) · `lg`
+10px (chips, badges, small tiles) · `xl` 12px (cards, alerts, notes) · `box` 14px
+(`rounded-box`, the content box in the navy frame) · `sheet` 16px
+(`rounded-sheet`, a dialog or sheet) · `full` 999px. The box's inner padding is
+`px-box-x pt-box-top pb-box-bottom` (28 / 22 / 56px); its outer margin is the
+shell gutter, 12px.
 
 Shadow: `sm` (resting card) · `md` (dropdown, popover) · `lg` (dialog). Darker
 and more opaque in dark mode, since a light shadow is invisible there.
@@ -338,8 +382,11 @@ Z-index: `base` 0 · `sticky` 10 · `dropdown` 100 · `overlay` 200 · `dialog` 
 
 ## Focus
 
-`--admin-focus-ring` (blue accent), `--admin-focus-ring-width` 2px,
-`--admin-focus-ring-offset` 2px, applied globally to `:focus-visible`.
+`--admin-focus-ring` (the identity blue, #3a7af0 light / #60a5fa dark),
+`--admin-focus-ring-width` 3px, `--admin-focus-ring-offset` 1px, applied globally
+to `:focus-visible`. The canvas draws a 3px translucent halo; a translucent ring
+is 2.02:1 on white, so the ring keeps the 3px and the blue but is solid: 3.50:1
+on the darkest light ground, 3.62:1 on the raised user menu in the navy rail.
 
 The legacy ring pointed at `--ring`, which was set to the *lightest* font colour
 and then wrapped in `hsl()` around a hex value — invalid CSS, so no ring

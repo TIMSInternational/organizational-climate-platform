@@ -3,9 +3,12 @@ import type {
   CreateMicroclimateInput,
   CreateQuestionInput,
   LocalizedInput,
+  MicroclimateDetail,
+  ReplaceMicroclimateContentInput,
 } from './api/microclimates'
 import type { QuestionLibraryItemDetail } from '../questions/api/questionLibrary'
 import { DEFAULT_QUESTION_TYPE } from './questionTypes'
+import { browserTimeZone, instantOfWallClock, isKnownTimeZone, wallClockIn } from '../surveys/next/authoring/zonedWindow'
 
 /**
  * The creation wizard's state, and the rules that decide when a step is finished.
@@ -101,7 +104,11 @@ export interface MicroclimateWizardValues {
   titleEs: string
   descriptionEn: string
   descriptionEs: string
-  /** `<input type="datetime-local">` text, e.g. `2026-08-07T10:30`. Local wall clock. */
+  /**
+   * `<input type="datetime-local">` text, e.g. `2026-08-07T10:30`: the COMPANY's wall clock (its
+   * settings timezone), turned into an instant only when the request is built (`buildCreateInput`),
+   * the rule Nueva encuesta follows since #630 (G16).
+   */
   startTime: string
   endTime: string
   targetParticipantCount: string
@@ -451,18 +458,34 @@ function toCreateQuestion(
   }
 }
 
+/** The zone the form's wall clocks are read on: `timeZone` when the platform knows it, else the browser's. */
+export function sessionZone(timeZone: string | null | undefined): string {
+  return isKnownTimeZone(timeZone) ? timeZone : browserTimeZone()
+}
+
+/**
+ * The instant a form wall clock names on `timeZone`'s clock, as ISO 8601 with a `Z` -- which
+ * `createMicroclimate`'s `toUtcIso` passes through unchanged (`new Date(iso).toISOString()`).
+ * An unparseable value is left to that function, as before.
+ */
+export function sessionInstant(wallClock: string, timeZone?: string | null): string {
+  const at = instantOfWallClock(wallClock, sessionZone(timeZone))
+  return at ? at.toISOString() : wallClock
+}
+
 /**
  * The POST body.
  *
- * `timezone` is left off on purpose: `createMicroclimate` fills it from
- * `Intl.DateTimeFormat().resolvedOptions().timeZone`, and it also converts the two
- * `datetime-local` strings to UTC there. Doing either here would be a second place
- * that has to know about the offset problem, which is exactly how the wall-clock bug
- * that comment describes comes back.
+ * The two wall clocks become instants HERE, on the company's zone (`timeZone`, from its
+ * settings), and `timezone` names that zone: the browser's zone -- what `createMicroclimate`
+ * would otherwise fill and convert on -- is the company's only while the administrator sits
+ * where the company is (G16). A zone that cannot be read falls back to the browser's, which
+ * is what this form always did, and the schedule card says so.
  */
 export function buildCreateInput(
   values: MicroclimateWizardValues,
   companyId: string,
+  timeZone?: string | null,
 ): CreateMicroclimateInput {
   const description = localizedFor(values.language, values.descriptionEn, values.descriptionEs)
   const hasDescription =
@@ -474,8 +497,9 @@ export function buildCreateInput(
     title: localizedFor(values.language, values.titleEn, values.titleEs) ?? '',
     description: hasDescription ? description : undefined,
     companyId,
-    startTime: values.startTime,
-    endTime: values.endTime,
+    startTime: sessionInstant(values.startTime, timeZone),
+    endTime: sessionInstant(values.endTime, timeZone),
+    timezone: sessionZone(timeZone),
     targetParticipantCount: Number(values.targetParticipantCount),
     anonymousResponses: values.anonymousResponses,
     templateId: values.templateId === '' ? undefined : values.templateId,
@@ -483,5 +507,90 @@ export function buildCreateInput(
       toCreateQuestion(question, values.language, index + 1),
     ),
     language: values.language,
+  }
+}
+
+/**
+ * The `PUT /microclimates/{id}/content` body (G23): exactly the create body, built by the same
+ * function, minus the two fields a draft does not change. One builder, so an edited draft and a
+ * new one cannot be sent in two different shapes.
+ */
+export function buildReplaceInput(values: MicroclimateWizardValues, timeZone?: string | null): ReplaceMicroclimateContentInput {
+  const { title, description, startTime, endTime, timezone, targetParticipantCount, anonymousResponses, questions, language } =
+    buildCreateInput(values, '', timeZone)
+  return { title, description, startTime, endTime, timezone, targetParticipantCount, anonymousResponses, questions, language }
+}
+
+/** An instant as the wall clock the form edits, read on `timeZone` (the company's; G16). */
+function wallClockOf(iso: string, timeZone: string | null | undefined): string {
+  return wallClockIn(iso, sessionZone(timeZone)) ?? ''
+}
+
+/**
+ * A draft, as the values the create form edits (G23).
+ *
+ * The admin read resolves every field for ONE locale, so a bilingual draft is read twice --
+ * `en` and `es` -- and each column is taken from its own read. A field the server lists in that
+ * read's `fallbackFields` had no text in that language (it was filled from the other one), so it
+ * is empty here: the form shows the gap, and the publish gate still names it on launch.
+ * A single-language draft is read once, in its own language.
+ */
+export function wizardValuesFromDraft(
+  en: MicroclimateDetail | null,
+  es: MicroclimateDetail | null,
+  nextKey: () => string,
+  /** The company's IANA zone: the draft's instants are shown as its wall clocks (G16). */
+  timeZone?: string | null,
+): MicroclimateWizardValues {
+  const base = (en ?? es) as MicroclimateDetail
+  const language: ContentLanguage = base.language === 'es' || base.language === 'both' ? base.language : 'en'
+  const own = (read: MicroclimateDetail | null, path: string, text: string | null | undefined): string =>
+    read && text != null && !read.fallbackFields.includes(path) ? text : ''
+  const enQuestions = new Map((en?.questions ?? []).map((question) => [question.id, question]))
+  const esQuestions = new Map((es?.questions ?? []).map((question) => [question.id, question]))
+
+  return {
+    language,
+    titleEn: own(en, 'title', en?.title),
+    titleEs: own(es, 'title', es?.title),
+    descriptionEn: own(en, 'description', en?.description),
+    descriptionEs: own(es, 'description', es?.description),
+    startTime: wallClockOf(base.startTime, timeZone),
+    endTime: wallClockOf(base.endTime, timeZone),
+    targetParticipantCount: String(base.targetParticipantCount),
+    anonymousResponses: base.anonymousResponses,
+    templateId: '',
+    questions: [...base.questions]
+      .sort((a, b) => a.order - b.order)
+      .map((question) => {
+        const key = nextKey()
+        const path = `questions[${question.order}]`
+        const inEn = enQuestions.get(question.id) ?? null
+        const inEs = esQuestions.get(question.id) ?? null
+        const optionLabel = (
+          read: MicroclimateDetail | null,
+          list: readonly { order: number; label: string | null }[] | null | undefined,
+          kind: 'options' | 'emojiOptions',
+          order: number,
+        ) => own(read, `${path}.${kind}[${order}].label`, list?.find((option) => option.order === order)?.label)
+        return {
+          key,
+          textEn: own(en, `${path}.text`, inEn?.text),
+          textEs: own(es, `${path}.text`, inEs?.text),
+          type: question.type,
+          required: question.required,
+          options: (question.options ?? []).map((option, index) => ({
+            key: `${key}-o${index}`,
+            labelEn: optionLabel(en, inEn?.options, 'options', option.order),
+            labelEs: optionLabel(es, inEs?.options, 'options', option.order),
+          })),
+          emojiOptions: (question.emojiOptions ?? []).map((face, index) => ({
+            key: `${key}-e${index}`,
+            emoji: face.emoji,
+            labelEn: optionLabel(en, inEn?.emojiOptions, 'emojiOptions', face.order),
+            labelEs: optionLabel(es, inEs?.emojiOptions, 'emojiOptions', face.order),
+          })),
+        }
+      }),
   }
 }

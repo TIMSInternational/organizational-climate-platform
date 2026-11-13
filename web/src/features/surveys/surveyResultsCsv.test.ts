@@ -23,7 +23,8 @@ const labels: CsvLabels = {
 function question(overrides: Partial<SurveyQuestionResult> = {}): SurveyQuestionResult {
   return {
     questionId: 'q1',
-    order: 1,
+    // The first question, at the builder's 0-based position: the export writes its number, 1.
+    order: 0,
     type: 'likert',
     text: 'I feel safe',
     category: null,

@@ -9,6 +9,7 @@ import {
   frequencyLabel,
   kpiProgressPercent,
   priorityLabel,
+  progressPercentText,
   statusLabel,
 } from './actionPlanVocabulary'
 
@@ -37,7 +38,7 @@ describe('action plan vocabulary', () => {
 
   it('translates rather than echoing, in both languages', () => {
     expect(statusLabel(t, 'in_progress')).toBe('In Progress')
-    expect(statusLabel(tEs, 'in_progress')).toBe('En Progreso')
+    expect(statusLabel(tEs, 'in_progress')).toBe('En progreso')
     expect(priorityLabel(tEs, 'critical')).toBe('Crítica')
     expect(frequencyLabel(tEs, 'quarterly')).toBe('Trimestral')
   })
@@ -86,5 +87,22 @@ describe('kpiProgressPercent', () => {
     // outcome -- but a bar 140% full is a rendering bug.
     expect(kpiProgressPercent(140, 100)).toBe(100)
     expect(kpiProgressPercent(-5, 100)).toBe(0)
+  })
+})
+
+describe('progressPercentText', () => {
+  it('floors the percentage instead of rounding it', () => {
+    // 58 of 70 is 82.857…: a rounded 83 claims progress that is not there.
+    expect(progressPercentText(kpiProgressPercent(58, 70)!, 'en')).toBe('82%')
+    expect(progressPercentText(99.6, 'en')).toBe('99%')
+    expect(progressPercentText(100, 'en')).toBe('100%')
+  })
+
+  it('does not lose a point to binary error in the division', () => {
+    expect(progressPercentText(0.29 * 100, 'en')).toBe('29%')
+  })
+
+  it('prints Spanish with the space before the sign', () => {
+    expect(progressPercentText(kpiProgressPercent(58, 70)!, 'es').replace(/\s/g, ' ')).toBe('82 %')
   })
 })

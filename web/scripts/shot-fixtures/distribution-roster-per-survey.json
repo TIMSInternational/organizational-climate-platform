@@ -387,7 +387,9 @@
         ],
         "surveyUsername": "esphsa-r4t9b2mc",
         "credentialIssuedOn": "2026-10-20",
-        "lastSignInOn": "2026-10-21"
+        "lastSignInOn": "2026-10-21",
+        "lastRemindedOn": "2026-10-30",
+        "reminderCount": 1
       },
       {
         "userId": "u-maria",
@@ -413,7 +415,9 @@
         "demographics": [],
         "surveyUsername": "esphsa-z2x7v5kd",
         "credentialIssuedOn": "2026-10-20",
-        "lastSignInOn": "2026-10-21"
+        "lastSignInOn": "2026-10-21",
+        "lastRemindedOn": "2026-10-28",
+        "reminderCount": 3
       },
       {
         "userId": "u-admin",

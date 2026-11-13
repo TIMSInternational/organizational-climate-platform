@@ -1,13 +1,15 @@
 import { Navigate } from 'react-router'
-import { Download } from 'lucide-react'
+import { ChevronDown, Download } from 'lucide-react'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import { useTranslation } from '../../../../i18n'
 import { useCompanyScope } from '../../../../company-context'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import {
   BandChip,
   BandLegend,
+  ClimateRangeBar,
+  type ClimateRangeRow,
   KpiTile,
   bandName,
   bandOf,
@@ -17,7 +19,7 @@ import {
   type ResultBandKey,
   type ResultScale,
 } from '../../../../components/charts'
-import { Button, EmptyState, LoadingRegion, NetworkError } from '../../../../components/ui'
+import { Button, EmptyState, LoadingRegion, NetworkError, SegmentedControl } from '../../../../components/ui'
 import { KpiRow } from '../../../dashboard/components/dashboardGrammar'
 import { printedMove, reading, signedReading } from '../../../dashboard/next/derive'
 import { calendarDay } from '../../../../lib/calendarDay'
@@ -38,11 +40,32 @@ import { buildTrendsCsv } from './trendsCsv'
 import type { ClimateTrendsNextModel, TrendDimension, TrendWave } from './model'
 import { useClimateTrendsModel } from './useClimateTrendsModel'
 
-/** The ink each band's tile prints its list in: the band's chip ink, measured for AA. */
-const BAND_INK: Record<ResultBandKey, string> = {
-  strength: 'text-chip-good-ink',
-  opportunity: 'text-chip-warning-ink',
-  critical: 'text-chip-critical-ink',
+/**
+ * The climate range bar's rows for the latest closed wave: each dimension's reading as the
+ * server served it (never computed here), ticked against the first wave once there are two.
+ * A wave the floor withheld for the drawn group is a protected row — padlock and "Menos de
+ * {floor}", no number — and a dimension the latest survey did not ask is left out rather than
+ * drawn as withheld. A withheld row, or a withheld first wave, draws no tick: a protected row
+ * shows the padlock alone.
+ */
+/** Above this many groups (the company plus its departments) the picker is a pop-up, not segments. */
+export const MAX_SEGMENTS = 5
+
+function rangeRows(model: ClimateTrendsNextModel): ClimateRangeRow[] {
+  const last = model.waves.length - 1
+  const first = model.waves[0]
+  if (last < 0) return []
+  return model.dimensions.flatMap((dimension) => {
+    const mean = dimension.values[last] ?? null
+    const withheld = model.withheld[last] === true
+    if (mean === null && !withheld) return []
+    const firstMean = dimension.values[0] ?? null
+    const comparison =
+      !withheld && last > 0 && first && firstMean !== null && !model.withheld[0]
+        ? { comparison: { label: first.code, mean: firstMean } }
+        : {}
+    return [{ key: dimension.key, label: dimension.name, mean: withheld ? null : mean, protected: withheld, ...comparison }]
+  })
 }
 
 /**
@@ -74,7 +97,7 @@ export default function ClimateTrendsNextPage() {
   if (scope.status !== 'ready') {
     return (
       <div className="grid gap-panel-gap">
-        <PageTopBar title={t('surveys.next.trends.title')} />
+        <PageHeader title={t('surveys.next.trends.title')} />
         {scope.status === 'needs-selection' ? (
           <EmptyState
             title={t('companyContext.chooseACompany')}
@@ -90,7 +113,7 @@ export default function ClimateTrendsNextPage() {
   if (state.status === 'error') {
     return (
       <div className="grid gap-panel-gap">
-        <PageTopBar title={t('surveys.next.trends.title')} />
+        <PageHeader title={t('surveys.next.trends.title')} />
         <NetworkError
           title={t('surveys.climateTrends.loadError')}
           description={state.error ?? undefined}
@@ -185,7 +208,7 @@ function ClimateTrendsNextView({
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={model.companyName}
         title={t('surveys.next.trends.title')}
         description={t('resultBands.trends.description')}
@@ -227,9 +250,11 @@ function ClimateTrendsNextView({
                     moves.length > 0 ? (
                       <span data-slot="climate-moves" className="flex flex-wrap gap-x-1">
                         {moves.map((move, index) => (
-                          <span key={move.wave.id} className={move.delta >= 0 ? 'text-accent-green-ink' : 'text-fg-primary'}>
+                          // A move is told by its sign, in the secondary ink: green is
+                          // Fortaleza's and nothing else (the user's ruling of 11 Nov).
+                          <span key={move.wave.id} className="text-fg-secondary">
                             {index > 0 && <span aria-hidden="true">· </span>}
-                            <span className="font-mono tabular-nums">{signedReading(move.delta, locale, 2, bands.scale)}</span>{' '}
+                            <span className="tabular-nums">{signedReading(move.delta, locale, 2, bands.scale)}</span>{' '}
                             {t('surveys.next.trends.climateVs', { wave: move.wave.code })}
                           </span>
                         ))}
@@ -268,7 +293,9 @@ function ClimateTrendsNextView({
                       unit={t('surveys.next.trends.ofDimensions', { total: judged.length })}
                       locale={locale}
                       sub={
-                        <span data-slot={`band-tile-${band}`} className={entries.length > 0 ? BAND_INK[band] : undefined}>
+                        // The tile's label names the area; the list stays in the secondary ink
+                        // so a result colour never stands without its glyph and name.
+                        <span data-slot={`band-tile-${band}`} className="text-fg-secondary">
                           {entries.length === 0
                             ? t('surveys.next.trends.none')
                             : [
@@ -283,35 +310,83 @@ function ClimateTrendsNextView({
               </KpiRow>
             </section>
 
+            {/* The signature: every dimension of the latest closed wave on the climate range
+                bar, painted in the company's own bands, ticked at the first wave. */}
+            <section
+              aria-labelledby="trends-next-range"
+              data-slot="trends-range"
+              className="flex flex-col gap-2 rounded-xl border border-line-panel bg-surface-card px-5 py-4.5"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 id="trends-next-range" className="m-0 text-2xl">
+                  {t('surveys.next.trends.rangeHeading', { wave: latestWave?.code ?? '' })}
+                </h2>
+                <p className="m-0 text-sm text-fg-secondary">
+                  {waves.length > 1
+                    ? t('surveys.next.trends.rangeSub', { group: groupName, first: waves[0]?.code ?? '' })
+                    : t('surveys.next.trends.rangeSubOne', { group: groupName })}
+                </p>
+              </div>
+              {/* One decimal, as every card and table cell under it prints the same dimension's
+                  reading (`docs/decisions/app-wide-mean.md`: on this page a dimension reads
+                  "3,3 → 3,7"). At the bar's default two decimals one dimension printed 3,79 on
+                  its bar and 3,8 on its card, and could even fall in two areas at once. */}
+              <ClimateRangeBar rows={rangeRows(model)} bands={bands} floor={model.floor} decimals={1} />
+            </section>
+
             <section aria-label={t('surveys.next.trends.chartsLabel')} className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-3">
-                <span id="trends-next-breakdown" className="text-sm font-semibold text-fg-secondary">
-                  {t('surveys.next.trends.breakDownBy')}
-                </span>
-                <div
-                  role="group"
-                  aria-labelledby="trends-next-breakdown"
-                  data-slot="trends-segments"
-                  className="inline-flex flex-wrap gap-0.5 rounded-md border border-line-default bg-surface-icon-box p-0.75"
-                >
-                  {model.groups.map((group) => {
-                    const selected = group.key === model.selectedGroup
-                    return (
-                      <Button
-                        key={group.key}
-                        type="button"
-                        variant={selected ? 'default' : 'ghost'}
-                        aria-pressed={selected}
-                        data-group={group.key}
-                        className={cn('h-7 rounded px-2.5 text-sm font-medium', selected && 'shadow-sm')}
-                        onClick={() => onSelectGroup(group.key)}
+                {model.groups.length > MAX_SEGMENTS ? (
+                  // More departments than a segmented control holds on one line (HIG
+                  // `segmented-controls.md` > "Best practices": about five to seven in a wide
+                  // interface, fewer in a narrow one): a pop-up — a native <select>, labelled,
+                  // with the list's thin chevron. Choosing reads that group's series, as before.
+                  <label className="mb-0 flex min-w-0 max-w-full items-center gap-3">
+                    <span className="shrink-0 text-sm font-semibold text-fg-secondary">
+                      {t('surveys.next.trends.breakDownBy')}
+                    </span>
+                    <span className="relative min-w-0 w-60 max-w-full">
+                      <ChevronDown
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-label"
+                      />
+                      <select
+                        data-slot="trends-group-select"
+                        className="mt-0 block w-full appearance-none pr-8"
+                        value={model.selectedGroup}
+                        onChange={(event) => onSelectGroup(event.target.value)}
                       >
-                        {group.name ?? t('surveys.next.trends.wholeCompany')}
-                      </Button>
-                    )
-                  })}
-                </div>
-                <BandLegend bands={bands} short className="ml-auto" />
+                        {model.groups.map((group) => (
+                          <option key={group.key} value={group.key}>
+                            {group.name ?? t('surveys.next.trends.wholeCompany')}
+                          </option>
+                        ))}
+                      </select>
+                    </span>
+                  </label>
+                ) : (
+                  <>
+                    <span aria-hidden="true" className="text-sm font-semibold text-fg-secondary">
+                      {t('surveys.next.trends.breakDownBy')}
+                    </span>
+                    {/* The board's `.seg`, on one line: at 390 it scrolls inside its own box
+                        rather than wrapping (a wrapped control stops reading as one), and the
+                        4px pad keeps the focus ring inside the scroller. */}
+                    <div data-slot="segment-scroller" className="-m-1 min-w-0 max-w-[calc(100%+0.5rem)] overflow-x-auto p-1 [scrollbar-width:none]">
+                      <SegmentedControl
+                        label={t('surveys.next.trends.breakDownBy')}
+                        data-slot="trends-segments"
+                        value={model.selectedGroup}
+                        onChange={onSelectGroup}
+                        options={model.groups.map((group) => ({
+                          value: group.key,
+                          label: group.name ?? t('surveys.next.trends.wholeCompany'),
+                        }))}
+                      />
+                    </div>
+                  </>
+                )}
+                <BandLegend bands={bands} className="ml-auto" />
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -329,13 +404,13 @@ function ClimateTrendsNextView({
 
             <section
               aria-labelledby="trends-next-table"
-              className="flex flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5"
+              className="flex flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-5 pt-4 pb-4.5"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <h2 id="trends-next-table" className="m-0 text-2xl">
                   {t('surveys.next.trends.tableHeading')}
                 </h2>
-                <p className="m-0 text-sm text-fg-label">{t(bands.scale === 'percent' ? 'surveys.next.trends.tableScalePercent' : 'surveys.next.trends.tableScale', { group: groupName })}</p>
+                <p className="m-0 text-sm text-fg-secondary">{t(bands.scale === 'percent' ? 'surveys.next.trends.tableScalePercent' : 'surveys.next.trends.tableScale', { group: groupName })}</p>
               </div>
               <TrendsNumbersTable
                 waves={waves}
@@ -346,12 +421,15 @@ function ClimateTrendsNextView({
                 floor={model.floor}
                 caption={t('surveys.next.trends.tableHeading')}
               />
+              {/* The cells carry the glyph and the reading, as the dashboard map's do; the
+                  areas are named once, here, under the table. */}
+              <BandLegend bands={bands} testId="trends-table-legend" />
               {/* The artboard's one line: the floor's rule, and — only while it is true of
                   every wave on the page — that the whole company is never under it. A
                   department withheld in every wave says so in its own segment, where every
-                  cell is hatched; the bands are the company's, and the legend above
-                  already names them. */}
-              <p data-slot="trends-footnote" className="m-0 -mt-1 text-xs leading-normal text-fg-label">
+                  cell is hatched; the bands are the company's, and the legend over it
+                  names them. */}
+              <p data-slot="trends-footnote" className="m-0 -mt-1 text-sm leading-normal text-fg-secondary">
                 {t('surveys.next.trends.floorNote', { floor: model.floor })}
                 {!model.companyWithheld.some(Boolean) && <> {t('surveys.next.trends.companyNeverWithheld')}</>}
               </p>
@@ -389,22 +467,26 @@ function TrendCard({
       data-slot="trend-card"
       data-dimension={dimension.key}
       data-band={band ?? 'withheld'}
-      className="flex min-w-0 flex-col gap-2 rounded-lg border border-line-default bg-surface-card px-4 pt-3.5 pb-3"
+      className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-panel bg-surface-card px-4 pt-3.5 pb-3"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-base font-semibold text-fg-primary">{dimension.name}</span>
+        {/* A card title, so the display serif (the type ruling). */}
+        <span className="min-w-0 truncate font-display text-lg font-semibold tracking-title text-fg-primary">{dimension.name}</span>
+        {/* The area's one name, the company's own, as every chip, legend and range bar in
+            the product prints it (review 12 Nov: «Oportunidad» beside «Área de oportunidad»
+            on one screen read as two areas). */}
         {band && <BandChip band={band} bands={bands} className="h-6" />}
       </div>
       {/* `leading-normal` is the canvas's line box: the artboard sets this 22px reading in a
           body of `line-height: 1.5`, so the row is 33px and the card 254px tall
           (ClimateTrends.dc.html, `.card` with `padding: 14px 16px 12px; gap: 8px`). */}
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span data-slot="trend-reading" className="font-mono text-reading leading-normal tabular-nums text-fg-primary">
+        <span data-slot="trend-reading" className="text-reading font-semibold leading-normal tabular-nums text-fg-primary">
           {value === null ? t('surveys.next.trends.withheld') : reading(value, locale, 1, bands.scale)}
         </span>
         {sincePrevious !== null && previousWave && <Move value={sincePrevious} scale={bands.scale} />}
         {(sincePrevious !== null || sinceFirst !== null) && (
-          <span className="text-xs text-fg-label">
+          <span className="text-sm text-fg-secondary">
             {sincePrevious !== null && previousWave && (
               <span>{t('surveys.next.trends.sinceWave', { wave: previousWave.code })}</span>
             )}
@@ -445,18 +527,17 @@ function TrendCard({
 }
 
 /**
- * A signed move, in mono. The sign is in the reading (`signDisplay: 'always'`), so the
- * colour is not load-bearing; green marks a rise and a fall stays in the primary ink
- * rather than the red the feature-wide contrast sweep refuses.
+ * A signed move, in tabular figures of the UI face. The sign is in the reading
+ * (`signDisplay: 'always'`), so it needs no colour: a rise and a fall both sit in the
+ * secondary ink, because green and red are the result areas' and nothing else.
  */
 function Move({ value, scale, small = false }: { value: number; scale: ResultScale; small?: boolean }) {
   const { locale } = useTranslation()
   return (
     <span
       className={cn(
-        'font-mono tabular-nums',
-        small ? 'text-xs' : 'text-sm',
-        value >= 0 ? 'text-accent-green-ink' : 'text-fg-primary',
+        'tabular-nums text-fg-secondary',
+        small ? 'text-sm' : 'text-base font-medium',
       )}
     >
       {signedReading(value, locale, 1, scale)}

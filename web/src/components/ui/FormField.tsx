@@ -46,7 +46,9 @@ function Field({
   labelAfterControl = false,
 }: BaseFieldProps & { children: ReactNode; labelAfterControl?: boolean }) {
   const labelNode = (
-    <FormLabel>
+    // Beside a checkbox or a switch the label is the option's text, so it reads as body text;
+    // above a control it is the field's title (13px semibold, `Label`'s default).
+    <FormLabel className={labelAfterControl ? 'text-base font-normal' : undefined}>
       {label}
       {required && (
         /* Not `text-accent-red`. Since the navy revalue red means destructive

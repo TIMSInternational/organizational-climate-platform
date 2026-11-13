@@ -318,7 +318,7 @@ export default function QuestionLibraryBrowser({
                 <span className="min-w-0 truncate">
                   {locale === 'es' ? category.nameEs : category.nameEn}
                 </span>
-                <span className="ms-auto font-mono text-xs tabular-nums text-fg-secondary">
+                <span className="ms-auto text-sm tabular-nums">
                   {countFor(category.id)}
                 </span>
               </Button>
@@ -369,10 +369,10 @@ export default function QuestionLibraryBrowser({
                               nothing. The rare half of a binary is the informative
                               half. */}
                           {item.companyId !== null && (
-                            <Chip tone="good" label={t('questionLibrary.companyItem')} />
+                            <Chip tone="neutral" label={t('questionLibrary.companyItem')} />
                           )}
                           {item.dimension !== null && item.dimension.trim() !== '' && (
-                            <Chip tone="accent" label={dimensionLabel(item.dimension.trim(), t)} />
+                            <Chip tone="neutral" label={dimensionLabel(item.dimension.trim(), t)} />
                           )}
                           {item.tags.map((tag) => (
                             <Chip key={tag} tone="neutral" label={tag} />
@@ -498,7 +498,7 @@ function PreviewBody({
                 {option.labelEs !== null && option.labelEs !== option.labelEn && (
                   <> / {option.labelEs}</>
                 )}{' '}
-                <span className="font-mono text-xs text-fg-secondary">({option.value})</span>
+                <span className="text-sm tabular-nums text-fg-secondary">({option.value})</span>
               </li>
             ))}
           </ul>

@@ -127,7 +127,7 @@ describe('NotificationsNextPage (/notifications)', () => {
     expect((screen.getByRole('button', { name: copy.markAll }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('draws "Adjust by kind of notice" in the secondary ink, as the artboard does, not the blue link colour', async () => {
+  it('draws "Adjust by kind of notice" as a blue link with a 44px target, as the Privacy page draws the same destination', async () => {
     // `company_admin`, not `employee`: since 2026-10-18 the respondent shell offers no
     // route into the account pages at all, and this link was the first step of the chain
     // that defeated removing them from the menu — bell -> /notifications -> here ->
@@ -136,7 +136,10 @@ describe('NotificationsNextPage (/notifications)', () => {
     renderAs({ role: 'company_admin', companyId: 'c1' })
     const link = await screen.findByRole('link', { name: copy.byType })
     expect(link.getAttribute('href')).toBe('/settings/notifications')
-    expect(link.className.split(/\s+/)).toContain('text-fg-secondary')
+    const classes = link.className.split(/\s+/)
+    expect(classes).toContain('text-accent-blue-ink')
+    expect(classes).toContain('min-h-11')
+    expect(classes).not.toContain('text-fg-secondary')
   })
 
   it('offers a respondent no way into the notification settings', async () => {
@@ -169,6 +172,50 @@ describe('NotificationsNextPage (/notifications)', () => {
     expect(vi.mocked(updateNotificationPreferences).mock.calls[0][1]).toEqual({
       emailSurveys: false, emailMicroclimates: false, emailActionPlans: false, emailReminders: false, digestFrequency: 'weekly',
     })
+  })
+
+  it('draws the in-app inbox as a fact with a padlock, never a switch, since it cannot be turned off', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByText(copy.channelEmail)
+    const app = document.querySelector('[data-slot="channel-app"]') as HTMLElement
+    expect(app.textContent).toContain(copy.channelApp)
+    expect(app.textContent).toContain(copy.channelAppAlways)
+    expect(app.querySelector('[role="switch"]')).toBeNull()
+    // The two switches left are the two real settings: by email and the weekly digest.
+    expect(screen.getAllByRole('switch')).toHaveLength(2)
+  })
+
+  it('when every notice is older than the period, says how many and how many unread, and widens to all on request', async () => {
+    const old = (days: number, over: Partial<NotificationDetail> = {}) => closed({ createdAt: new Date(Date.now() - days * DAY).toISOString(), ...over })
+    vi.mocked(listMyNotifications).mockResolvedValue([
+      old(120, { id: 'x' }),
+      old(130, { id: 'y' }),
+      old(140, { id: 'z', title: 'Old read', openedAt: new Date().toISOString(), status: 'opened' }),
+    ])
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    const empty = await screen.findByText(copy.noneInPeriod.replace('{days}', '90'))
+    // The bell counts these two unread; the list must not read as an empty inbox beside it.
+    expect(screen.getByText(copy.olderWithUnread.replace('{count}', '3').replace('{unread}', '2'))).toBeTruthy()
+    expect(empty.closest('[data-slot="filter-empty"]')).not.toBeNull()
+    expect(document.querySelectorAll('[data-slot="notification-row"]')).toHaveLength(0)
+    // Two of them are unread, so marking them all is still a real action.
+    expect((screen.getByRole('button', { name: copy.markAll }) as HTMLButtonElement).disabled).toBe(false)
+
+    await userEvent.click(screen.getByRole('button', { name: copy.showAll }))
+    expect(document.querySelectorAll('[data-slot="notification-row"]')).toHaveLength(3)
+    expect(document.querySelector('[data-slot="filter-empty"]')).toBeNull()
+  })
+
+  it('says a facet is empty as a centred empty state, not as the empty inbox', async () => {
+    vi.mocked(listMyNotifications).mockResolvedValue(inbox())
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByText('Plan due')
+    await userEvent.click(screen.getByRole('button', { name: `${copy.facet.reports} 0` }))
+    const block = document.querySelector('[data-slot="filter-empty"]') as HTMLElement
+    expect(block.querySelector('[data-slot="error-state"]')).not.toBeNull()
+    expect(block.textContent).toContain(copy.nothingHere)
+    expect(block.textContent).toContain(copy.nothingHereHint)
+    expect(block.textContent).not.toContain(copy.emptyTitle)
   })
 
   it('explains local mail only to a .test address', async () => {

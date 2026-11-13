@@ -153,6 +153,30 @@ describe('EmployeeHomeView', () => {
     expect(start.getAttribute('href')).toBe('/surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558/respond')
   })
 
+  /**
+   * The Apple design inside the frame (the user's rulings of 11 Nov). The open survey's
+   * chip is the blue `live` chip — blue means live, and green is Fortaleza's, a result
+   * area. The survey's title is set in the app's display serif (`font-display`, the face
+   * `index.css` gives h1/h2), not the storefront's Goudy: this card sits under the page's
+   * «Buenas noches», and two serifs on one screen read as two products.
+   */
+  it('marks the open survey with the blue live chip and titles it in the page’s own serif', async () => {
+    serves()
+    renderHome()
+
+    const lead = await waitFor(() => {
+      const node = document.querySelector<HTMLElement>('[data-slot="home-lead"]')
+      if (!node) throw new Error('no lead card yet')
+      return node
+    })
+    const chip = within(lead).getByText(es('employee.next.openChip'))
+    expect(chip.getAttribute('data-live')).toBe('true')
+    expect(chip.className.split(/\s+/)).not.toContain('bg-chip-good-fill')
+    const title = within(lead).getByRole('heading', { name: 'Encuesta de Clima Q4 (abierta)' })
+    expect(title.className.split(/\s+/)).toContain('font-display')
+    expect(title.className.split(/\s+/)).not.toContain('font-store-serif')
+  })
+
   it('reads the canvas’s countdown and three readings from the payload, not from type', async () => {
     serves()
     renderHome()

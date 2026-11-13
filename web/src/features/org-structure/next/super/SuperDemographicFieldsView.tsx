@@ -1,8 +1,8 @@
 import { useId, useState, type KeyboardEvent } from 'react'
 import { useParams } from 'react-router'
-import { AlertCircle, AlertTriangle, Check, Columns2, EyeOff, Filter, Plus, Shield, X } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Check, Columns2, EyeOff, Filter, Lock, Plus, Shield, X } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, KpiTile } from '../../../../components/charts'
 import { Alert, AlertDescription, Button, Input, LoadingRegion, NetworkError, SkeletonText, Switch } from '../../../../components/ui'
 import { MonoReadings } from '../../../dashboard/components/dashboardGrammar'
@@ -10,6 +10,7 @@ import { createDemographicField, updateDemographicField, type DemographicField }
 import { fieldVerdict, isUsableCut, keyFromLabel, meanPerValue, tippingPoint, usableCuts } from './demographics'
 import { CanvasChip, CanvasSelect, EmptyNote, Field, IconBox, Panel } from './parts'
 import { useSuperDemographicsModel } from './useSuperDemographicsModel'
+import { describeApiError } from '../../../../api/describeApiError'
 
 const TYPES = ['select', 'text', 'number', 'date'] as const
 const TYPE_KEY: Readonly<Record<string, string>> = {
@@ -54,8 +55,8 @@ export default function SuperDemographicFieldsView() {
   return (
     <div className="flex flex-col gap-section">
       <div className="-mb-6">
-        <PageTopBar
-          eyebrow={companyName ?? t('navigation.systemAdministration')}
+        <PageHeader
+          eyebrow={t('navigation.sectionOrganization')}
           title={t('navigation.demographicFields')}
           description={t('superadmin.next.demographics.description', { floor: ANONYMITY_FLOOR })}
           breadcrumbs={breadcrumbs}
@@ -161,12 +162,22 @@ const STARTER_VALUES = [
   'superadmin.next.demographics.starter.overFive',
 ] as const
 
+/** A proposed field a new one starts from: what a sample row of the catalogue shows. */
+export interface FieldSeed {
+  label: string
+  field: string
+  type: string
+  values: readonly string[]
+  required: boolean
+}
+
 export function FieldForm({
   companyId,
   field,
   people,
   nextOrder,
   seedExample = false,
+  seedFrom,
   onDone,
   onCancel,
 }: {
@@ -180,20 +191,25 @@ export function FieldForm({
    * "Crear campo"; every value can be edited or removed.
    */
   seedExample?: boolean
+  /** A new field filled from this proposal (a sample row's «Crear»); ignored when editing. */
+  seedFrom?: FieldSeed
   onDone: () => void
   onCancel: () => void
 }) {
   const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const editing = field !== null
-  const seed = !editing && seedExample
-  const [label, setLabel] = useState(field?.label ?? (seed ? t('superadmin.next.demographics.starter.label') : ''))
-  const [key, setKey] = useState(field?.field ?? (seed ? t('superadmin.next.demographics.starter.key') : ''))
+  const from = editing ? undefined : seedFrom
+  const seed = !editing && !from && seedExample
+  const [label, setLabel] = useState(field?.label ?? from?.label ?? (seed ? t('superadmin.next.demographics.starter.label') : ''))
+  const [key, setKey] = useState(field?.field ?? from?.field ?? (seed ? t('superadmin.next.demographics.starter.key') : ''))
   const [keyTouched, setKeyTouched] = useState(editing)
-  const [type, setType] = useState(field?.type ?? 'select')
+  const [type, setType] = useState(field?.type ?? from?.type ?? 'select')
   const [order, setOrder] = useState(String(field?.order ?? nextOrder))
   const [values, setValues] = useState<ValueDraft[]>(
-    seed
+    from
+      ? from.values.map((text) => ({ text }))
+      : seed
       ? STARTER_VALUES.map((valueKey) => ({ text: t(valueKey) }))
       : [...(field?.options ?? [])]
       .sort((a, b) => a.order - b.order)
@@ -201,7 +217,7 @@ export function FieldForm({
   )
   const [adding, setAdding] = useState(false)
   const [draftValue, setDraftValue] = useState('')
-  const [required, setRequired] = useState(field?.required ?? false)
+  const [required, setRequired] = useState(field?.required ?? from?.required ?? false)
   const [isActive, setIsActive] = useState(field?.isActive ?? true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -255,7 +271,7 @@ export function FieldForm({
       }
       onDone()
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('superadmin.next.demographics.form.saveFailed'))
+      setError(describeApiError(err, t, 'superadmin.next.demographics.form.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -412,15 +428,15 @@ export function FieldForm({
           data-verdict={usable ? 'usable' : 'narrow'}
           className={
             usable
-              ? 'flex flex-col gap-1.5 rounded-lg border border-accent-green-ring bg-accent-green-soft px-3.5 py-3'
-              : 'flex flex-col gap-1.5 rounded-lg border border-accent-red-ring bg-accent-red-soft px-3.5 py-3'
+              ? 'flex flex-col gap-1.5 rounded-xl bg-surface-fill-subtle px-4 py-3.5'
+              : 'flex flex-col gap-1.5 rounded-xl border border-line-default bg-surface-fill-subtle px-4 py-3.5'
           }
         >
           <div className="flex items-start gap-2.5">
             {usable ? (
-              <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-green-ink" />
+              <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-fg-primary" />
             ) : (
-              <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-red" />
+              <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-red-ink" />
             )}
             <p className="m-0 text-base text-fg-primary">
               <b className="font-semibold">
@@ -439,8 +455,8 @@ export function FieldForm({
       )}
 
       {isList && usable && tipping !== null && people !== undefined && (
-        <div className="flex items-start gap-2.5 rounded-lg bg-accent-amber-soft px-3.5 py-3 text-xs leading-normal text-fg-secondary">
-          <AlertCircle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-amber-ink" />
+        <div className="flex items-start gap-3 rounded-xl bg-surface-fill-subtle px-4 py-3.5 text-sm leading-normal text-fg-secondary">
+          <AlertCircle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-fg-secondary" />
           <span>
             <MonoReadings
               t={t}
@@ -456,14 +472,14 @@ export function FieldForm({
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5 sm:flex-nowrap">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <label htmlFor={ids.required} className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
-            <Switch id={ids.required} checked={required} onCheckedChange={setRequired} className="data-[state=checked]:bg-accent-green" />
+            <Switch id={ids.required} checked={required} onCheckedChange={setRequired}  />
             <span>
               {t('superadmin.next.demographics.form.required')} · {t('superadmin.next.demographics.form.requiredHelper')}
             </span>
           </label>
           {editing && (
             <label htmlFor={ids.active} className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
-              <Switch id={ids.active} checked={isActive} onCheckedChange={setIsActive} className="data-[state=checked]:bg-accent-green" />
+              <Switch id={ids.active} checked={isActive} onCheckedChange={setIsActive}  />
               <span>{t('superadmin.next.demographics.form.activeLabel')}</span>
             </label>
           )}
@@ -544,16 +560,17 @@ function Catalogue({
               >
                 <div className="flex min-w-0 flex-col gap-1">
                   <p className="m-0 truncate font-semibold text-fg-primary">
-                    {name} <span className="font-mono text-2xs font-normal text-fg-tertiary">{field.field}</span>
+                    {name} <span className="font-mono text-xs font-normal text-fg-tertiary">{field.field}</span>
                   </p>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <CanvasChip
-                      tone={field.isActive ? 'good' : 'neutral'}
+                      tone="neutral"
                       label={field.isActive ? t('superadmin.next.demographics.catalogue.active') : t('superadmin.next.demographics.catalogue.inactive')}
                     />
                     {verdict !== 'unknown' && (
                       <CanvasChip
-                        tone={verdict === 'usable' ? 'good' : verdict === 'narrow' ? 'critical' : 'neutral'}
+                        tone="neutral"
+                        icon={verdict === 'usable' ? <Check className="size-3" /> : verdict === 'narrow' ? <Lock className="size-3" /> : undefined}
                         label={
                           verdict === 'usable'
                             ? t('superadmin.next.demographics.catalogue.usable')
@@ -564,7 +581,7 @@ function Catalogue({
                       />
                     )}
                     {field.type === 'select' && (
-                      <span className="text-2xs text-fg-tertiary">
+                      <span className="text-xs text-fg-tertiary">
                         {t('superadmin.next.demographics.catalogue.valuesCount', { count: field.options?.length ?? 0 })}
                       </span>
                     )}

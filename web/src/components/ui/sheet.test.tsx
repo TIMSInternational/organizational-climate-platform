@@ -53,3 +53,19 @@ describe('Sheet', () => {
     expect((await screen.findByRole('dialog')).getAttribute('data-side')).toBe('right')
   })
 })
+
+describe('Sheet, as the Apple design draws it', () => {
+  it('dims the page with the scrim and rounds the corners that face it', async () => {
+    render(
+      <Sheet defaultOpen>
+        <SheetContent closeLabel="Cerrar">
+          <SheetTitle>Filtros</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    )
+    const sheet = await screen.findByRole('dialog')
+    expect(sheet.className.split(/\s+/)).toEqual(expect.arrayContaining(['rounded-l-sheet', 'bg-surface-card']))
+    expect(document.querySelector('[data-slot="sheet-overlay"]')?.className).toContain('bg-surface-scrim')
+    expect(screen.getByText('Filtros').className.split(/\s+/)).toContain('font-display')
+  })
+})

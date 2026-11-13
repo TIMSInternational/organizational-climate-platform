@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useTranslation } from '../i18n'
 import { activeHref, type NavSection, type NavItem as NavItemType } from './navSections'
@@ -124,26 +124,13 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
     setFlyout({ key, top: rect.top, left: rect.right })
   }
 
-  function renderItem(item: NavItemType, options?: { neverSelected?: boolean }) {
-    // A `flat` group (the super administrator's "Administración del Sistema") is drawn
-    // as the 10 Sep per-role canvas draws it: the group's own row, then its children as
-    // plain rows beside it — no chevron, no elbow, nothing to expand. Its row links to its
-    // `href` and is never the selected one: that `href` is its first child's, and the
-    // child's row carries the selection. Collapsed, it keeps the flyout below.
-    if (item.flat && item.sub?.length && !collapsed) {
-      return (
-        <Fragment key={item.labelKey}>
-          {renderItem({ ...item, sub: undefined, flat: undefined }, { neverSelected: true })}
-          {item.sub.map((sub) => renderItem(sub))}
-        </Fragment>
-      )
-    }
+  function renderItem(item: NavItemType) {
     const hasChildren = Boolean(item.sub?.length)
     // While collapsed a grouped row is a plain link with a flyout (see `collapsed`
     // above), so it gets a leaf's selected styling too.
     const hasSub = hasChildren && !collapsed
     const hasFlyout = hasChildren && collapsed
-    const isActive = !options?.neverSelected && item.href === selectedHref
+    const isActive = item.href === selectedHref
     const childSelected = item.sub?.some((sub) => sub.href === selectedHref) ?? false
     // A collapsed group stands in for its whole sub-tree — the children are not
     // rendered in the rail at all — so it carries the selection when one of them
@@ -162,17 +149,19 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
     const isFlyoutOpen = hasFlyout && flyout?.key === item.labelKey
     const label = t(item.labelKey)
 
-    // Ported from the legacy navigation/RoleBasedNav.tsx row: `minHeight: 28,
-    // padding: '4px 8px', fontSize: 13, gap-2, rounded-[4px]`, and the same
-    // three-way selected state — a selected leaf is white on the blue accent, a
-    // selected parent stays on the panel and goes bold, everything else is
-    // secondary text. The two colour properties live in `index.css` now, keyed on
-    // `data-nav-state`; see `NavRowState` for why.
+    // The Apple-design rail's row (`occ.css` `.item`, 11 Nov): 14px type (`--admin-text-ui`),
+    // the glyph 10px from the label, a 28px row. The selected row is the blue fill with white,
+    // semibold text (`.item.on`); every other row is regular weight in the chrome's ink. The
+    // two colour properties live in `index.css`, keyed on `data-nav-state` — see
+    // `NavRowState` for why they are not inline. The 13px step the rail kept until the regroup
+    // was for "Administración de Empresa", which truncated at 14px in the 236px rail; the
+    // regrouped labels are the boards' short ones ("Configuración de empresa" is the longest,
+    // and fits).
     const rowStyle = {
       display: 'flex',
       alignItems: 'center',
       justifyContent: collapsed ? 'center' : 'flex-start',
-      gap: collapsed ? '0' : 'var(--admin-size-inline-gap)',
+      gap: collapsed ? '0' : 'var(--admin-space-10)',
       flex: 1,
       width: '100%',
       minWidth: 0,
@@ -183,8 +172,8 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
       border: 'none',
       borderRadius: 'var(--admin-radius-md)',
       fontFamily: 'inherit',
-      fontSize: 'var(--admin-text-base)',
-      fontWeight: isActive && hasSub && isExpanded ? 'var(--admin-weight-bold)' : 'var(--admin-weight-medium)',
+      fontSize: 'var(--admin-text-ui)',
+      fontWeight: isFilled || (isActive && hasSub && isExpanded) ? 'var(--admin-weight-semibold)' : 'var(--admin-weight-regular)',
       textAlign: 'left' as const,
       textDecoration: 'none',
     }
@@ -197,13 +186,13 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
             {label}
           </span>
         )}
-        {/* `data-active` so the badge can invert on a filled row. Without it the
-            pill is `--admin-accent-blue` on `--admin-accent-bg-blue`, an 8%-alpha
-            tint of that same colour — over the solid accent fill of a selected row
-            that is teal text on teal, which is unreadable at exactly the moment
-            the count matters most. */}
+        {/* A count, as a small pill at the row's end: `--admin-bg-active` is the rail's own
+            neutral tint (`.on-shell` points it at the chrome's translucent white), never blue —
+            in the rail blue means the selected row and nothing else. `data-active` lets the
+            figure take the on-accent white on a filled row (`index.css`). No row carries a
+            count today; see `NavItem.badge`. */}
         {!collapsed && item.badge && (
-          <span className="nav-badge" data-active={isFilled}>
+          <span className="nav-badge" data-active={isFilled} style={{ background: 'var(--admin-bg-active)' }}>
             {item.badge}
           </span>
         )}
@@ -414,12 +403,15 @@ export default function RoleBasedNav({ sections, collapsed = false, onNavigate }
       style={{ flex: 1, overflowY: 'auto', padding: collapsed ? '4px 6px 8px 6px' : '4px 8px 8px 8px' }}
     >
       {sections.map((section, index) => (
-        <div key={section.titleKey || index} style={{ marginBottom: 8 }}>
+        // The Apple-design rail (`occ.css`): 4px between sections (`.nav { gap: 4px }`), and the
+        // unheaded home section — Inicio, or a leader's Mi equipo and Mis encuestas — drawn as
+        // plain rows with no heading over them, as every board opens its rail.
+        <div key={section.titleKey || index} style={{ marginBottom: 'var(--admin-space-4)' }}>
           {section.titleKey && !collapsed && (
-            // The canvas's section head (`.nav-section`, every artboard): 8px more under it than
-            // `.nav-section-title` keeps elsewhere — its 6px plus the nav's 2px gap — and the rows'
-            // 10px inset. At 6px every row under a heading sat 2px high, 6px by the rail's foot.
-            <div className="nav-section-title" data-slot="nav-section-title" style={{ padding: 'var(--admin-space-8) var(--admin-space-10)' }}>
+            // `.sec-t { padding: 12px 10px 4px }`: 12px of air over the heading, 4px under it to
+            // the first row, and the rows' own 10px inset. 11px uppercase, tracked, in the
+            // chrome's label ink — `index.css` `.nav-section-title`.
+            <div className="nav-section-title" data-slot="nav-section-title" style={{ padding: 'var(--admin-space-12) var(--admin-space-10) var(--admin-space-4)' }}>
               {t(section.titleKey)}
             </div>
           )}
@@ -467,7 +459,7 @@ function SubItemRow({
         height: 'var(--admin-size-control-md)',
         padding: elbow ? '0 var(--admin-space-4) 0 0' : '0 var(--admin-space-8)',
         borderRadius: 'var(--admin-radius-md)',
-        fontSize: 'var(--admin-text-base)',
+        fontSize: 'var(--admin-text-sm)',
         fontWeight: 'var(--admin-weight-medium)',
         textDecoration: 'none',
       }}

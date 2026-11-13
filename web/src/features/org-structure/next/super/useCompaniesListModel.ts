@@ -4,6 +4,7 @@ import { getSuperAdminDashboard } from '../../../dashboard/api/dashboard'
 import { listSurveys } from '../../../surveys/api/surveys'
 import { listCompanies } from '../../api/companies'
 import { composeCompanyRows, type CompanyListRow } from './companiesList'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface CompaniesListState {
   status: 'loading' | 'ready' | 'error'
@@ -33,13 +34,11 @@ const isDashboard = (value: unknown) =>
  *   list payload has neither;
  * - `GET /surveys` with no company (every tenant, for this role) for the open wave.
  *
- * It sends NO request that writes. Each tenant's content language lives only in its
- * settings, and the only read of those is `PUT /admin/companies/{id}/settings` with an
- * empty body — a PUT, so `AuditPolicy.IsMutatingMethod` (AuditPolicy.cs:137-141) audits it
- * and `AuditWritingMiddleware` adds a `companies.settings.update` row per call. A list
- * that fired one per tenant on every visit would fill the audit trail with updates nobody
- * made, so the language column says where the language is read — the tenant's detail —
- * instead of reading it. `CompaniesListNextPage.test.tsx` pins that no PUT is sent.
+ * It sends NO request that writes. The only read of a tenant's settings is
+ * `PUT /admin/companies/{id}/settings` with an empty body — a PUT, so `AuditPolicy` audits it
+ * and a list that fired one per tenant would fill the audit trail with updates nobody made.
+ * The language column instead reads `language` off the list payload itself (added 2026-11-08).
+ * `CompaniesListNextPage.test.tsx` pins that no PUT is sent.
  *
  * `enabled` is `canManageCompanies`: every one of these is super-only, so nothing is
  * requested for a viewer the server would refuse.
@@ -69,7 +68,7 @@ export function useCompaniesListModel(enabled: boolean): CompaniesListState {
         setStatus('ready')
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       }
     }

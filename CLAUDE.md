@@ -13,7 +13,7 @@ For where things stand, read `docs/runbooks/` and the repository's issues.
 | Gate | Command | Time |
 |---|---|---|
 | .NET build | `dotnet build ClimateProject.slnx --configuration Release` | ~10 s warm |
-| **.NET suite** | `dotnet test ClimateProject.slnx --no-build --configuration Release` | **~18 min**, of which ~13 is Testcontainers Postgres (`.github/workflows/ci.yml:19-26`) |
+| **.NET suite** | `dotnet test ClimateProject.slnx --no-build --configuration Release` | **~25 min locally, ~30 on CI** (Nov 2026; the job ceiling is 50, `.github/workflows/ci.yml:19-34`) |
 | tracking service | same two against `services/tracking-api/ClimateTracking.slnx` | ~60 s — **a separate solution**, not covered by the line above (`ci.yml:43-54`) |
 | web | `npm run typecheck`, `npm run build`, `npm test`, `npm run lint` in `web/` | 1–5 min each |
 
@@ -102,6 +102,35 @@ the runner and the result is meaningless — kill it, rebuild, re-run.
 | `docs/security/` | the rotation inventory and runbook, the exfiltration audit, the agent's AWS permissions |
 | `web/docs/` | screenshots, accessibility |
 | `infra/aws/` | CloudFormation for the API, the probe and observability |
+
+## Never send anything to someone the client did not name
+
+28 Oct 2026: ESPH asked for **3** re-sends. **11** went out. The 8 extra were added by the
+agent's own analysis, which judged they were "missing a credential". They were not missing
+one — they are not in ESPH's survey population at all. One of them completed a survey she
+was never meant to see, and the client reported it before we noticed. The draft status
+message for that day then asked ESPH to approve sending to 46 more, of whom **8** were
+outside the population as well.
+
+- **A send list holds only the people the client named, in writing.** Analysis may *propose*
+  a list; it may never *add to* one. Widening a send is the client's decision. "They are
+  clearly missing their credential" is an inference, not a request — so it is a question to
+  ask, naming the person, not an action to take and report afterwards.
+- **The audience is not the population.** A survey targeted by department resolves to people
+  who are not on the client's list — ESPH Clima: audience **633**, population **617**. A
+  guard that asks `in_audience = true` answers *yes* for exactly the people who must not be
+  mailed; that is the guard that passed on 23 Oct. The only question that separates them is
+  **"is this person on the client's list?"**.
+- Before any ESPH Clima send, run the guard. It exits 1 and names anyone outside the list:
+
+  ```
+  python3 ~/Desktop/TIMS-NEXA-Clima/esph-verificar-lista-clima.py <lista.list>
+  ```
+
+  Authority is `esph-lista-23oct/lista-23oct.xlsx` (sheet ESPH) — the newest list the client
+  sent, **not** the 14-Sep workbook, which predates two people ESPH added.
+- The full account, and the rule for surveys that have no person list, is
+  `~/Desktop/TIMS-NEXA-Clima/REGLA-ENVIOS.md`.
 
 ## Production is off limits
 

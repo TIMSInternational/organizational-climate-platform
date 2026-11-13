@@ -12,6 +12,7 @@ import SurveyDistributionNextPage from './SurveyDistributionNextPage'
 import * as surveysApi from '../../api/surveys'
 import * as distributionApi from '../../api/surveyDistribution'
 import * as usersApi from '../../../org-structure/api/users'
+import es from '../../../../i18n/es.json'
 
 /**
  * G9, G10 and G11 of the 2026-10-22 gap audit, through the page and its model.
@@ -133,6 +134,19 @@ afterEach(() => {
 })
 
 describe('Distribución — sending per-survey codes to any audience size (G9)', () => {
+  /**
+   * The bulk send mails everyone in the audience still without a code -- on a department-targeted
+   * survey, people the client never listed included (28 Oct 2026). Its confirmation now says so and
+   * points to the one-person send before anything leaves (walkthrough A3, 2026-11-08).
+   */
+  it('says, before sending, that it writes to everyone without a code and where the one-person send is', async () => {
+    open(survey(), list('per_survey'))
+    await userEvent.click(await screen.findByRole('button', { name: /Enviar códigos/ }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog.textContent).toContain(es.surveys.next.distribution.send.confirmCodesOnePerson)
+    expect(vi.mocked(distributionApi.createSurveyInvitations)).not.toHaveBeenCalled()
+  })
+
   it('repeats the same request while people remain, shows the progress, and names the address that failed', async () => {
     open(survey(), list('per_survey'))
     // 617 people. The first call reaches 99 and one address refuses; five more of 100; the
@@ -172,6 +186,9 @@ describe('Distribución — sending per-survey codes to any audience size (G9)',
     const outcome = await screen.findByTestId('send-outcome')
     expect(create).toHaveBeenCalledTimes(2)
     expect(outcome.textContent).toContain('El envío se detuvo: se enviaron 100 códigos y 517 personas siguen sin el suyo.')
+    // Unfinished is told by a glyph, not only by weight: the missing step's AlertCircle.
+    expect(outcome.querySelector('[data-slot="send-outcome-mark"]')?.getAttribute('data-mark')).toBe('unfinished')
+    expect(outcome.querySelector('[data-slot="send-outcome-mark"] svg')?.getAttribute('class')).toMatch(/circle-alert|alert-circle/)
     // The server's English never reaches the screen.
     expect(document.body.textContent).not.toContain('timed out')
 
@@ -180,6 +197,7 @@ describe('Distribución — sending per-survey codes to any audience size (G9)',
     await userEvent.click(within(outcome).getByRole('button', { name: 'Reanudar el envío' }))
     await waitFor(() => expect(screen.getByTestId('send-outcome').textContent).toContain('Se enviaron 517 códigos. Todas las personas de la audiencia tienen el suyo.'))
     expect(create).toHaveBeenCalledTimes(8)
+    expect(screen.getByTestId('send-outcome').querySelector('[data-slot="send-outcome-mark"]')?.getAttribute('data-mark')).toBe('finished')
     expect(create.mock.calls[2][2]).toEqual({ allTargeted: true })
   })
 

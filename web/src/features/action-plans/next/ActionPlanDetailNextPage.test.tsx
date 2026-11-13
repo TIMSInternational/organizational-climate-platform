@@ -9,8 +9,10 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../co
 import { clearCompanyNameCache } from '../../../company-context/useCompanyName'
 import { tokenFor } from '../../../test/jwtFixture'
 import {
+  deleteActionPlan,
   getActionPlan,
   listActionPlans,
+  listProgress,
   recordProgress,
   updateActionPlan,
   type ActionPlanDetail,
@@ -32,6 +34,8 @@ vi.mock('../api/actionPlans', async (importOriginal) => ({
   listActionPlans: vi.fn(),
   updateActionPlan: vi.fn(),
   recordProgress: vi.fn(),
+  listProgress: vi.fn(),
+  deleteActionPlan: vi.fn(),
 }))
 vi.mock('../api/actionPlanTemplates', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/actionPlanTemplates')>()),
@@ -145,6 +149,7 @@ function renderAs(claims: Record<string, unknown>) {
         <CompanyContextProvider>
           <Routes>
             <Route path="/action-plans/:id" element={<ActionPlanDetailNextPage />} />
+            <Route path="/action-plans" element={<div data-testid="plans-list" />} />
           </Routes>
         </CompanyContextProvider>
       </MemoryRouter>
@@ -176,6 +181,8 @@ describe('ActionPlanDetailNextPage', () => {
       ])
     vi.mocked(updateActionPlan).mockReset()
     vi.mocked(recordProgress).mockReset()
+    vi.mocked(listProgress).mockReset().mockResolvedValue([])
+    vi.mocked(deleteActionPlan).mockReset()
     vi.mocked(listActionPlanTemplates).mockReset().mockResolvedValue([])
     vi.mocked(listDepartments)
       .mockReset()
@@ -216,6 +223,38 @@ describe('ActionPlanDetailNextPage', () => {
     expect(screen.getByRole('button', { name: new RegExp(copy.changeStatus) })).toBeTruthy()
   })
 
+  it('counts a late plan’s days in primary ink: the large red numeral is the Crítica area’s alone', async () => {
+    vi.setSystemTime(new Date(2026, 9, 20, 12, 0))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByRole('heading', { level: 1, name: plan.title })
+    const count = document.querySelector('[data-slot="deadline-count"]') as HTMLElement
+    expect(count.textContent).toBe('5')
+    expect(count.className).toContain('text-fg-primary')
+    expect(count.className).not.toContain('text-accent-red-ink')
+  })
+
+  it('gives a late plan’s header sentence one red cue, the clock, and keeps its words out of the danger ink', async () => {
+    vi.setSystemTime(new Date(2026, 9, 20, 12, 0))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByRole('heading', { level: 1, name: plan.title })
+    const sentence = document.querySelector('[data-slot="plan-due-sentence"]') as HTMLElement
+    expect(sentence.className).not.toContain('text-accent-red-ink')
+    const clock = sentence.querySelector('[data-slot="plan-due-clock"]') as SVGElement
+    expect(clock.getAttribute('class')).toContain('text-accent-red-ink')
+  })
+
+  it('floors a KPI’s progress and prints it in the Spanish percent form: 58 of 70 is 82 %, never 83%', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({
+      ...plan,
+      kpis: [{ id: 'k1', name: 'Rotación', currentValue: 58, targetValue: 70, unit: '%' } as never],
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByText('Rotación')
+    const bar = screen.getByRole('progressbar', { name: 'Rotación' })
+    const text = (bar.nextElementSibling?.textContent ?? '').replace(/\s/g, ' ')
+    expect(text).toBe('82 %')
+  })
+
   it('draws the header’s actions at the canvas’s 34px', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     const record = await screen.findByRole('button', { name: new RegExp(copy.recordProgress) })
@@ -224,7 +263,7 @@ describe('ActionPlanDetailNextPage', () => {
     expect(screen.getByRole('button', { name: copy.moreActions.replace('{title}', 'Reducir la carga de trabajo en Operaciones') }).className.split(' ')).toContain('size-control-canvas')
   })
 
-  it('never claims the plan has no progress: the server does not return it, and the Bitácora says so', async () => {
+  it('never claims the plan has no progress when none is recorded: one entry, the creation', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await screen.findByText(copy.log.entryOne)
     expect(screen.queryByText(/Sin avances registrados/)).toBeNull()
@@ -233,6 +272,36 @@ describe('ActionPlanDetailNextPage', () => {
         (_, node) => node?.tagName === 'SPAN' && node.textContent === `${copy.log.noteBefore} ${copy.log.noteAction}${copy.log.noteAfter}`,
       ),
     ).toBeTruthy()
+  })
+
+  /**
+   * G24: `POST .../progress` wrote every note and nothing read one back, so the Bitácora showed
+   * only what was recorded during the visit and lost it on reload. It now reads the server's.
+   */
+  it('reads the Bitácora from the server, so the progress recorded on earlier visits is there on load', async () => {
+    vi.mocked(listProgress).mockResolvedValue([
+      { id: 'u1', updateDate: '2026-09-01T18:00:00Z', overallNotes: 'Primera reunión con el equipo.', updatedBy: 'u-ana', updatedByName: 'Ana Rojas' },
+      { id: 'u2', updateDate: '2026-09-08T18:00:00Z', overallNotes: 'Turno de noche redistribuido.', updatedBy: 'u-luis', updatedByName: null },
+    ])
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+
+    expect(await screen.findByText(copy.log.entries.replace('{count}', '3'))).toBeTruthy()
+    expect(screen.getByText('Primera reunión con el equipo.')).toBeTruthy()
+    expect(screen.getByText('Turno de noche redistribuido.')).toBeTruthy()
+    // Named where the server named them; the plain sentence where it could not.
+    expect(screen.getByText((_, node) => node?.tagName === 'SPAN' && node.textContent === `${copy.log.progressBy} Ana Rojas`)).toBeTruthy()
+    expect(screen.getByText(copy.log.progress)).toBeTruthy()
+    expect(vi.mocked(listProgress).mock.calls[0]?.slice(1)).toEqual(['p1'])
+  })
+
+  it('says the history could not be read rather than drawing an empty one, and keeps the plan', async () => {
+    vi.mocked(listProgress).mockRejectedValue(new ApiError(500, 'boom'))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+
+    expect(await screen.findByText(copy.log.historyFailed)).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: plan.title })).toBeTruthy()
+    // No count where the count is unknown.
+    expect(screen.queryByText(copy.log.entryOne)).toBeNull()
   })
 
   it('proposes the finding: the lowest cell of the plan’s department in the latest closed wave, in its result band', async () => {
@@ -292,7 +361,10 @@ describe('ActionPlanDetailNextPage', () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     expect(await screen.findByText(copy.finding.moveLabel)).toBeTruthy()
     expect(screen.getByText('Q2 2,6 → Q3 3,1')).toBeTruthy()
-    expect(screen.getByText(/\+0,5/)).toBeTruthy()
+    const delta = screen.getByText(/\+0,5/)
+    // The sign carries the direction; ▲/▼ and green/red are the result areas' and not a move's.
+    expect(delta.textContent).not.toMatch(/[\u25b2\u25bc]/)
+    expect(delta.className).not.toMatch(/accent-(green|red)/)
   })
 
   it('withholds the move, and any number with it, when the later wave does not disclose the group', async () => {
@@ -303,7 +375,8 @@ describe('ActionPlanDetailNextPage', () => {
     })
     vi.mocked(getClimateTrends).mockResolvedValue(twoWaves({ q2: [2.6, 2.4], q3: null }))
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    expect(await screen.findByText(copy.finding.moveProtected.replace('{code}', 'Q2').replace('{floor}', String(ANONYMITY_FLOOR)))).toBeTruthy()
+    // The payload's own floor (the fixture's `minimumGroupSize`), never a constant.
+    expect(await screen.findByText(copy.finding.moveProtected.replace('{code}', 'Q2').replace('{floor}', '5'))).toBeTruthy()
     expect(screen.queryByText(copy.finding.moveLabel)).toBeNull()
     // The Q2 baseline still prints; what is withheld is the later reading, and only it.
     expect(screen.getByText('2,6')).toBeTruthy()
@@ -321,10 +394,27 @@ describe('ActionPlanDetailNextPage', () => {
     expect(await screen.findByText(copy.finding.moveAwaiting.replace('{code}', 'Q3'))).toBeTruthy()
   })
 
+  it('reads a department the server disclosed at its own floor, as the departments page does', async () => {
+    // Administrators see a single department from one response (ruling 2026-10-15), so the
+    // server's payload says minimumGroupSize 1. Two respondents are then a disclosed reading
+    // here too: this page withheld them under a constant 3 and said «Menos de 3» about a
+    // department the departments page printed (review 12 Nov).
+    vi.mocked(getClimateTrends).mockResolvedValue({
+      ...trendsWith({ respondentCount: 2, isSuppressed: false, scores: [3.2, 2.4] }),
+      minimumGroupSize: 1,
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText('2,4')).toBeTruthy()
+    expect(screen.queryByText(es.ui.protected.short.replace('{floor}', '3'))).toBeNull()
+    expect(screen.queryByText(es.ui.protected.short.replace('{floor}', '1'))).toBeNull()
+  })
+
   it('prints no number for a department under the floor, even when the payload carries its scores', async () => {
     vi.mocked(getClimateTrends).mockResolvedValue(trendsWith({ respondentCount: ANONYMITY_FLOOR - 1, isSuppressed: false, scores: [3.2, 2.4] }))
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    expect(await screen.findByText(copy.finding.protected)).toBeTruthy()
+    // The padlock and "Menos de 5" (`ProtectedState`) — the floor the payload applied, never a
+    // constant — and no figure of the group's own.
+    expect(await screen.findByText(es.ui.protected.short.replace('{floor}', '5'))).toBeTruthy()
     expect(screen.queryByText('2,4')).toBeNull()
     expect(screen.queryByText('Carga de trabajo')).toBeNull()
   })
@@ -370,7 +460,10 @@ describe('ActionPlanDetailNextPage', () => {
   })
 
   it('records progress from the dialog and lists the update in the Bitácora', async () => {
-    vi.mocked(recordProgress).mockResolvedValue({ id: 'u1', updateDate: '2026-09-10T18:00:00Z', overallNotes: 'Se redistribuyó el turno de noche.', updatedBy: 'u-ana' })
+    const update = { id: 'u1', updateDate: '2026-09-10T18:00:00Z', overallNotes: 'Se redistribuyó el turno de noche.', updatedBy: 'u-ana' }
+    vi.mocked(recordProgress).mockResolvedValue(update)
+    // The first read finds nothing; the read after the POST finds what it wrote.
+    vi.mocked(listProgress).mockResolvedValueOnce([]).mockResolvedValue([update])
     renderAs({ role: 'company_admin', companyId: COMPANY })
     await userEvent.click(await screen.findByRole('button', { name: new RegExp(copy.recordProgress) }))
     const dialog = await screen.findByRole('dialog')
@@ -384,6 +477,91 @@ describe('ActionPlanDetailNextPage', () => {
     )
     expect(await screen.findByText(copy.log.entries.replace('{count}', '2'))).toBeTruthy()
     expect(screen.getByText(copy.log.progress)).toBeTruthy()
+  })
+
+  /** G24: a plan could not be corrected after it was created; `PUT` always accepted these. */
+  it('corrects the title, description, due date and tags through the PUT, keeping the tags the platform wrote', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({ ...plan, tags: ['clima', 'department:ops', 'dimension:workload'] })
+    vi.mocked(updateActionPlan).mockResolvedValue({ ...plan, title: 'Reducir la carga en Operaciones' })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+
+    await userEvent.click(await screen.findByRole('button', { name: new RegExp(copy.moreActions.replace('{title}', '')) }))
+    await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: copy.edit.menu }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(copy.edit.title)).toBeTruthy()
+
+    const title = within(dialog).getByRole('textbox', { name: new RegExp(es.actionPlans.planTitle) })
+    expect((title as HTMLInputElement).value).toBe(plan.title)
+    // Only the person-written tag is offered; the provenance tags are not editable.
+    const tags = within(dialog).getByRole('textbox', { name: new RegExp(es.actionPlans.tags) })
+    expect((tags as HTMLInputElement).value).toBe('clima')
+
+    await userEvent.clear(title)
+    await userEvent.type(title, 'Reducir la carga en Operaciones')
+    await userEvent.clear(tags)
+    await userEvent.type(tags, 'clima, turnos')
+    const due = dialog.querySelector('input[type="date"]') as HTMLInputElement
+    expect(due.value).toBe('2026-10-15')
+    await userEvent.clear(due)
+    await userEvent.type(due, '2026-11-30')
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.edit.save }))
+
+    await waitFor(() =>
+      expect(vi.mocked(updateActionPlan).mock.calls[0]?.slice(1)).toEqual([
+        'p1',
+        {
+          title: 'Reducir la carga en Operaciones',
+          description: plan.description,
+          dueDate: '2026-11-30',
+          tags: ['clima', 'turnos', 'department:ops', 'dimension:workload'],
+        },
+        'es',
+      ]),
+    )
+    expect(await screen.findByRole('heading', { level: 1, name: 'Reducir la carga en Operaciones' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('keeps the edit open with the server’s reason when the PUT is refused', async () => {
+    vi.mocked(updateActionPlan).mockRejectedValue(new ApiError(400, 'Title is required'))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await userEvent.click(await screen.findByRole('button', { name: new RegExp(copy.moreActions.replace('{title}', '')) }))
+    await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: copy.edit.menu }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.edit.save }))
+
+    expect(await within(dialog).findByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('deletes the plan only after a confirmation that says what goes with it, then returns to the list', async () => {
+    vi.mocked(deleteActionPlan).mockResolvedValue()
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await userEvent.click(await screen.findByRole('button', { name: new RegExp(copy.moreActions.replace('{title}', '')) }))
+    await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: copy.delete.menu }))
+
+    const confirm = await screen.findByRole('alertdialog')
+    expect(within(confirm).getByText(copy.delete.body.replace('{title}', plan.title))).toBeTruthy()
+    // Nothing is sent until the reader confirms.
+    expect(deleteActionPlan).not.toHaveBeenCalled()
+    await userEvent.click(within(confirm).getByRole('button', { name: copy.delete.confirm }))
+
+    await waitFor(() => expect(vi.mocked(deleteActionPlan).mock.calls[0]?.slice(1)).toEqual(['p1']))
+    expect(await screen.findByTestId('plans-list')).toBeTruthy()
+  })
+
+  it('stays on the plan and says why when the delete is refused', async () => {
+    vi.mocked(deleteActionPlan).mockRejectedValue(new ApiError(403, 'Forbidden'))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await userEvent.click(await screen.findByRole('button', { name: new RegExp(copy.moreActions.replace('{title}', '')) }))
+    await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: copy.delete.menu }))
+    const confirm = await screen.findByRole('alertdialog')
+    await userEvent.click(within(confirm).getByRole('button', { name: copy.delete.confirm }))
+
+    // G30: the refusal in the reader's language, never the server's English.
+    expect(await within(confirm).findByText(es.errors.api.forbidden)).toBeTruthy()
+    expect(within(confirm).queryByText('Forbidden')).toBeNull()
+    expect(screen.queryByTestId('plans-list')).toBeNull()
   })
 
   it('offers a super administrator the actions with no company chosen: the plan names its own', async () => {
@@ -413,9 +591,13 @@ describe('ActionPlanDetailNextPage', () => {
     expect(screen.getByText(copy.finding.adminOnly)).toBeTruthy()
     expect(screen.queryByText(es.actionPlans.accessRestricted)).toBeNull()
 
-    // Read-only: the writes are the administration's, as the plan's own guard line says.
+    // Read-only: the writes are the administration's, as the plan's own guard line says --
+    // no edit, no delete, no menu that holds them.
     expect(screen.queryByRole('button', { name: new RegExp(copy.recordProgress) })).toBeNull()
     expect(screen.queryByRole('button', { name: new RegExp(copy.changeStatus) })).toBeNull()
+    expect(screen.queryByRole('button', { name: new RegExp(copy.moreActions.replace('{title}', '')) })).toBeNull()
+    // The history is the plan's own, readable by its owner.
+    expect(listProgress).toHaveBeenCalled()
 
     // Not sent and then failed: never sent.
     for (const adminRead of [listDepartments, getUser, listUsers, listActionPlanTemplates, listSurveys, getClimateTrends]) {

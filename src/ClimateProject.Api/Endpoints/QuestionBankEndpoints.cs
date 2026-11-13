@@ -392,6 +392,7 @@ public static class QuestionBankEndpoints
                 {
                     message = $"This question has been used in {instantiated} survey question(s) and cannot be deleted. "
                               + "Retire it instead, through PUT /admin/question-bank/{id}/lifecycle.",
+                    code = AdminRefusals.QuestionBankItemInUse,
                 },
                 statusCode: 409);
         }
@@ -400,7 +401,7 @@ public static class QuestionBankEndpoints
         if (variations > 0)
         {
             return Results.Json(
-                new { message = $"This question has {variations} variation(s) hanging off it. Delete or re-parent them first." },
+                new { message = $"This question has {variations} variation(s) hanging off it. Delete or re-parent them first.", code = AdminRefusals.QuestionBankItemHasVariations },
                 statusCode: 409);
         }
 
