@@ -229,8 +229,11 @@ than by the write, which is what makes step 3→4 predictable instead of open-en
    (`.github/workflows/deploy-tracking-prod.yml`,
    [`docs/runbooks/tracking-service-provisioning.md`](../runbooks/tracking-service-provisioning.md)).
    Re-check with
-   `aws cloudformation describe-stacks --stack-name climate-tracking-api-prod --region us-east-1`
-   — a `does not exist` error means steps 4–5 are still a no-op.
+   `aws cloudformation describe-stacks --stack-name climate-tracking-api-prod --region us-east-2`
+   — a `does not exist` error means steps 4–5 are still a no-op. [AMENDED 2026-11-13: the
+   region was `us-east-1`. Climate production moved to account `795965600143`, `us-east-2`, on
+   2026-10-12, and the tracking stack deploys beside it; asked in `us-east-1` this command says
+   `does not exist` even once the stack exists, which reads as "still a no-op" when it is not.]
 1. Generate: `openssl rand -hex 32`.
 2. SECRET-UPDATE `climate-project-api/prod/InternalApiKey`. **One secret, not two.** Both
    services read this ARN; there is deliberately no `climate-tracking/prod/...` copy,

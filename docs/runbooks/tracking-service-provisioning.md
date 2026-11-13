@@ -78,6 +78,37 @@ Left as a recommendation rather than applied: it is production configuration, an
 serves it has been verified from outside (`/version`, `/health`, `/ready` all 200 on 2026-09-28)
 but the tracking service's own call path has not, because it does not run yet.
 
+[RESOLVED — measured 2026-11-13: `gh variable list --env production` →
+`CLIMATE_PROJECT_BASE_URL  https://api.climate.timsint.com  2026-09-28T17:52:29Z`. The correction
+above was applied the same day.]
+
+### AMENDED 2026-11-13 — climate production changed AWS account; this file named the old one
+
+On 2026-10-12 climate production moved from account `747814092517`, `us-east-1`, to account
+**`795965600143`, `us-east-2`** (`scripts/migrate-climate-to-new-account.sh`, PR #541). Not
+`us-east-1` in the new account: App Runner answers `SubscriptionRequiredException` there (same
+script, header, measured 2026-10-12). The tracking
+service deploys beside it — `deploy-tracking-prod.yml` sets `AWS_REGION: us-east-2` and builds
+its role ARN and its secret-ARN check from `vars.AWS_ACCOUNT_ID` — but §4, §5.1, §5.2 and §9 below
+still told whoever runs this to create the secret and the bootstrap stack in the old account and
+region. They are corrected in place. Measured today, read-only:
+
+| fact | measurement |
+|---|---|
+| `AWS_ACCOUNT_ID` is the new account | `gh variable list` → `AWS_ACCOUNT_ID  795965600143  2026-10-12T18:45:07Z` |
+| The two shared ARNs name the new account and region | `gh variable list --env production` → `INTERNAL_API_KEY_SECRET_ARN …:us-east-2:795965600143:secret:climate-project-api/prod/InternalApiKey-wggtub`, `TRACKING_JWT_SECRET_ARN …:us-east-2:795965600143:secret:climate-project-api/prod/tracking-jwt-secret-GzgyDc` |
+| …and equal what the live climate stack runs with, so the identity preflight will pass | CloudFormation `DescribeStacks climate-project-api-prod` (us-east-2) → parameters `InternalApiKeySecretArn` and `TrackingJwtSecretArn` are byte-identical to those two |
+| Both secrets exist there | Secrets Manager `ListSecrets` (us-east-2) → 5 secrets, all `climate-project-api/prod/*`, created 2026-10-12 |
+| No tracking database secret yet | `DescribeSecret climate-tracking-api/prod/database-connection-string` → `ResourceNotFoundException` |
+| No tracking stack, role or repository in the new account | `DescribeStacks` `climate-tracking-api-bootstrap` and `climate-tracking-api-prod` → `does not exist`; `GetRole climate-tracking-github-deploy-prod` → `NoSuchEntity`; ECR `DescribeRepositories` → only `climate-project-api` |
+| The GitHub OIDC provider the bootstrap role trusts already exists | IAM `ListOpenIDConnectProviders` → `arn:aws:iam::795965600143:oidc-provider/token.actions.githubusercontent.com` |
+| The climate API answers on its custom domain from the new account | `dig +short api.climate.timsint.com` → `av3s7p9mkm.us-east-2.awsapprunner.com.`; `/version` → commit `645dac4e…`, `"environment":"Production"` |
+| The old App Runner hostname is gone | `curl https://bhgrdkd4gt.us-east-1.awsapprunner.com/version` → `Could not resolve host` |
+| Still unset | `PROCOMER_COMPANY_ID`, `TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN` (absent from `gh variable list --env production`); `TRACKING_MIGRATION_DATABASE_CONNECTION_STRING` (absent from `gh secret list --env production`, which lists only `MIGRATION_DATABASE_CONNECTION_STRING`) |
+
+So what is left is the same three values as on 2026-09-28, plus the bootstrap stack (§5.2) — which
+did not exist in the old account on 2026-09-28 and does not exist in the new one today.
+
 ## 1. The shape, and why it is this shape
 
 Two CloudFormation stacks and one dispatch-only workflow, identical in structure to
@@ -375,19 +406,26 @@ AAAA record and no A record, so it is unroutable from IPv4-only GitHub runners.
 **The tracking host has no `Database__RequireSessionPooler` equivalent, so here the
 wrong port degrades silently the way it used to on climate-project.**
 
-Then create the Secrets Manager entry, in account `747814092517`, `us-east-1`:
+`aws-0-us-east-1` in that string is a **Supabase** pooler region — the climate project's — not an
+AWS one, and it is only the shape. Copy the host from the tracking project's own Connect →
+Session pooler panel: it follows the region the project is created in.
+
+Then create the Secrets Manager entry, in account `795965600143`, `us-east-2` — beside the
+climate secrets, and in the only region the deploy's preflight accepts (its ARN check is
+`^arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:`). [AMENDED 2026-11-13: this
+read `747814092517`, `us-east-1`, the account climate production left on 2026-10-12.]
 
 ```bash
 aws secretsmanager create-secret \
   --name climate-tracking-api/prod/database-connection-string \
   --description 'climate-tracking Postgres. Session pooler, port 5432. MUST carry Maximum Pool Size=10 (no DatabaseConnectionStringPolicy in this service).' \
   --secret-string 'Host=...;Port=5432;...;Maximum Pool Size=10' \
-  --region us-east-1
+  --region us-east-2
 
 # Read the ARN back — this is the value that goes into the GitHub variable.
 aws secretsmanager describe-secret \
   --secret-id climate-tracking-api/prod/database-connection-string \
-  --query ARN --output text --region us-east-1
+  --query ARN --output text --region us-east-2
 ```
 
 **Turn PITR on for the tracking project while you are there**, and open the
@@ -404,38 +442,53 @@ this codebase is hard; `DailySemaforoWorker` writes on a schedule.
 
 Already set, **shared with `deploy-prod.yml`, do not duplicate**:
 
-| Name | Value (read back 2026-08-24) |
+| Name | Value (read back 2026-11-13) |
 |---|---|
-| `AWS_ACCOUNT_ID` (repo variable) | `747814092517` |
-| `INTERNAL_API_KEY_SECRET_ARN` | `arn:aws:secretsmanager:us-east-1:747814092517:secret:climate-project-api/prod/InternalApiKey-rILWWK` |
-| `TRACKING_JWT_SECRET_ARN` | `arn:aws:secretsmanager:us-east-1:747814092517:secret:climate-project-api/prod/tracking-jwt-secret-rtayFN` |
+| `AWS_ACCOUNT_ID` (repo variable) | `795965600143` |
+| `INTERNAL_API_KEY_SECRET_ARN` | `arn:aws:secretsmanager:us-east-2:795965600143:secret:climate-project-api/prod/InternalApiKey-wggtub` |
+| `TRACKING_JWT_SECRET_ARN` | `arn:aws:secretsmanager:us-east-2:795965600143:secret:climate-project-api/prod/tracking-jwt-secret-GzgyDc` |
+
+[AMENDED 2026-11-13: this table was read back on 2026-08-24 and named account `747814092517`,
+`us-east-1` (`…InternalApiKey-rILWWK`, `…tracking-jwt-secret-rtayFN`). All three were re-pointed at
+the new account on 2026-10-12, and the two ARNs equal the live `climate-project-api-prod` stack's
+parameters (CloudFormation `DescribeStacks`, us-east-2, 2026-11-13).]
 
 New, to add:
 
 | Name | Kind | Value |
 |---|---|---|
-| `TRACKING_CORS_ALLOWED_ORIGIN` | variable | `https://climate.timsint.com` |
+| `TRACKING_CORS_ALLOWED_ORIGIN` | variable | `https://climate.timsint.com` — **already set** (2026-08-31) |
 | `TRACKING_CORS_ADDITIONAL_ALLOWED_ORIGIN` | variable, optional | leave unset |
-| `CLIMATE_PROJECT_BASE_URL` | variable | `https://bhgrdkd4gt.us-east-1.awsapprunner.com` |
+| `CLIMATE_PROJECT_BASE_URL` | variable | `https://api.climate.timsint.com` — **already set** (2026-09-28) |
 | `PROCOMER_COMPANY_ID` | variable | **HUMAN INPUT**, see below |
 | `TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN` | variable | the ARN from §4 |
 | `TRACKING_MIGRATION_DATABASE_CONNECTION_STRING` | **secret** | the tracking session-pooler string |
 
 ```bash
-gh variable set TRACKING_CORS_ALLOWED_ORIGIN --env production --body 'https://climate.timsint.com'
-gh variable set CLIMATE_PROJECT_BASE_URL     --env production --body 'https://bhgrdkd4gt.us-east-1.awsapprunner.com'
+# Already set — do not re-run unless the read-back says otherwise:
+#   gh variable set TRACKING_CORS_ALLOWED_ORIGIN --env production --body 'https://climate.timsint.com'
+#   gh variable set CLIMATE_PROJECT_BASE_URL     --env production --body 'https://api.climate.timsint.com'
 gh variable set PROCOMER_COMPANY_ID          --env production --body '<GUID>'
-gh variable set TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN --env production --body 'arn:aws:secretsmanager:...'
+gh variable set TRACKING_DATABASE_CONNECTION_STRING_SECRET_ARN --env production --body 'arn:aws:secretsmanager:us-east-2:795965600143:secret:climate-tracking-api/prod/database-connection-string-......'
 gh secret   set TRACKING_MIGRATION_DATABASE_CONNECTION_STRING  --env production
 ```
+
+[AMENDED 2026-11-13: `CLIMATE_PROJECT_BASE_URL` was `https://bhgrdkd4gt.us-east-1.awsapprunner.com`
+here. That host no longer resolves (`curl … /version` → `Could not resolve host`, 2026-11-13).]
 
 **`PROCOMER_COMPANY_ID` is not knowable from this repository.** It is the
 climate-project `Company` GUID this deployment serves. Read it from the production
 database:
 
 ```sql
-SELECT id, name FROM companies ORDER BY name;
+SELECT "Id", name FROM companies ORDER BY name;
 ```
+
+[AMENDED 2026-11-13: this read `SELECT id, name …`, which fails. The key column was created
+PascalCase (`Id = table.Column<Guid>` in `20260731030029_InitialAuthSchema.cs`, no
+`HasColumnName`), so it must be quoted. Measured against the local `climate_project` database:
+`SELECT id, name FROM companies` → `ERROR: column "id" does not exist`; `SELECT "Id", name …` →
+rows.]
 
 Getting it wrong has two distinct failure modes, and the preflight catches both:
 blank makes the host refuse to start (which is the *correct* behaviour — a blank
@@ -452,7 +505,7 @@ aws cloudformation deploy \
   --template-file infra/aws/climate-tracking-api-bootstrap.yml \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset \
-  --region us-east-1 \
+  --region us-east-2 \
   --parameter-overrides \
     RepositoryName=climate-tracking-api \
     EnvironmentName=production \
@@ -478,14 +531,26 @@ GitHub will mint, and the authoritative answer if the two disagree. Measured
 why the trust policy carries four subs and why deleting the ID-qualified pair
 breaks every deploy with a denial that reads like a credentials problem.
 
-**This needs credentials for account `747814092517`.** The credentials available on
-this machine are `arn:aws:iam::795965600143:user/Federico` — the **dev** account —
-so this step could not be rehearsed here at all. Confirm afterwards:
+**This needs write credentials for account `795965600143`, in `us-east-2`** — the
+account and region climate production has run in since 2026-10-12, where
+`climate-project-api-prod` (the `PeerApiStackName` above) and the GitHub OIDC provider
+the deploy role trusts both already exist (IAM `ListOpenIDConnectProviders` →
+`arn:aws:iam::795965600143:oidc-provider/token.actions.githubusercontent.com`, 2026-11-13).
+The role's `ReadPeerApiStackParameters` grant is built from `${AWS::Region}`, so a
+bootstrap stack in any other region cannot read the peer stack and the identity preflight
+fails. Re-derived 2026-11-13: `gh api /repos/…` → `{"owner":305569681,"repo":1317724282}`;
+`…/oidc/customization/sub` → `use_default: true`,
+`repo:TIMSInternational@305569681/organizational-climate-platform@1317724282` — both
+match the defaults above. Confirm afterwards:
 
 ```bash
 aws cloudformation describe-stacks --stack-name climate-tracking-api-bootstrap \
-  --region us-east-1 --query 'Stacks[0].Outputs'
+  --region us-east-2 --query 'Stacks[0].Outputs'
 ```
+
+[AMENDED 2026-11-13: this section read "needs credentials for account `747814092517`" and
+`--region us-east-1` in both commands, and called `795965600143` the dev account. Since
+2026-10-12 `795965600143` is production.]
 
 ### 5.3 First dispatch
 
@@ -630,10 +695,13 @@ string array with no wildcard support — there is no `Cors:AllowedWildcardOrigi
 and no `CorsOriginMatcher` in that service — so a Vercel *preview* build with the
 variable set would fail every tracking request at the preflight.
 
-Also update `web/vercel.json`'s `Content-Security-Policy-Report-Only`: `connect-src`
-currently names only `https://bhgrdkd4gt.us-east-1.awsapprunner.com`. It is
-report-only, so it will not block anything today — which is exactly why it will be
-forgotten before it is enforced.
+Also update `web/vercel.json`'s `Content-Security-Policy-Report-Only`: add the tracking
+service's origin to `connect-src`. [AMENDED 2026-11-13: this read "currently names only
+`https://bhgrdkd4gt.us-east-1.awsapprunner.com`". It now names
+`'self' https://api.climate.timsint.com https://bhgrdkd4gt.us-east-1.awsapprunner.com`
+(`web/vercel.json:33`), and the second host stopped resolving after the 2026-10-12 account
+move. Neither is the tracking service.] It is report-only, so it will not block anything
+today — which is exactly why it will be forgotten before it is enforced.
 
 **Rollback for O2 is fast and complete**: unset the Vercel variable and redeploy.
 Action Plans comes back, the tracking rows go away. That asymmetry — the web change
@@ -699,13 +767,17 @@ touching it.
 ## 9. What only a human can decide or supply
 
 1. **`PROCOMER_COMPANY_ID`** — the `Company` GUID. Not in this repository; read it
-   from the production database (`SELECT id, name FROM companies`).
+   from the production database (`SELECT "Id", name FROM companies` — the column is
+   quoted PascalCase, see §5.1).
 2. **Where the tracking database lives** — D3 (a new Supabase project) is
    recommended; it is a cost decision as much as a technical one.
 3. **The tracking database password and connection string**, and the decision to
    write `Maximum Pool Size=10` into it. Nothing in the repository can set this.
-4. **Production AWS credentials (`747814092517`)** to create the bootstrap stack and
-   the Secrets Manager entry. This machine has only the dev account.
+4. **Production AWS credentials (`795965600143`, `us-east-2`)** to create the bootstrap
+   stack and the Secrets Manager entry. [AMENDED 2026-11-13: this read `747814092517` and
+   called `795965600143` "the dev account"; since 2026-10-12 it is production. The
+   credentials on this machine reach it, but an agent is read-only there by rule
+   (`CLAUDE.md`, "Production is off limits"), so a human runs both writes.]
 5. **Whether to turn PITR on** — for the tracking project, and separately for
    climate-project, whose PITR is measurably off with zero listed backups.
 6. **Whether the tracking test suite is green**, before adding the CI job in §2.

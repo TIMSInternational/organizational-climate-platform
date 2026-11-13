@@ -217,7 +217,7 @@ Parameters:
     Type: String
     Description: >-
       Base URL of climate-project-api, e.g.
-      https://bhgrdkd4gt.us-east-1.awsapprunner.com. Required, no default: the host
+      https://api.climate.timsint.com. Required, no default: the host
       `?? throw`s on it and `new Uri(value)` then throws on a blank one, so a
       missing value fails startup twice over.
 
