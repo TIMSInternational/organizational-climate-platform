@@ -25,7 +25,7 @@ export const NAMES = {
 
 /**
  * Whether a step runs under `--only <prefix>`. Case-insensitive on both sides, whitespace
- * trimmed, so `--only 04` and `--only "04 results"` both pick step `04 results Q3 and
+ * trimmed, so `--only 04` and `--only "04 results"` both pick step `04 results and
  * drill-in`. An empty or missing prefix selects everything.
  */
 export function matchesOnly(name, only) {

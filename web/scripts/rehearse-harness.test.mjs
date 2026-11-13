@@ -71,20 +71,20 @@ describe('the accessible names match the button whatever case it renders in', ()
 
 describe('--only selects steps by a case-insensitive prefix', () => {
   it('selects everything when no prefix is given', () => {
-    expect(matchesOnly('04 results Q3 and drill-in', undefined)).toBe(true)
-    expect(matchesOnly('04 results Q3 and drill-in', '')).toBe(true)
-    expect(matchesOnly('04 results Q3 and drill-in', '   ')).toBe(true)
+    expect(matchesOnly('04 results and drill-in', undefined)).toBe(true)
+    expect(matchesOnly('04 results and drill-in', '')).toBe(true)
+    expect(matchesOnly('04 results and drill-in', '   ')).toBe(true)
   })
 
   it('matches the step number, the number and words, and ignores case and padding', () => {
-    expect(matchesOnly('04 results Q3 and drill-in', '04')).toBe(true)
-    expect(matchesOnly('04 results Q3 and drill-in', '04 RESULTS')).toBe(true)
-    expect(matchesOnly('04 results Q3 and drill-in', ' 04 results q3 ')).toBe(true)
+    expect(matchesOnly('04 results and drill-in', '04')).toBe(true)
+    expect(matchesOnly('04 results and drill-in', '04 RESULTS')).toBe(true)
+    expect(matchesOnly('04 results and drill-in', ' 04 results and ')).toBe(true)
     expect(matchesOnly('10a employee dashboard', '10')).toBe(true)
   })
 
   it('is a prefix, not a substring, so "results" does not pick every step that mentions results', () => {
-    expect(matchesOnly('04 results Q3 and drill-in', 'results')).toBe(false)
+    expect(matchesOnly('04 results and drill-in', 'results')).toBe(false)
     expect(matchesOnly('14 microclimate live page', '04')).toBe(false)
     expect(matchesOnly('01 login', '010')).toBe(false)
   })
