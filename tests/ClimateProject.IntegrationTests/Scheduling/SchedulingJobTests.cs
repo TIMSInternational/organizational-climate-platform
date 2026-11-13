@@ -221,10 +221,10 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
     [Theory]
     // G28: recording progress and moving the date are `Roles.Admin` writes, so only an
     // administrator owner is told to do them; anyone else is told who can.
-    [InlineData("company_admin", "Registra un avance o cambia la fecha")]
-    [InlineData("super_admin", "Registra un avance o cambia la fecha")]
-    [InlineData("leader", "Pide a quien administra la plataforma que registre un avance o cambie la fecha")]
-    [InlineData("employee", "Pide a quien administra la plataforma que registre un avance o cambie la fecha")]
+    [InlineData("company_admin", "Registre un avance o cambie la fecha")]
+    [InlineData("super_admin", "Registre un avance o cambie la fecha")]
+    [InlineData("leader", "Pida a quien administra la plataforma que registre un avance o cambie la fecha")]
+    [InlineData("employee", "Pida a quien administra la plataforma que registre un avance o cambie la fecha")]
     public async Task The_due_soon_nudge_asks_its_owner_only_for_what_their_role_can_do(string role, string ask)
     {
         await using var db = await FreshAsync();
@@ -246,7 +246,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         Assert.Contains(ask, raised.Message);
         if (role is "leader" or "employee")
         {
-            Assert.DoesNotContain("Registra un avance", raised.Message);
+            Assert.DoesNotContain("Registre un avance", raised.Message);
         }
     }
 
@@ -485,7 +485,7 @@ public class SchedulingJobTests(PostgresContainerFixture postgres)
         await using var read = CreateContext();
         var raised = await read.Notifications.SingleAsync(n => n.UserId == owner.Id);
 
-        Assert.Equal("Un plan de acción a tu cargo vence pronto", raised.Title);
+        Assert.Equal("Un plan de acción a su cargo vence pronto", raised.Title);
         // The plan's OWN Spanish title, resolved for the recipient, not the English column.
         Assert.Contains("Reducir la carga de trabajo en Operaciones", raised.Message, StringComparison.Ordinal);
     }

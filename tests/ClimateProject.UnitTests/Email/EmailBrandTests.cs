@@ -132,7 +132,7 @@ public class EmailBrandTests
         // Gmail and Outlook block remote images by default, so the masthead can simply not
         // arrive. The footer is text and always does -- which is why the product identifies
         // itself there and not at the top.
-        var footer = EmailBranding.Footer("Si no esperabas este mensaje, puedes ignorarlo.");
+        var footer = EmailBranding.Footer("Si no esperaba este mensaje, puede ignorarlo.");
 
         Assert.Contains(EmailBranding.ProductName, footer, StringComparison.Ordinal);
     }

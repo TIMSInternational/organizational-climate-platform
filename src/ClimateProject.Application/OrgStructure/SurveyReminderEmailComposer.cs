@@ -188,14 +188,14 @@ public static class SurveyReminderEmailComposer
     /// client's request.
     /// </summary>
     private static readonly ReminderCopy ReminderSpanish = new(
-        Subject: "Recordatorio: te falta terminar la encuesta",
-        SubjectPrefix: "Recordatorio: te falta terminar",
-        Body: "Aún no hemos recibido tu respuesta. Tus datos de acceso son los mismos que te enviamos antes: no hay usuario ni contraseña nuevos. Entra con ellos y, si ya la habías empezado, continúa donde la dejaste.",
+        Subject: "Recordatorio: le falta terminar la encuesta",
+        SubjectPrefix: "Recordatorio: le falta terminar",
+        Body: "Aún no hemos recibido su respuesta. Sus datos de acceso son los mismos que le enviamos antes: no hay usuario ni contraseña nuevos. Entre con ellos y, si ya la había empezado, continúe donde la dejó.",
         UsernameLabel: "Usuario",
-        WhichOne: "Es la encuesta «{0}». Si ya contestaste otra encuesta antes, esta es distinta.",
+        WhichOne: "Es la encuesta «{0}». Si ya contestó otra encuesta antes, esta es distinta.",
         Cta: "Entrar y terminar",
-        Lost: "Si ya no encuentras el correo con tu contraseña, pídele a tu administrador que te envíe datos nuevos.",
-        Ignore: "Si no esperabas este mensaje, puedes ignorarlo.");
+        Lost: "Si ya no encuentra el correo con su contraseña, pida a su administrador que le envíe datos nuevos.",
+        Ignore: "Si no esperaba este mensaje, puede ignorarlo.");
 
     private static readonly ReminderCopy ReminderEnglish = new(
         Subject: "Reminder: your survey is unfinished",

@@ -43,7 +43,7 @@ public class SurveyReminderEmailComposerTests
     {
         // The people this route exists for are mid-survey: reissue refuses them precisely
         // because they are holding working details. The copy has to speak to that.
-        Assert.Contains("continúa donde la dejaste", Spanish().TextBody, StringComparison.Ordinal);
+        Assert.Contains("continúe donde la dejó", Spanish().TextBody, StringComparison.Ordinal);
         Assert.Contains("carry on where you left off", English().TextBody, StringComparison.Ordinal);
     }
 
@@ -98,7 +98,7 @@ public class SurveyReminderEmailComposerTests
         // ESPH's first rehearsal finding: a doubled message reads as two sets of details.
         var spanish = Spanish().TextBody;
 
-        Assert.Contains("Aún no hemos recibido tu respuesta", spanish, StringComparison.Ordinal);
+        Assert.Contains("Aún no hemos recibido su respuesta", spanish, StringComparison.Ordinal);
         Assert.DoesNotContain("We have not received your response", spanish, StringComparison.Ordinal);
     }
 
@@ -108,7 +108,7 @@ public class SurveyReminderEmailComposerTests
         var both = SurveyReminderEmailComposer.Compose(
             "person@example.com", Person, Username, LoginUrl, companyLanguage: null).TextBody;
 
-        Assert.Contains("Aún no hemos recibido tu respuesta", both, StringComparison.Ordinal);
+        Assert.Contains("Aún no hemos recibido su respuesta", both, StringComparison.Ordinal);
         Assert.Contains("We have not received your response", both, StringComparison.Ordinal);
     }
 

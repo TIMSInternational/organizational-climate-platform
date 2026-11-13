@@ -55,8 +55,8 @@ public static class NotificationEmailComposer
             OpenSurvey: "Open the survey",
             OpenActionPlan: "Open the plan"),
         [ContentLanguages.Spanish] = new EmailChrome(
-            WhyReceiving: "Recibes este mensaje porque tienes una cuenta en {0}.",
-            ManagePreferences: "Gestiona tus preferencias de notificación",
+            WhyReceiving: "Recibe este mensaje porque tiene una cuenta en {0}.",
+            ManagePreferences: "Gestione sus preferencias de notificación",
             SubjectFallback: "Una notificación de {0}",
             OpenSurvey: "Abrir la encuesta",
             OpenActionPlan: "Abrir el plan"),

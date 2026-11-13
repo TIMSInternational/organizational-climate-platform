@@ -111,7 +111,7 @@ public class EmailNotificationSenderTests
         // Composed in the recipient's language, resolved at delivery time. The greeting was
         // the tell here until 2026-10-16; the "why you are receiving this" line is what is
         // left of the Spanish chrome now that no name reaches a respondent.
-        Assert.Contains("Recibes este mensaje", sent.TextBody, StringComparison.Ordinal);
+        Assert.Contains("Recibe este mensaje", sent.TextBody, StringComparison.Ordinal);
         Assert.Null(sent.ToName);
     }
 

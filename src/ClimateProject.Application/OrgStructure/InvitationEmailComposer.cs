@@ -106,11 +106,11 @@ public static class InvitationEmailComposer
         Ignore: "If you were not expecting this invitation you can ignore this message.");
 
     private static readonly InvitationCopy Spanish = new(
-        Subject: $"Te han invitado a {EmailBranding.ProductName}",
-        Body: $"Un administrador te ha invitado a unirte a {EmailBranding.ProductName}. Usa el enlace de abajo para crear tu cuenta.",
+        Subject: $"Le han invitado a {EmailBranding.ProductName}",
+        Body: $"Un administrador le ha invitado a unirse a {EmailBranding.ProductName}. Use el enlace de abajo para crear su cuenta.",
         Cta: "Aceptar la invitación",
         Expiry: "Esta invitación caduca el {0}.",
-        Ignore: "Si no esperabas esta invitación, puedes ignorar este mensaje.");
+        Ignore: "Si no esperaba esta invitación, puede ignorar este mensaje.");
 
     private sealed record InvitationCopy(string Subject, string Body, string Cta, string Expiry, string Ignore);
 }

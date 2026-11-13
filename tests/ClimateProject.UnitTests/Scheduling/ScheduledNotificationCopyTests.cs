@@ -17,8 +17,8 @@ public class ScheduledNotificationCopyTests
         var title = ScheduledNotificationCopy.ReminderTitleFor("es");
         var body = ScheduledNotificationCopy.ReminderBodyFor("es", "Clima Organizacional Q3", Closes);
 
-        Assert.Equal("Recordatorio: tu respuesta sigue pendiente", title);
-        Assert.Contains("Aún no has completado", body);
+        Assert.Equal("Recordatorio: su respuesta sigue pendiente", title);
+        Assert.Contains("Aún no ha completado", body);
         Assert.Contains("Clima Organizacional Q3", body);
     }
 
@@ -35,7 +35,7 @@ public class ScheduledNotificationCopyTests
     [InlineData("es-MX")]
     public void A_bcp47_tag_resolves_to_its_base_locale(string locale)
         => Assert.Equal(
-            "Recordatorio: tu respuesta sigue pendiente",
+            "Recordatorio: su respuesta sigue pendiente",
             ScheduledNotificationCopy.ReminderTitleFor(locale));
 
     [Theory]
@@ -89,7 +89,7 @@ public class ScheduledNotificationCopyTests
         var spanish = ScheduledNotificationCopy.ReportReadyBodyFor("es", "Informe mensual de clima", Closes);
 
         Assert.Equal("Your scheduled report is ready", ScheduledNotificationCopy.ReportReadyTitleFor("en"));
-        Assert.Equal("Tu informe programado está listo", ScheduledNotificationCopy.ReportReadyTitleFor("es"));
+        Assert.Equal("Su informe programado está listo", ScheduledNotificationCopy.ReportReadyTitleFor("es"));
         Assert.Contains("Monthly climate report", english);
         Assert.Contains("2026-08-20", english);
         Assert.Contains("Informe mensual de clima", spanish);
@@ -138,13 +138,13 @@ public class ScheduledNotificationCopyTests
     [Fact]
     public void An_admin_owner_is_told_to_record_progress_or_move_the_date_in_spanish()
         => Assert.Equal(
-            "\"Reducir rotación\" vence el 2026-10-30. Registra un avance o cambia la fecha antes de que venza.",
+            "\"Reducir rotación\" vence el 2026-10-30. Registre un avance o cambie la fecha antes de que venza.",
             ScheduledNotificationCopy.PlanDueBodyFor("es", "Reducir rotación", PlanDue, overdue: false, recipientAdministers: true));
 
     [Fact]
     public void A_non_admin_owner_is_told_to_ask_whoever_administers_the_platform_in_spanish()
         => Assert.Equal(
-            "\"Reducir rotación\" vence el 2026-10-30. Pide a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.",
+            "\"Reducir rotación\" vence el 2026-10-30. Pida a quien administra la plataforma que registre un avance o cambie la fecha antes de que venza.",
             ScheduledNotificationCopy.PlanDueBodyFor("es", "Reducir rotación", PlanDue, overdue: false, recipientAdministers: false));
 
     [Fact]
@@ -164,14 +164,14 @@ public class ScheduledNotificationCopyTests
             ScheduledNotificationCopy.PlanDueBodyFor("en", "Reduce turnover", PlanDue, overdue: false, recipientAdministers: true));
 
     [Theory]
-    [InlineData("es", "Pide a quien administra la plataforma que registre un avance o cambie la fecha")]
+    [InlineData("es", "Pida a quien administra la plataforma que registre un avance o cambie la fecha")]
     [InlineData("en", "Ask whoever administers the platform to record progress or move the date")]
     public void The_untitled_phrasing_asks_a_non_admin_owner_the_same_way(string locale, string ask)
     {
         var body = ScheduledNotificationCopy.PlanDueBodyFor(locale, null, PlanDue, overdue: false, recipientAdministers: false);
 
         Assert.Contains(ask, body);
-        Assert.DoesNotContain("Registra un avance", body);
+        Assert.DoesNotContain("Registre un avance", body);
         Assert.DoesNotContain("Record progress or move", body);
     }
 

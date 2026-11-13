@@ -8,7 +8,7 @@ namespace ClimateProject.UnitTests.OrgStructure;
 ///
 /// <para>
 /// Nothing pinned this copy before. The bulk resend behind the *Quién ya respondió* roster
-/// re-sent the INVITATION message -- *"Tu organización te invita a responder una encuesta"* --
+/// re-sent the INVITATION message -- *"Su organización le invita a responder una encuesta"* --
 /// to people who had already been invited and had already read exactly that sentence, while
 /// the client had asked for *"un correo solicitándoles que por favor ingresen y lo hagan"*.
 /// Every .NET and web test passed throughout, because the two messages carry an identical
@@ -41,7 +41,7 @@ public class CredentialsEmailComposerTests
         // and do it. The invitation cannot ask that -- its reader has never heard of the account.
         var reminder = SpanishText(CredentialsEmailPurpose.Reminder);
 
-        Assert.Contains("por favor ingreses y respondas la encuesta", reminder, StringComparison.Ordinal);
+        Assert.Contains("por favor ingrese y responda la encuesta", reminder, StringComparison.Ordinal);
         Assert.Contains("Please sign in and answer the survey", EnglishText(CredentialsEmailPurpose.Reminder), StringComparison.Ordinal);
         Assert.DoesNotContain("Please sign in and answer the survey", reminder, StringComparison.Ordinal);
     }
@@ -53,8 +53,8 @@ public class CredentialsEmailComposerTests
         var reminder = SpanishText(CredentialsEmailPurpose.Reminder);
         var invitation = SpanishText(CredentialsEmailPurpose.Invitation);
 
-        Assert.DoesNotContain("te invita a responder una encuesta", reminder, StringComparison.Ordinal);
-        Assert.Contains("te invita a responder una encuesta", invitation, StringComparison.Ordinal);
+        Assert.DoesNotContain("le invita a responder una encuesta", reminder, StringComparison.Ordinal);
+        Assert.Contains("le invita a responder una encuesta", invitation, StringComparison.Ordinal);
         Assert.DoesNotContain("por favor ingreses", invitation, StringComparison.Ordinal);
     }
 
@@ -92,7 +92,7 @@ public class CredentialsEmailComposerTests
         // person who abandoned the survey has no way to know that unless the mail says it.
         var reminder = SpanishText(CredentialsEmailPurpose.Reminder);
 
-        Assert.Contains("puedes continuar donde la dejaste", reminder, StringComparison.Ordinal);
+        Assert.Contains("puede continuar donde la dejó", reminder, StringComparison.Ordinal);
         Assert.Contains("carry on where you left off", EnglishText(CredentialsEmailPurpose.Reminder), StringComparison.Ordinal);
         Assert.DoesNotContain("carry on where you left off", reminder, StringComparison.Ordinal);
     }
@@ -200,7 +200,7 @@ public class CredentialsEmailComposerTests
         Assert.Contains("Recordatorio", reminder, StringComparison.Ordinal);
 
         // And the subject is in ONE language too. It used to read
-        // "Tu acceso a ... / Your access to ...", which is the first thing the recipient saw
+        // "Su acceso a ... / Your access to ...", which is the first thing the recipient saw
         // and the first place the duplication showed -- see the screenshot in the 2026-10-17
         // rehearsal review. The English subject still exists, for an English company.
         Assert.DoesNotContain("Reminder", reminder, StringComparison.Ordinal);
@@ -357,8 +357,8 @@ public class CredentialsEmailComposerTests
 
     /// <summary>
     /// The heading is the line the inbox showed, not the product name. Measured 2026-10-20 on
-    /// the mail the product actually composed: the subject read "Tu acceso a Clima
-    /// Organizacional … — …" while the message opened "Tu acceso a OCC — Organizational
+    /// the mail the product actually composed: the subject read "Su acceso a Clima
+    /// Organizacional … — …" while the message opened "Su acceso a OCC — Organizational
     /// Climate Check", so the two messages one person receives were identical once opened.
     /// </summary>
     [Fact]
@@ -366,10 +366,10 @@ public class CredentialsEmailComposerTests
     {
         var mail = ForSurvey(Teletrabajo);
 
-        Assert.Contains($"Tu acceso a {Teletrabajo} \u2014 ESPH", mail.Subject, StringComparison.Ordinal);
-        Assert.Contains($"Tu acceso a {Teletrabajo} \u2014 ESPH</h1>", mail.HtmlBody, StringComparison.Ordinal);
-        Assert.StartsWith($"Tu acceso a {Teletrabajo} \u2014 ESPH", mail.TextBody, StringComparison.Ordinal);
-        Assert.DoesNotContain($"Tu acceso a {EmailBranding.ProductName}", mail.TextBody, StringComparison.Ordinal);
+        Assert.Contains($"Su acceso a {Teletrabajo} \u2014 ESPH", mail.Subject, StringComparison.Ordinal);
+        Assert.Contains($"Su acceso a {Teletrabajo} \u2014 ESPH</h1>", mail.HtmlBody, StringComparison.Ordinal);
+        Assert.StartsWith($"Su acceso a {Teletrabajo} \u2014 ESPH", mail.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain($"Su acceso a {EmailBranding.ProductName}", mail.TextBody, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -382,7 +382,7 @@ public class CredentialsEmailComposerTests
         var text = ForSurvey(Clima).TextBody;
 
         Assert.Contains(
-            $"Tu organización te invita a responder la encuesta «{Clima}». Inicia sesión con el usuario y la contraseña de abajo; tus datos organizacionales ya están en tu cuenta. La encuesta cierra el 27 de octubre de 2026. Gracias por participar.",
+            $"Su organización le invita a responder la encuesta «{Clima}». Inicie sesión con el usuario y la contraseña de abajo; sus datos organizacionales ya están en su cuenta. La encuesta cierra el 27 de octubre de 2026. Gracias por participar.",
             text, StringComparison.Ordinal);
         Assert.Contains("abren solo esta encuesta", text, StringComparison.Ordinal);
         // The generic sentence is replaced, not joined -- two of them would read as a mistake.
@@ -462,7 +462,7 @@ public class CredentialsEmailComposerTests
             CredentialsEmailPurpose.Invitation, new EmailBrand(null, "ESPH", null), Clima, surveyClosesOn: null);
 
         Assert.Contains(
-            $"tus datos organizacionales ya están en tu cuenta. Gracias por participar.", mail.TextBody, StringComparison.Ordinal);
+            $"sus datos organizacionales ya están en su cuenta. Gracias por participar.", mail.TextBody, StringComparison.Ordinal);
         Assert.DoesNotContain("cierra", mail.TextBody, StringComparison.Ordinal);
     }
 
@@ -474,7 +474,7 @@ public class CredentialsEmailComposerTests
     /// signed in and then lost the key that nothing can be done -- in both languages.
     /// </summary>
     [Theory]
-    [InlineData("es", "Guarda este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierdes, pide a tu administrador que te envíe unos nuevos.", "son tus datos de acceso", "por primera vez")]
+    [InlineData("es", "Guarde este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierde, pida a su administrador que le envíe unos nuevos.", "son sus datos de acceso", "por primera vez")]
     [InlineData("en", "Keep this message: this username and password open this survey only. If you lose them, ask your administrator to send new ones.", "these are your sign-in details", "first sign in")]
     public void A_per_survey_key_promises_a_replacement_even_after_it_is_used(string language, string keep, string accountWording, string droppedClause)
     {
@@ -496,9 +496,9 @@ public class CredentialsEmailComposerTests
     /// word for word what it was, in both languages, even if a close day is handed in.
     /// </summary>
     [Theory]
-    [InlineData(CredentialsEmailPurpose.Invitation, "es", "Tu organización te invita a responder una encuesta. Inicia sesión con el usuario y la contraseña de abajo; tus datos organizacionales ya están en tu cuenta. Gracias por participar.", "Guarda este mensaje: son tus datos de acceso. Si los pierdes, pide a tu administrador que te envíe unos nuevos.")]
+    [InlineData(CredentialsEmailPurpose.Invitation, "es", "Su organización le invita a responder una encuesta. Inicie sesión con el usuario y la contraseña de abajo; sus datos organizacionales ya están en su cuenta. Gracias por participar.", "Guarde este mensaje: son sus datos de acceso. Si los pierde, pida a su administrador que le envíe unos nuevos.")]
     [InlineData(CredentialsEmailPurpose.Invitation, "en", "Your organisation has invited you to answer a survey. Sign in with the username and password below; your organisational details are already on your account. Thank you for taking part.", "Keep this message: these are your sign-in details. If you lose them, ask your administrator to send new ones.")]
-    [InlineData(CredentialsEmailPurpose.Reminder, "es", "Te pedimos que por favor ingreses y respondas la encuesta. Abajo están de nuevo tu usuario y una contraseña nueva: la anterior deja de funcionar, así que entra con estos datos. Si ya la habías empezado, puedes continuar donde la dejaste.", "Guarda este mensaje: son tus datos de acceso. Si los pierdes, pide a tu administrador que te envíe unos nuevos.")]
+    [InlineData(CredentialsEmailPurpose.Reminder, "es", "Le pedimos que por favor ingrese y responda la encuesta. Abajo están de nuevo su usuario y una contraseña nueva: la anterior deja de funcionar, así que entre con estos datos. Si ya la había empezado, puede continuar donde la dejó.", "Guarde este mensaje: son sus datos de acceso. Si los pierde, pida a su administrador que le envíe unos nuevos.")]
     [InlineData(CredentialsEmailPurpose.Reminder, "en", "Please sign in and answer the survey. Your username and a new password are below; the previous password stops working, so sign in with these details. If you had already started, you can carry on where you left off.", "Keep this message: these are your sign-in details. If you lose them, ask your administrator to send new ones.")]
     public void A_message_that_opens_everything_still_says_so(
         CredentialsEmailPurpose purpose, string language, string body, string keep)

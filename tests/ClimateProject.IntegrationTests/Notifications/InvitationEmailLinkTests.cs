@@ -311,7 +311,7 @@ public class InvitationEmailLinkTests : IAsyncLifetime, IClassFixture<CapturingM
                 Channel = NotificationChannels.Email,
                 Priority = NotificationPriorities.Medium,
                 Status = NotificationStatuses.Pending,
-                Title = "Un plan de acción a tu cargo vence pronto",
+                Title = "Un plan de acción a su cargo vence pronto",
                 Message = "\"Reducir la carga\" vence el 2026-10-20.",
                 Data = ActionPlanNotificationData.Serialize(planId),
                 ScheduledFor = DateTimeOffset.UtcNow.AddMinutes(-1),
