@@ -467,15 +467,16 @@ public class CredentialsEmailComposerTests
     }
 
     /// <summary>
-    /// R4: a per-survey key is not an account, and the only route that replaces one -- the
-    /// reissue (#620) -- refuses a key that has already signed in. So the line under the button
-    /// says it opens this survey only and promises a replacement only before the first
-    /// sign-in, in both languages.
+    /// R4: a per-survey key is not an account, so the line under the button says it opens this
+    /// survey only. It promises a replacement with no "before you first sign in" clause: the
+    /// reissue (#620) replaces an unused key for any administrator, and since #648 a super_admin
+    /// replaces a used one too (<c>replaceUsedKey</c>), so the clause would tell the person who
+    /// signed in and then lost the key that nothing can be done -- in both languages.
     /// </summary>
     [Theory]
-    [InlineData("es", "Guarda este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierdes antes de ingresar por primera vez, pide a tu administrador que te envíe unos nuevos.", "son tus datos de acceso")]
-    [InlineData("en", "Keep this message: this username and password open this survey only. If you lose them before you first sign in, ask your administrator to send new ones.", "these are your sign-in details")]
-    public void A_per_survey_key_promises_a_replacement_only_before_it_is_used(string language, string keep, string accountWording)
+    [InlineData("es", "Guarda este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierdes, pide a tu administrador que te envíe unos nuevos.", "son tus datos de acceso", "por primera vez")]
+    [InlineData("en", "Keep this message: this username and password open this survey only. If you lose them, ask your administrator to send new ones.", "these are your sign-in details", "first sign in")]
+    public void A_per_survey_key_promises_a_replacement_even_after_it_is_used(string language, string keep, string accountWording, string droppedClause)
     {
         foreach (var purpose in new[] { CredentialsEmailPurpose.Invitation, CredentialsEmailPurpose.Reminder })
         {
@@ -484,6 +485,7 @@ public class CredentialsEmailComposerTests
             Assert.Contains(keep, mail.TextBody, StringComparison.Ordinal);
             Assert.Contains(EmailBranding.Escape(keep), mail.HtmlBody, StringComparison.Ordinal);
             Assert.DoesNotContain(accountWording, mail.TextBody, StringComparison.Ordinal);
+            Assert.DoesNotContain(droppedClause, mail.TextBody, StringComparison.Ordinal);
         }
     }
 

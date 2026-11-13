@@ -221,12 +221,16 @@ public static class CredentialsEmailComposer
     /// people screen calls it (<c>ResendCredentials.tsx</c>).
     /// </para>
     /// <para>
-    /// <b>`per_survey`</b>: the details are a key to ONE survey, not an account, and the only
-    /// route that replaces one -- <c>POST /surveys/{id}/credentials/{userId}/reissue</c>
-    /// (#620) -- refuses a key that has already signed in (<c>already_signed_in</c>), because
-    /// replacing it would lock out somebody halfway through. So the promise is true only
-    /// BEFORE the first sign-in, and the sentence says exactly that rather than promising a
-    /// replacement the route will refuse.
+    /// <b>`per_survey`</b>: the details are a key to ONE survey, not an account, and the route
+    /// that replaces one is <c>POST /surveys/{id}/credentials/{userId}/reissue</c> (#620). Before
+    /// the first sign-in any administrator of the survey may call it. After it, the default
+    /// refusal (<c>already_signed_in</c>) protects somebody who still holds the key, and since
+    /// #648 a super_admin may replace it anyway with <c>replaceUsedKey</c> -- the case of
+    /// somebody who signed in once and then lost it. So a replacement is possible at any time
+    /// while the survey is open, and the sentence promises it without a "before you first sign
+    /// in" clause, which would tell exactly that person there is nothing to be done. It still
+    /// says "ask your administrator", not "your administrator will", because after a sign-in it
+    /// is TIMS (super_admin) who can do it, not the company's own administrator.
     /// </para>
     /// </remarks>
     private static string Keep(CredentialsCopy copy, SurveyScope? survey)
@@ -324,7 +328,7 @@ public static class CredentialsEmailComposer
     }
 
     // The `per_survey` sentences ("SurveyBody", "SurveyKeep") say what one key does: it opens
-    // ONE survey, and it can be replaced only until it is first used. "Estos datos abren solo
+    // ONE survey, and it can be replaced (after a sign-in by a super_admin only, #648). "Estos datos abren solo
     // esta encuesta" is what lets a person holding two of these tell them apart once opened;
     // the survey's name in the body says which one this is.
 
@@ -391,10 +395,10 @@ public static class CredentialsEmailComposer
         Ignore: "Si no esperabas este mensaje, puedes ignorarlo.");
 
     private const string SurveyKeepEnglish =
-        "Keep this message: this username and password open this survey only. If you lose them before you first sign in, ask your administrator to send new ones.";
+        "Keep this message: this username and password open this survey only. If you lose them, ask your administrator to send new ones.";
 
     private const string SurveyKeepSpanish =
-        "Guarda este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierdes antes de ingresar por primera vez, pide a tu administrador que te envíe unos nuevos.";
+        "Guarda este mensaje: este usuario y esta contraseña abren solo esta encuesta. Si los pierdes, pide a tu administrador que te envíe unos nuevos.";
 
     /// <summary>
     /// The copy one purpose reads in one language. A purpose this does not know throws rather
