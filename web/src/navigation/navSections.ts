@@ -531,6 +531,32 @@ export function isPerUserOnly(sections: NavSection[]): boolean {
 }
 
 /**
+ * The roles that keep the rail although every row in it is their own page.
+ *
+ * ⚠️ This NARROWS the 2026-10-18 ESPH ruling, it does not reverse it. That ruling stripped the
+ * chrome from every role {@link isPerUserOnly} answers true for, which on 18 Oct was `employee`
+ * and `supervisor` alike. Ruled by the owner 2026-11-12: a SUPERVISOR gets the rail shell --
+ * Inicio, Mis encuestas and Seguimiento › Mis tareas, the account menu, the bell, the palette
+ * chip and the phone's tab bar -- because a supervisor runs a team, and `/dashboard` is their
+ * team's page (`DepartmentAdminDashboardView`), not a respondent's welcome. An EMPLOYEE keeps
+ * the railless shell exactly as ESPH asked for it.
+ *
+ * A role list, and deliberately beside the computed check rather than inside it: the rows are
+ * unchanged, so the hrefs cannot tell the two roles apart (`roleCapabilities.ts` gives them the
+ * same list), and what differs is a decision about chrome, not a destination.
+ */
+const RAIL_DESPITE_PER_USER_ROLES: ReadonlySet<string> = new Set(['supervisor'])
+
+/**
+ * Whether the shell is the railless respondent one -- the single answer `AdminLayout` draws
+ * and `useRespondentShell` reports, so the screens outside the shell cannot disagree with it.
+ */
+export function drawsRespondentShell(role: string | undefined, sections: NavSection[]): boolean {
+  if (role !== undefined && RAIL_DESPITE_PER_USER_ROLES.has(role)) return false
+  return isPerUserOnly(sections)
+}
+
+/**
  * Does `pathname` sit under `href` at all?
  *
  * Segment-aware: `/surveys` must not claim `/surveys-archive`, which a bare
