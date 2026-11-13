@@ -39,31 +39,49 @@ are not ported: each hardcodes an English title, description and a breadcrumb tr
 pointing at a `/dashboard` route this app does not have yet. A page passes its own
 props.
 
+## PageHeader — the Apple-design page header (11 Nov)
+
+`PageHeader` is the one header a redesigned page adopts: optional breadcrumb, eyebrow
+(11px uppercase tracked), serif `<h1>`, optional sub (15px, capped at the measure), and the
+actions — `actions` for the secondary ones, then **one** `primaryAction`, drawn last. It is
+presentational and derives nothing from the nav; a page passes its own eyebrow.
+
+```tsx
+import { PageHeader } from '../../components/layout'
+
+<PageHeader
+  breadcrumbs={[{ label: t('navigation.surveys'), href: '/surveys' }, { label: survey.title }]}
+  eyebrow={companyName}
+  title={survey.title}
+  description={t('…')}
+  actions={<Button variant="outline">…</Button>}
+  primaryAction={<Button variant="primary">…</Button>}
+/>
+```
+
+`PageTopBar` stays as it is: 113 pages render it and feature tests pin its geometry, so it
+is migrated page by page as each lane adopts `PageHeader`, not rewritten underneath them.
+
 ## MobileNav
 
-Below `md` the sidebar is `hidden` and this takes over: a bottom tab bar of up to four
-**leaf** destinations plus a "More" drawer holding the full role-aware nav.
+Below `md` the sidebar is `hidden` and this takes over: a bottom tab bar plus a "More"
+drawer holding the full role-aware nav.
 
+- **One tab per section of the rail** (`mobileTabs` in `navSections.ts`, since the 11 Nov
+  regroup): every row of the unheaded home section (Inicio; a leader's Mi equipo and Mis
+  encuestas), then one tab per titled section, named for the section — Encuestas,
+  Seguimiento, Analítica — leading to its first destination. A section's tab is the current
+  one on every page of that section. The bar used to take the first four LEAVES, which put a
+  group's children (Configuración de empresa, Usuarios, Campos demográficos) on the bar and
+  truncated them ("Configuraci…"); single-word section names fit, as HIG `tab-bars.md`
+  § Best practices asks ("Use single words whenever possible").
 - The drawer is a **`Sheet` (Radix Dialog)**. The legacy drawer was a bare
   `position: fixed` div with no focus trap, no Escape and no focus return — opening it
   left keyboard focus on the page behind, and Tab walked out into content the overlay
   had covered. Verified in Chrome: focus now stays inside over 25 tabs and returns to
   the trigger on Escape.
 - It closes on navigation (`useLocation`), which Radix cannot know to do.
-- A grouped nav item is a *toggle*, not a destination, so `leafNavItems()` replaces it
-  with its children rather than letting it occupy a slot.
-
-### Two measured constraints worth knowing before you extend it
-
-- **Tab labels truncate on a small phone.** Five slots at 320px is 56px each; at 10px
-  type that is ~9 characters, so "Company Settings" renders as "Configur…" in Spanish.
-  Inherent to the legacy four-slot design, not a bug introduced here. If it matters,
-  the fix is a `shortLabelKey` in `navSections.ts`, which is a copy decision.
-- **The bar's slot order is `navSections.ts`'s order, flattened.** A group's three
-  children take slots before the top-level rows after it, so today a configuration
-  page (Demographic fields) is on the bar while a primary destination (Microclimates)
-  is only in the drawer. Recorded in `MobileNav.test.tsx` rather than "fixed", because
-  ranking the bar means stating a hierarchy `navSections.ts` does not currently hold.
+- A grouped nav item is a *toggle*, not a destination, so it never takes a tab.
 
 ## DashboardGrid
 

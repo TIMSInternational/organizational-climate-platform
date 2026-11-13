@@ -225,7 +225,7 @@ export function PasteQuestionsDialog({
                 <ol className="m-0 flex max-h-64 list-none flex-col gap-1 overflow-y-auto rounded-md border border-line-light p-2 text-sm">
                   {preview.questions.map((question, index) => (
                     <li key={question.key} className="flex min-w-0 gap-2">
-                      <span className="w-7 shrink-0 text-right font-mono text-xs text-fg-secondary">{index + 1}</span>
+                      <span className="w-7 shrink-0 text-right text-xs tabular-nums text-fg-secondary">{index + 1}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block">{question.textEs || question.textEn || '—'}</span>
                         <span className="block text-xs text-fg-secondary">

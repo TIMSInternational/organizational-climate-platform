@@ -119,7 +119,7 @@ describe('ConsolidadoPage', () => {
 
   it('renders in Spanish', async () => {
     renderPage()
-    expect(await screen.findByRole('heading', { name: 'Vista Consolidada' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Vista consolidada' })).toBeTruthy()
     expect(screen.getByText('Nodo')).toBeTruthy()
     expect(screen.getByText('Resultado año anterior')).toBeTruthy()
     expect(screen.getByText('Planes de acción')).toBeTruthy()
@@ -297,7 +297,7 @@ describe('ConsolidadoPage', () => {
 
     expect(await screen.findByText('No se pudo contactar el servicio de seguimiento')).toBeTruthy()
     // The page is still a page: header, and a way to try again.
-    expect(screen.getByRole('heading', { name: 'Vista Consolidada' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Vista consolidada' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
   })

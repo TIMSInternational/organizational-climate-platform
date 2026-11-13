@@ -57,7 +57,7 @@ export default function ParticipationPanel({ state }: { state: ParticipationStat
             <div className="flex min-w-0 flex-col gap-2" data-testid="participation-answered">
               <h3 className="m-0 flex items-baseline gap-2 text-base">
                 {copy('answered')}
-                <span className="font-mono text-sm tabular-nums text-fg-secondary">{state.view.answeredCount}</span>
+                <span className="text-sm tabular-nums text-fg-secondary">{state.view.answeredCount}</span>
               </h3>
               {state.view.answered.length === 0 ? (
                 <p className="m-0 text-sm text-fg-secondary">{copy('answeredEmpty')}</p>
@@ -77,7 +77,7 @@ export default function ParticipationPanel({ state }: { state: ParticipationStat
                           (person, index) => (
                             <TableRow key={`${person.email ?? person.name}-${index}`}>
                               <TableCell className="px-3 py-2 font-medium">{person.name}</TableCell>
-                              <TableCell className="px-3 py-2 font-mono text-xs text-fg-secondary">
+                              <TableCell className="px-3 py-2 text-sm text-fg-secondary">
                                 {person.email ?? copy('noEmail')}
                               </TableCell>
                               <TableCell className="whitespace-nowrap px-3 py-2 text-fg-secondary">
@@ -101,7 +101,7 @@ export default function ParticipationPanel({ state }: { state: ParticipationStat
             <div className="flex min-w-0 flex-col gap-2" data-testid="participation-pending">
               <h3 className="m-0 flex items-baseline gap-2 text-base">
                 {copy('pending')}
-                <span className="font-mono text-sm tabular-nums text-fg-secondary">{state.view.pendingCount}</span>
+                <span className="text-sm tabular-nums text-fg-secondary">{state.view.pendingCount}</span>
               </h3>
               {state.view.pending.length === 0 ? (
                 <p className="m-0 text-sm text-fg-secondary">{copy('pendingEmpty')}</p>
@@ -120,7 +120,7 @@ export default function ParticipationPanel({ state }: { state: ParticipationStat
                           (person) => (
                             <TableRow key={person.email}>
                               <TableCell className="px-3 py-2 font-medium">{person.name}</TableCell>
-                              <TableCell className="px-3 py-2 font-mono text-xs text-fg-secondary">{person.email}</TableCell>
+                              <TableCell className="px-3 py-2 text-sm text-fg-secondary">{person.email}</TableCell>
                             </TableRow>
                           ),
                         )}

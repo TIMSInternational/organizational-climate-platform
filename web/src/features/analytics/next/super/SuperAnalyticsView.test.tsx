@@ -131,7 +131,8 @@ describe('SuperAnalyticsView', () => {
     expect(holders.length).toBeGreaterThan(0)
     const score = document.querySelector('[data-slot="score"]') as HTMLElement
     expect(score.textContent).toBe('0.00')
-    expect(score.className.split(/\s+/)).toContain('font-mono')
+    expect(score.className.split(/\s+/)).toContain('tabular-nums')
+    expect(score.className.split(/\s+/)).not.toContain('font-mono')
     expect(screen.getByText(copy.tiles.globalOnlyOne)).toBeTruthy()
   })
 

@@ -271,7 +271,7 @@
     "responseCount": 0,
     "targetAudienceCount": 420,
     "version": 1,
-    "departmentIds": [],
+    "departmentIds": [], "userIds": [],
     "questions": [
       {
         "id": "q1",

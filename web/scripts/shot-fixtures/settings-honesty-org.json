@@ -1048,7 +1048,7 @@
       }
     ],
     "suppressedGroupCount": 1,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-11T04:38:41.874237+00:00"
   },
   "GET /surveys/climate-trends": {
@@ -1175,7 +1175,7 @@
       }
     ],
     "suppressedGroupCount": 0,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-11T04:38:41.886578+00:00"
   },
   "GET /surveys": {
@@ -1274,7 +1274,7 @@
       "5bfdb04e-8847-4baa-89c8-d4411654a129",
       "aac7e1b9-5af4-4e04-872b-c11df8f1d4bd",
       "bff21fd0-422b-4f3b-8c89-d6bfbf5f19e9"
-    ],
+    ], "userIds": [],
     "questions": [
       {
         "id": "bdca477a-e031-4a51-87b3-c762151dbb46",

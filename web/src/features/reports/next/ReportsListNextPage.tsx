@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router'
 import { useCompanyNameFor } from '../../../company-context'
 import { Check, Download, MoreHorizontal, Plus, Shield } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { PageHeader } from '../../../components/layout'
 import { ANONYMITY_FLOOR, KpiTile } from '../../../components/charts'
 import {
   Button,
@@ -22,9 +22,8 @@ import {
   NetworkError,
   SkeletonText,
   Table,
-  type ChipTone,
 } from '../../../components/ui'
-import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
+import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import ReportForm from '../components/ReportForm'
@@ -47,18 +46,12 @@ import type { ReportContents, ReportRow } from './model'
 import { useReportsListModel } from './useReportsListModel'
 import { describeApiError } from '../../../api/describeApiError'
 
-// The canvas's `.label` head: 10px bold uppercase spaced .06em, 8px under it, over the
-// default hairline — the same head `SurveysListNextPage` draws.
+// The spec's `.tbl th`: 12px semibold, sentence case, 8px under it, over the default hairline.
 const HEAD =
-  'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+  'px-3 pt-2 pb-2 text-left text-xs font-semibold leading-normal text-fg-label whitespace-nowrap border-b border-line-default'
 /** Every cell after the first: its column's left edge is the canvas's 12px gap. */
 const GAP_CELL = 'pl-0'
 
-const STATUS_TONE: Record<string, ChipTone> = {
-  completed: 'good',
-  generating: 'warning',
-  failed: 'critical',
-}
 
 /**
  * `/admin/companies/:companyId/reports` — the redesigned Informes, which replaced
@@ -139,20 +132,25 @@ export default function ReportsListNextPage() {
 
   return (
     <div>
-      <PageTopBar
-        // The artboard's eyebrow is the area the page belongs to, which the nav does not
-        // say: Informes sits among the work surfaces in the sidebar, under the company.
-        // The client's name when it is known: a TIMS operator moves between clients all day, and
-        // "Configuración de empresa" did not say whose reports these were (walkthrough, C).
-        eyebrow={companyName ?? t('navigation.companySettings')}
+      <PageHeader
+        // The header rule every admin screen follows (review 12 Nov): the eyebrow is the sidebar
+        // section the page sits in. Informes is a top-level page for a company administrator,
+        // whose top bar names the company, so it carries no breadcrumb. For a super
+        // administrator it is a page UNDER a client — the header switcher stands down on
+        // `/admin/companies/:id/*` (`app/headerScope.ts`) — so the breadcrumb is what names
+        // whose reports these are (walkthrough, C: a TIMS operator moves between clients).
+        eyebrow={t('navigation.sectionAnalytics')}
         title={t('navigation.reports')}
         description={t('reports.next.description')}
-        // `/admin/companies/:companyId` is loadable by exactly who can load this page.
-        breadcrumbs={[
-          { label: companyName ?? t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
-          { label: t('navigation.reports') },
-        ]}
-        actions={
+        breadcrumbs={
+          readViewerClaims().role === 'super_admin'
+            ? [
+                { label: companyName ?? t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
+                { label: t('navigation.reports') },
+              ]
+            : undefined
+        }
+        primaryAction={
           mayRead ? (
             <Button type="button" variant="primary" size="canvas" onClick={() => setCreating(true)}>
               <Plus aria-hidden="true" />
@@ -244,13 +242,13 @@ export default function ReportsListNextPage() {
                       <h2 id="reports-generated" className="m-0 text-2xl">
                         {t('reports.next.generatedHeading')}
                       </h2>
-                      <span className="font-mono text-sm tabular-nums text-fg-label">{rows.length}</span>
+                      <span className="text-sm tabular-nums text-fg-label">{rows.length}</span>
                     </div>
                     <p className="m-0 text-sm text-fg-label">
                       {mayShare ? t('reports.next.menuNote') : t('reports.next.menuNoteSchedule')}
                     </p>
                   </div>
-                  <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card shadow-xs">
+                  <div className="overflow-hidden rounded-xl border border-line-panel bg-surface-card">
                     {/* The canvas's grid, `minmax(0,1fr) 300px 70px 110px 130px 150px` with 12px
                         between columns, from xl. A table has no column gap, so each fixed column
                         carries the gap before it (+12px) and its cells drop their left padding.
@@ -384,10 +382,10 @@ function LinksTileSub({
     return <span className="text-fg-label">{t('reports.next.linksSubNone')}</span>
   }
   const date = calendarDay(Date.parse(links.firstExpiry), locale)
-  // Amber: a link that opens without a password is the one thing on this screen a reader
-  // should re-check before forwarding, and the sentence says so in words too.
+  // The words carry it: a link that opens without a password is the one thing on this screen
+  // a reader should re-check before forwarding. Not amber — amber is a result area only.
   return (
-    <span data-slot="links-warning" className="text-accent-amber-ink">
+    <span data-slot="links-warning" className="font-medium text-fg-primary">
       {links.active === 1 ? t('reports.next.linksSubOne', { date }) : t('reports.next.linksSubMany', { date })}
     </span>
   )
@@ -441,25 +439,37 @@ function ReportTableRow({
           >
             {row.title}
           </span>
-          <span data-slot="report-meta" className="text-xs leading-normal text-fg-label xl:truncate">
+          {/* Wraps, never truncates: the schedule ("Mensualmente · el próximo el 1 sept") is
+              the line's useful half, and an ellipsis cut it at every width (review 12 Nov). */}
+          <span data-slot="report-meta" className="text-xs leading-normal text-fg-label">
             {meta}
           </span>
         </div>
       </td>
       <td className="py-3.5 pr-3 pl-0">
-        {row.contents ? <ContentsCell contents={row.contents} t={t} /> : null}
+        {row.contents ? (
+          <ContentsCell contents={row.contents} t={t} />
+        ) : (
+          // Said, never left blank: a completed report whose document could not be read
+          // says so, as its links cell does; one with no document yet says that. No
+          // number either way — an empty column read as a broken layout (review 12 Nov).
+          <span data-slot="report-contents-none" className="text-sm text-fg-label">
+            {completed ? t('reports.next.containsNotRead') : t('reports.next.containsNoDocument')}
+          </span>
+        )}
       </td>
       <td className="py-3.5 pr-3 pl-0">
-        <Chip tone="neutral" label={reportFormatLabel(t, row.format)} className="w-full justify-start" />
+        <Chip tone="neutral" label={reportFormatLabel(t, row.format)} />
       </td>
       <td className="py-3.5 pr-3 pl-0">
         <Chip
-          tone={STATUS_TONE[row.status] ?? 'neutral'}
+          // Gray for every status (Apple design ruling: status chips are neutral; green, amber
+          // and red name the three result areas only). The word and the check carry it.
+          tone="neutral"
           label={reportStatusLabel(t, row.status)}
           // Sized here: `Chip` wraps its icon in a span, so the primitive's `[&>svg]:size-3`
           // never reaches it and lucide's own 24px would push the word out of the chip.
           icon={completed ? <Check strokeWidth={2.25} className="size-3" /> : undefined}
-          className="w-full justify-start"
         />
       </td>
       <td data-slot="report-links" className="py-3.5 pr-3 pl-0">

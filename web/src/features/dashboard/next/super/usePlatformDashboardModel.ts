@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useTranslation } from '../../../../i18n'
+import { describeApiError } from '../../../../api/describeApiError'
 import { getSuperAdminDashboard } from '../../api/dashboard'
 import { useDashboardData } from '../../useDashboardData'
 import { listCompanies } from '../../../org-structure/api/companies'
@@ -51,7 +52,7 @@ const hasKey = (key: string) => (value: unknown) => typeof value === 'object' &&
  * one request answers for every tenant.
  */
 export function usePlatformDashboardModel(): PlatformDashboardState {
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
   const load = useCallback(async () => {
@@ -65,11 +66,12 @@ export function usePlatformDashboardModel(): PlatformDashboardState {
     return composePlatform({ dashboard, companies, surveys, system, settings }, today())
   }, [baseUrl, locale])
 
-  const { data, failed, error, reload } = useDashboardData(load)
+  const { data, failed, thrown, reload } = useDashboardData(load)
   return {
     status: failed ? 'error' : data ? 'ready' : 'loading',
     model: data,
-    error,
+    // Said in the reader's words by the failure's status, never the server's own text.
+    error: failed ? describeApiError(thrown, t) : null,
     reload,
   }
 }

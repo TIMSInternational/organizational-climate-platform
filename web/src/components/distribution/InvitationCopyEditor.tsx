@@ -6,6 +6,7 @@ import {
   type InvitationCopyField,
 } from '../../features/surveys/api/surveyInvitationCopy'
 import type { Locale } from '../../i18n'
+import { languageInSentence } from '../../features/surveys/surveyVocabulary'
 
 /**
  * Authoring the invitation subject and message, **side by side in every language the
@@ -109,7 +110,8 @@ export default function InvitationCopyEditor({
               {missing.map((gap) => (
                 <li key={`${gap.locale}-${gap.field}`}>
                   {t('surveys.distribution.copyMissingItem', {
-                    language: t(`surveys.distribution.locale.${gap.locale}`),
+                    // «Asunto en inglés»: the name is mid-phrase, so lower case in Spanish.
+                    language: languageInSentence(t, gap.locale),
                     field: t(
                       gap.field === 'subject'
                         ? 'surveys.distribution.invitationSubject'

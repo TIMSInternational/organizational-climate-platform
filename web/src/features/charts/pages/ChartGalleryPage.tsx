@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { LanguageSwitcher, useTranslation } from '../../../i18n'
 import {
+  BandLegend,
   BarChart,
   ClimateMap,
+  ClimateRangeBar,
+  DEFAULT_RESULT_BANDS,
   Counter,
   HeatMap,
   KPIDisplay,
@@ -20,10 +23,12 @@ import {
   type ClimateMapDimension,
   type ClimateMapRow,
   type ClimateMapSelection,
+  type ClimateRangeRow,
   type HeatMapCell,
   type Kpi,
   type PieSlice,
   type RecommendedAction,
+  type ResultBands,
   type WordFrequency,
 } from '../../../components/charts'
 import { SENTIMENT_STUB } from '../../../components/charts/sentimentStub'
@@ -315,6 +320,38 @@ export default function ChartGalleryPage() {
         </div>
       </Section>
 
+      <Section title={t('charts.gallerySectionRangeBar')}>
+        {/* The Apple design's signature, on a card because that is where every board puts it
+            (its seams between the areas are the card's colour). Harness data only — the
+            Results board's figures. Look for: the dimmed track outside each range, the dot
+            on the company mean, Finanzas withheld and moving nothing, the one-group row
+            with a dot and no range, and on the team card the thin organization mark, another
+            company's boundaries and a withheld row with the padlock and no number. */}
+        <div className="flex flex-col gap-3 rounded-xl border border-line-default bg-surface-card p-panel">
+          <p className="m-0 text-sm text-fg-secondary">{t('charts.galleryRangeBarCompany')}</p>
+          <BandLegend bands={DEFAULT_RESULT_BANDS} short />
+          <ClimateRangeBar rows={RANGE_COMPANY} bands={DEFAULT_RESULT_BANDS} floor={3} />
+        </div>
+        <div className="flex flex-col gap-3 rounded-xl border border-line-default bg-surface-card p-panel">
+          <p className="m-0 text-sm text-fg-secondary">{t('charts.galleryRangeBarTeam')}</p>
+          <BandLegend bands={RANGE_TEAM_BANDS} short />
+          <ClimateRangeBar rows={RANGE_TEAM} bands={RANGE_TEAM_BANDS} floor={3} />
+        </div>
+        <div className="flex flex-col gap-3 rounded-xl border border-line-default bg-surface-card p-panel">
+          <ClimateMap
+            variant="canvas"
+            title={t('charts.galleryClimateMapBanded')}
+            dimensions={BANDED_DIMENSIONS}
+            rows={BANDED_ROWS}
+            target={DEFAULT_RESULT_BANDS.opportunityMin}
+            bands={DEFAULT_RESULT_BANDS}
+            decimals={2}
+            threshold={3}
+            showGroupSize
+          />
+        </div>
+      </Section>
+
       <Section title={t('charts.gallerySectionWords')}>
         <WordCloud data={WORDS} title={t('charts.galleryWords')} />
         <WordCloud data={WORDS} colorBy="category" title={t('charts.galleryWordsByCategory')} />
@@ -436,6 +473,84 @@ const CLIMATE_ROWS: ClimateMapRow[] = [
   { id: 'eng', label: 'Engineering', responses: 57, scores: [81, 66, 79, 73, 84, 80] },
   { id: 'people', label: 'People', responses: 12, scores: [79, 68, 77, 75, 78, 82] },
   { id: 'finance', label: 'Finance', responses: 4, scores: [79, 81, 77, 80, 76, 83] },
+]
+
+/**
+ * The climate range bar's harness data: the Results board's departments and means (Meridiano,
+ * 11 Nov canvas). Finanzas is withheld on every dimension, with the lowest scores a payload
+ * could carry, so the gallery shows it moving nothing.
+ */
+const RANGE_DEPARTMENTS = ['Operaciones', 'Atención al cliente', 'Logística', 'Comercial', 'Tecnología', 'Talento humano'] as const
+
+function rangeGroups(means: readonly number[]) {
+  return [
+    ...RANGE_DEPARTMENTS.map((name, index) => ({ name, mean: means[index] ?? null, protected: false })),
+    { name: 'Finanzas', mean: null, protected: true },
+  ]
+}
+
+const RANGE_COMPANY: ClimateRangeRow[] = [
+  { key: 'leadership', label: 'Liderazgo y gestión', mean: 4.08, groups: rangeGroups([4.24, 3.96, 3.42, 4.02, 4.51, 4.36]) },
+  { key: 'safety', label: 'Seguridad psicológica', mean: 3.74, groups: rangeGroups([3.88, 3.52, 3.05, 3.61, 4.3, 4.12]) },
+  { key: 'communication', label: 'Comunicación', mean: 3.61, groups: rangeGroups([3.7, 3.44, 2.88, 3.55, 4.12, 3.98]) },
+  { key: 'workload', label: 'Carga de trabajo', mean: 3.22, groups: rangeGroups([3.31, 2.98, 2.71, 3.2, 3.6, 3.94]) },
+  { key: 'recognition', label: 'Reconocimiento', mean: 3.18, groups: rangeGroups([3.64, 3.02, 2.92, 2.64, 3.7, 3.52]) },
+  // Only one department disclosed on this dimension: a dot, no range, no low/high.
+  {
+    key: 'belonging',
+    label: 'Pertenencia',
+    mean: 4.21,
+    groups: [
+      { name: 'Tecnología', mean: 4.62, protected: false },
+      { name: 'Finanzas', mean: null, protected: true },
+    ],
+  },
+]
+
+/** Another company's boundaries, so the team card paints a different track. */
+const RANGE_TEAM_BANDS: ResultBands = { ...DEFAULT_RESULT_BANDS, opportunityMin: 3.5, strengthMin: 4.3 }
+
+const RANGE_TEAM: ClimateRangeRow[] = [
+  {
+    key: 'leadership',
+    label: 'Liderazgo y gestión',
+    mean: 4.24,
+    comparison: { label: 'Meridiano', mean: 4.08 },
+    groups: [
+      { name: 'Bodega', mean: 3.98, protected: false },
+      { name: 'Despacho', mean: 4.46, protected: false },
+    ],
+  },
+  {
+    key: 'safety',
+    label: 'Seguridad psicológica',
+    mean: 3.88,
+    comparison: { label: 'Meridiano', mean: 3.74 },
+    groups: [
+      { name: 'Bodega', mean: 3.61, protected: false },
+      { name: 'Despacho', mean: 4.12, protected: false },
+    ],
+  },
+  { key: 'workload', label: 'Carga de trabajo', mean: 3.31, comparison: { label: 'Meridiano', mean: 3.22 } },
+  // Withheld by the server: the padlock and the floor, no dot, no number.
+  { key: 'recognition', label: 'Reconocimiento', mean: null, protected: true, comparison: { label: 'Meridiano', mean: 3.18 } },
+]
+
+const BANDED_DIMENSIONS: ClimateMapDimension[] = [
+  { key: 'leadership', label: 'Liderazgo' },
+  { key: 'safety', label: 'Seguridad psicológica' },
+  { key: 'communication', label: 'Comunicación' },
+  { key: 'workload', label: 'Carga de trabajo' },
+  { key: 'recognition', label: 'Reconocimiento' },
+]
+
+const BANDED_ROWS: ClimateMapRow[] = [
+  { id: 'ops', label: 'Operaciones', responses: 118, scores: [4.24, 3.88, 3.7, 3.31, 3.64] },
+  { id: 'care', label: 'Atención al cliente', responses: 74, scores: [3.96, 3.52, 3.44, 2.98, 3.02] },
+  { id: 'log', label: 'Logística', responses: 61, scores: [3.42, 3.05, 2.88, 2.71, 2.92] },
+  { id: 'tech', label: 'Tecnología', responses: 38, scores: [4.51, 4.3, 4.12, 3.6, 3.7] },
+  // Under the floor: hatched, padlocked, no count beside its name.
+  { id: 'fin', label: 'Finanzas', responses: 2, scores: [] },
 ]
 
 const QUARTERS: ChartSeries[] = [

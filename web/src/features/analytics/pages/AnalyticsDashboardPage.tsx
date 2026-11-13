@@ -150,13 +150,13 @@ function AnalyticsDashboardPageForAdmins() {
       id: 'benchmarks',
       label: t('analytics.kpiBenchmarks'),
       value: benchmarks.length,
-      action: { label: t('navigation.benchmarks'), href: '/analytics/benchmarks' },
+      action: { label: t('navigation.references'), href: '/analytics/benchmarks' },
     },
     {
       id: 'activeBenchmarks',
       label: t('analytics.kpiActiveBenchmarks'),
       value: benchmarks.filter((benchmark) => benchmark.isActive).length,
-      action: { label: t('navigation.benchmarks'), href: '/analytics/benchmarks' },
+      action: { label: t('navigation.references'), href: '/analytics/benchmarks' },
     },
     {
       id: 'outstandingInsights',

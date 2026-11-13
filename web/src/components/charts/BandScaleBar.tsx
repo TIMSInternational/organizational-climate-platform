@@ -102,7 +102,7 @@ export default function BandScaleBar({
           return (
             <span
               key={value}
-              className={`absolute font-mono text-xs tabular-nums ${badTicks.includes(value) ? 'text-accent-red-ink' : 'text-fg-tertiary'}`}
+              className={`absolute text-xs tabular-nums ${badTicks.includes(value) ? 'text-accent-red-ink' : 'text-fg-tertiary'}`}
               style={{ left: `${left}%`, top: row * 14, transform: `translateX(${shift})` }}
             >
               {boundaryText(value, locale, bands.scale)}

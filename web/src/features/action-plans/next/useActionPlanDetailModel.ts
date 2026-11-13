@@ -23,6 +23,7 @@ import { findingFromTags } from './useActionPlansListModel'
 import { planFinding, planMove, type PlanFinding, type PlanMove } from './planDetailDerive'
 import type { ActionPlanDetailModel, Settled } from './planDetailModel'
 import { describeApiError } from '../../../api/describeApiError'
+import { ANONYMITY_FLOOR } from '../../../components/charts'
 
 export interface ActionPlanDetailState {
   status: 'loading' | 'ready' | 'error'
@@ -224,8 +225,15 @@ export function useActionPlanDetailModel(
         ),
       ])
       const latest = latestClosedSurvey(surveys)
-      const found = planFinding(trends, latest?.id ?? null, departmentId, { sourceSurveyId, dimensionKey })
-      return { found, moved: planMove(trends, found, departmentId) }
+      // The floor the SERVER applied to this very payload, as the departments page reads it
+      // (`useDepartmentsModel`): an administrator is shown a single department from one
+      // response (ruling 2026-10-15), a leader their own team from the floor of 3. The
+      // product floor only when the payload does not say. Review of 12 Nov: this page
+      // withheld at a constant 3 and printed «Menos de 3» where the server had disclosed
+      // the department, so one department read two ways across two screens.
+      const floor = trends.minimumGroupSize > 0 ? trends.minimumGroupSize : ANONYMITY_FLOOR
+      const found = planFinding(trends, latest?.id ?? null, departmentId, { sourceSurveyId, dimensionKey }, floor)
+      return { found, moved: planMove(trends, found, departmentId, floor) }
     }).then((settled) => {
       apply(setFinding)(settled.status === 'ready' ? { status: 'ready', value: settled.value.found } : settled)
       apply(setMove)(settled.status === 'ready' ? { status: 'ready', value: settled.value.moved } : settled)

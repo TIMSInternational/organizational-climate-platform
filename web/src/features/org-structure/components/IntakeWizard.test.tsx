@@ -3,6 +3,7 @@ import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-li
 import userEvent from '@testing-library/user-event'
 import IntakeWizard from './IntakeWizard'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
+import es from '../../../i18n/es.json'
 import { IntakeRequestError, type IntakeMapping, type IntakeRow, type IntakeUnderstanding } from '../api/intake'
 import type { BulkImportResponse } from '../api/bulkImport'
 
@@ -339,7 +340,7 @@ describe('IntakeWizard — upload and understanding', () => {
 
     await user.upload(screen.getByLabelText('Archivo de personas'), hrExport())
 
-    expect(await screen.findByText('Ocurrió un error. Por favor intenta nuevamente.')).toBeTruthy()
+    expect(await screen.findByText(es.errors.generic)).toBeTruthy()
     expect(screen.queryByText(/Request failed/)).toBeNull()
   })
 
@@ -988,7 +989,7 @@ describe('IntakeWizard — a file too big for one request', () => {
     submitIntakeRows.mockImplementation(async () => { throw new TypeError('Failed to fetch') })
     await user.click(screen.getByRole('button', { name: APPROVE_CREDENTIALS }))
 
-    await screen.findByText('Ocurrió un error. Por favor intenta nuevamente.')
+    await screen.findByText(es.errors.generic)
     expect(onImported).not.toHaveBeenCalled()
     // Still on the review table, where approving again is the right thing to do.
     expect(screen.getByRole('button', { name: APPROVE_CREDENTIALS })).toBeTruthy()

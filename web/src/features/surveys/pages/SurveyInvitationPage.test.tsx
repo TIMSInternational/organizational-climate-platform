@@ -246,7 +246,7 @@ describe('SurveyInvitationPage', () => {
     await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
     expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true)
 
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar Idioma' }), 'en')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar idioma' }), 'en')
 
     // The switch really landed: the shell's own control is renamed by it.
     await screen.findByRole('combobox', { name: 'Switch Language' })
@@ -273,7 +273,7 @@ describe('SurveyInvitationPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
     await waitFor(() => expect(steps()).toEqual(['opened', 'started']))
 
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar Idioma' }), 'en')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar idioma' }), 'en')
     await screen.findByRole('combobox', { name: 'Switch Language' })
 
     expect(steps()).toEqual(['opened', 'started'])

@@ -82,18 +82,27 @@ export function instantOfWallClock(wallClock: string, timeZone: string): Date | 
 }
 
 /**
- * The zone as a reader recognises it: `America/Costa_Rica (GMT-6)`. The offset is the one in
- * force at `at`, in the platform's own short spelling.
+ * The zone as a reader recognises it: `Costa Rica (GMT-6)`, the place the IANA id names (its
+ * last segment, underscores as spaces) rather than the id itself. The offset is the one in
+ * force at `at`, in the platform's own short spelling. Display only: the id is what is stored
+ * and sent, and an id with no place segment (`UTC`) prints as it is.
  */
 export function zoneLabel(timeZone: string, at: number | Date = Date.now()): string {
+  const place = zonePlace(timeZone)
   try {
     const offset = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })
       .formatToParts(new Date(at))
       .find((part) => part.type === 'timeZoneName')?.value
-    return offset ? `${timeZone} (${offset})` : timeZone
+    return offset ? `${place} (${offset})` : place
   } catch {
-    return timeZone
+    return place
   }
+}
+
+/** `America/Costa_Rica` → `Costa Rica`; `America/Argentina/Buenos_Aires` → `Buenos Aires`. */
+function zonePlace(timeZone: string): string {
+  const last = timeZone.split('/').pop() ?? timeZone
+  return last.replace(/_/g, ' ') || timeZone
 }
 
 /** "28 oct 2026 · 23:59" -- the day and the 24-hour time `instant` reads as in `timeZone`. */

@@ -265,13 +265,15 @@ describe('the team against the organisation', () => {
   })
 
   /**
-   * Seguridad psicológica, as the artboard draws it: 4,00 against 3,75 prints 4,0 and 3,8,
-   * and the move is their difference, +0,2 — never the rounded raw 0,25 (+0,3).
+   * At the two decimals the climate range bar prints (fix round 1: one score, one precision
+   * on every home): 4,004 against 3,745 prints 4,00 and 3,75, and the move is their
+   * difference, +0,25 — never the rounded raw 0,259 (+0,26).
    */
   it('moves by the difference of the printed readings', () => {
-    expect(dimensionMove({ key: 'psychological_safety', team: 4, organization: 3.75 })).toBeCloseTo(0.2, 10)
-    expect(dimensionMove({ key: 'belonging', team: 4.33, organization: 4 })).toBeCloseTo(0.3, 10)
-    expect(dimensionMove({ key: 'recognition', team: 3.17, organization: 3.38 })).toBeCloseTo(-0.2, 10)
+    expect(dimensionMove({ key: 'psychological_safety', team: 4.004, organization: 3.745 })).toBeCloseTo(0.25, 10)
+    expect(dimensionMove({ key: 'psychological_safety', team: 4, organization: 3.75 })).toBeCloseTo(0.25, 10)
+    expect(dimensionMove({ key: 'belonging', team: 4.33, organization: 4 })).toBeCloseTo(0.33, 10)
+    expect(dimensionMove({ key: 'recognition', team: 3.174, organization: 3.385 })).toBeCloseTo(-0.22, 10)
     expect(dimensionMove({ key: 'x', team: null, organization: 3.75 })).toBeNull()
     expect(dimensionMove({ key: 'x', team: 4, organization: null })).toBeNull()
   })
@@ -283,12 +285,14 @@ describe('the team against the organisation', () => {
    * it on target): there is one scale now, the company's, and every screen reads it.
    */
   it('reads each reading in the company’s bands, at the decimal it prints', () => {
-    expect(dimensionBand({ key: 'a', team: 2.94, organization: null }, DEFAULT_RESULT_BANDS)).toBe('critical')
-    // 2,96 prints 3,0: the opportunity area, never critical.
-    expect(dimensionBand({ key: 'a', team: 2.96, organization: null }, DEFAULT_RESULT_BANDS)).toBe('opportunity')
+    // Two decimals, as the bar prints them: 2,96 is 2,96 and critical (at one it printed 3,0).
+    expect(dimensionBand({ key: 'a', team: 2.96, organization: null }, DEFAULT_RESULT_BANDS)).toBe('critical')
+    // 2,996 prints 3,00: the opportunity area, never critical.
+    expect(dimensionBand({ key: 'a', team: 2.996, organization: null }, DEFAULT_RESULT_BANDS)).toBe('opportunity')
     expect(dimensionBand({ key: 'a', team: 3.5, organization: null }, DEFAULT_RESULT_BANDS)).toBe('opportunity')
-    // 3,96 prints 4,0: strength.
-    expect(dimensionBand({ key: 'a', team: 3.96, organization: null }, DEFAULT_RESULT_BANDS)).toBe('strength')
+    expect(dimensionBand({ key: 'a', team: 3.96, organization: null }, DEFAULT_RESULT_BANDS)).toBe('opportunity')
+    // 3,996 prints 4,00: strength.
+    expect(dimensionBand({ key: 'a', team: 3.996, organization: null }, DEFAULT_RESULT_BANDS)).toBe('strength')
     expect(dimensionBand({ key: 'a', team: null, organization: 4 }, DEFAULT_RESULT_BANDS)).toBeNull()
     // The company's own boundaries, not the default.
     const custom = { ...DEFAULT_RESULT_BANDS, opportunityMin: 3.6 }

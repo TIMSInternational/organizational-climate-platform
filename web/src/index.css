@@ -56,7 +56,7 @@
     /* The root font size is deliberately NOT set. The legacy app did not
        override it either, and pinning it to an absolute px value would drop the
        user's browser default-font-size preference on the floor (WCAG 1.4.4).
-       The 13px shell base is applied to `body`, in `rem`, so it scales. */
+       The 15px body is applied to `body`, in `rem`, so it scales. */
     font-family: var(--admin-font-sans);
     background: var(--admin-bg-outer);
     color: var(--admin-font-primary);
@@ -86,8 +86,9 @@
   }
 
   body {
-    /* 13px/1.5 — legacy AppShell.tsx `fontSize: 13` on the shell root,
-       globals.css `body { line-height: 1.5 }`. */
+    /* 15px/1.45 — the Apple design's body (user ruling, 11 Nov; the canvas's
+       `.app { font: 15px/1.45 }`). It was the legacy console's 13px/1.5
+       (AppShell.tsx `fontSize: 13`, globals.css `body { line-height: 1.5 }`). */
     font-size: var(--admin-text-base);
     line-height: var(--admin-leading-normal);
     margin: 0;
@@ -115,27 +116,33 @@
     margin: 0 0 var(--admin-space-8);
   }
 
-  /* The storefront recolour: page-level display headings wear the Conócete
-     serif at its native 400 — the face ships one weight, and synthesised 600
-     is exactly the fake-bold `fonts.css` exists to avoid. h3-h6 stay sans:
-     16px/14px UI headings in an old-style serif read as decoration. */
+  /* The Apple design's title serif (user ruling, 11 Nov): New York, then the
+     self-hosted Source Serif 4, at 600 — the canvas's `.lt` (the 30px page
+     title) and `.h` (the 20px card title), each with its own tracking, which
+     HIG `typography.md` § "Tracking values" (New York) puts at -12/1000 em at
+     30pt and -10/1000 em at 20pt; the canvas's -.015em / -.01em are those within
+     three thousandths. It replaces the Conócete Goudy here; the storefront
+     surfaces keep `font-store-serif`. h3-h6 stay sans: the serif is for titles
+     and the respondent's question only. */
   h1 {
-    font-family: var(--storefront-font-serif);
-    font-weight: var(--admin-weight-regular);
-    font-size: var(--admin-text-3xl); /* 24px — legacy `text-2xl` page title */
+    font-family: var(--admin-font-display);
+    font-weight: var(--admin-weight-semibold);
+    font-size: var(--admin-text-3xl); /* 30px — the page title */
+    letter-spacing: var(--admin-tracking-display);
   }
   h2 {
-    font-family: var(--storefront-font-serif);
-    font-weight: var(--admin-weight-regular);
-    font-size: var(--admin-text-2xl); /* 20px */
+    font-family: var(--admin-font-display);
+    font-weight: var(--admin-weight-semibold);
+    font-size: var(--admin-text-2xl); /* 20px — a card or section title */
+    letter-spacing: var(--admin-tracking-title);
   }
   h3,
   h4 {
-    font-size: var(--admin-text-xl); /* 16px */
+    font-size: var(--admin-text-xl); /* 17px */
   }
   h5,
   h6 {
-    font-size: var(--admin-text-lg); /* 14px */
+    font-size: var(--admin-text-base); /* 15px — a semibold body-size heading */
     letter-spacing: var(--admin-tracking-normal);
   }
 
@@ -155,8 +162,10 @@
     color: var(--admin-font-tertiary);
   }
 
+  /* The blue TEXT ink (the canvas's `--tint`), 6.70:1 on white. Not the identity
+     `--admin-accent-blue`, which is a graphic blue held under 4.5:1 on purpose. */
   a {
-    color: var(--admin-accent-blue);
+    color: var(--admin-accent-blue-ink);
     text-decoration: none;
     transition: color var(--admin-duration-fast) var(--admin-ease-out);
   }
@@ -195,20 +204,27 @@
      ui/alert.tsx: `rounded-lg border px-4 py-3 text-sm` (8px radius, 16px/12px
      padding, 14px) with the `destructive` variant colouring the text. Every
      page reports failure as `<p role="alert">`, so the role carries the styling
-     and no page has to name the error colour. Deviation: the fill is the soft
-     red accent rather than `bg-card`, so an alert reads as an alert on a card. */
+     and no page has to name the error colour. The fill is the neutral Note fill
+     (`--admin-bg-fill-subtle`) on the panel hairline, not the soft red it was:
+     Apple design ruling, 11 Nov — green, amber and red are the three result areas
+     only, and a pink panel read as «Crítica». The word stays in the red TEXT ink,
+     the one mark that says "failure" (5.75:1 light, 5.8:1 dark on the fill over the
+     box; `styles/inkContrast.test.ts` re-measures it). 14px, the canvas's `.note`,
+     one step under the body (`--admin-text-ui`). */
   [role='alert'] {
-    color: var(--admin-accent-red);
-    background: var(--admin-accent-bg-red);
-    border: 1px solid var(--admin-accent-border-red);
+    color: var(--admin-accent-red-ink);
+    background: var(--admin-bg-fill-subtle);
+    border: 1px solid var(--admin-border-panel);
     border-radius: var(--admin-radius-xl);
     padding: var(--admin-space-12) var(--admin-space-16);
-    font-size: var(--admin-text-lg);
+    font-size: var(--admin-text-ui);
   }
 
   /* -- Forms -------------------------------------------------------------
-     ui/label.tsx is `text-sm font-medium` and globals.css `label` is
-     `0.875rem / 1.25rem / 500` — 14px medium either way.
+     The canvas's field label: `.field > label { font-size: 13px; font-weight:
+     600; color: var(--label) }` — the secondary size, set in the heading ink and
+     weight, so a field's name reads as its title. (It was ui/label.tsx's
+     `text-sm font-medium` and globals.css `label`, 14px medium, in the muted ink.)
 
      NO LEGACY COUNTERPART: `display: block` and the bottom margin. The legacy
      forms wrapped label+control in a `FormItem` that supplied both; the pages
@@ -217,10 +233,10 @@
   label {
     display: block;
     margin-bottom: var(--admin-space-12);
-    font-size: var(--admin-text-lg);
-    font-weight: var(--admin-weight-medium);
+    font-size: var(--admin-text-sm);
+    font-weight: var(--admin-weight-semibold);
     line-height: var(--admin-leading-normal);
-    color: var(--admin-font-secondary);
+    color: var(--admin-font-primary);
   }
 
   /* ui/input.tsx: `h-8 rounded-[4px] border border-input bg-background px-3
@@ -287,7 +303,8 @@
     width: auto;
     height: auto;
     margin-top: 0;
-    accent-color: var(--admin-accent-blue);
+    /* The canvas's `.ck { accent-color: var(--tintbg) }`: the app's one blue. */
+    accent-color: var(--admin-accent-blue-fill);
   }
 
   input:hover,
@@ -371,6 +388,10 @@
   table {
     border-collapse: collapse;
     font-size: var(--admin-text-base);
+    /* Tabular figures, so a column of numbers lines up digit under digit (the
+       canvas's `.num`, `.tbl .r`, `.hm`). Letters are unaffected. Elsewhere,
+       `tabular-nums` is Tailwind's own utility for the same declaration. */
+    font-variant-numeric: tabular-nums;
     /* A bare `<table>` sizes to its content and stops at its container instead
        of being stretched past it. `max-width` cannot beat a table's min-content
        width on its own, which is why the `overflow-wrap` below matters. */
@@ -451,6 +472,51 @@
  * nothing ever defined them, so they rendered as unstyled text.
  * ------------------------------------------------------------------------- */
 @layer components {
+  /* -- The chip picker (`components/layout/chipSelectStyle.ts`) -------------
+     The respond header's "Español" and "Claro". The label carries a chevron in the chip's
+     ink so the chip reads as a menu, and on a phone (under `md`, or any coarse pointer) it
+     turns the <select> into a 44px target — HIG `accessibility.md` › Mobility — without
+     growing the row: the select bleeds 11px above and below (negative margins), its own
+     ground and line go transparent, and the label draws the 22px chip behind it
+     (`::before`, inside the label's own stacking context). */
+  .chip-select {
+    position: relative;
+    isolation: isolate;
+    color: var(--admin-font-secondary);
+  }
+  .chip-select::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: var(--admin-space-6);
+    z-index: 1;
+    width: var(--admin-space-8);
+    height: var(--admin-space-8);
+    transform: translateY(-50%);
+    background-color: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3l2.5 2.5L6.5 3' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    pointer-events: none;
+  }
+  @media (max-width: 47.99rem), (pointer: coarse) {
+    .chip-select {
+      --chip-select-height: calc(var(--admin-space-2) * 22);
+      --chip-select-bleed: calc(var(--admin-space-2) * -5.5);
+      --chip-select-ground: transparent;
+      --chip-select-line: transparent;
+    }
+    .chip-select::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      border: 1px solid var(--admin-border-default);
+      border-radius: var(--admin-radius-lg);
+      background: var(--admin-bg-icon-box);
+      pointer-events: none;
+    }
+  }
+
   /* ---------------------------------------------------------------------------
    * The shell's ink region.
    *
@@ -508,7 +574,10 @@
        a dark photograph. Translucent rather than a hex, for the same reason
        `--admin-shell-border` is: it composites correctly on the rail AND on the image. */
     --admin-bg-icon-box: var(--admin-shell-bg-active);
-    --admin-bg-input: var(--admin-shell-bg-raised);
+    /* The company select is a WELL in the bar on the canvas (`.cosel` on
+       `--chrome2`), not a lifted surface, so a control in the chrome sits on the
+       sunken navy: the strong ink is 18.52:1 on it in light, 19.55:1 in dark. */
+    --admin-bg-input: var(--admin-shell-bg-sunken);
     --admin-border-light: var(--admin-shell-border);
     --admin-border-hover: var(--admin-shell-border);
     --admin-border-default: var(--admin-shell-border);
@@ -614,29 +683,30 @@
     flex-shrink: 0;
   }
 
-  /* NO LEGACY COUNTERPART: the legacy nav had no badge. Built from the badge
-     tokens (11px, `--admin-radius-lg`, soft accent fill) so it is at least
-     consistent with the rest of the language. */
+  /* NO LEGACY COUNTERPART: the legacy nav had no badge. The canvas's row count
+     (`.item .ct`): a quiet 12px figure at the row's end in the chrome's label ink
+     (`.on-shell` points `--admin-font-tertiary` at `--admin-shell-font-label`,
+     7.00:1 on the rail), tabular so the counts line up — not a blue pill: blue in
+     the rail means the selected row, and nothing else may wear it there. */
   .nav-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-width: var(--admin-space-16);
     padding: 0 var(--admin-space-4);
-    font-size: var(--admin-text-2xs);
+    font-size: var(--admin-text-xs);
     font-weight: var(--admin-weight-medium);
-    color: var(--admin-accent-blue);
-    background: var(--admin-accent-bg-blue);
+    font-variant-numeric: tabular-nums;
+    color: var(--admin-font-tertiary);
+    background: transparent;
     border-radius: var(--admin-radius-full);
   }
 
-  /* On a selected row the fill is already `--admin-accent-blue`, so the pill above
-     would be teal text on an 8%-alpha teal tint over solid teal — invisible at the
-     one moment the count matters. Inverted: the row's own on-accent colour for the
-     digits, and a translucent white plate to lift them off the fill. */
+  /* On the selected row the figure takes the row's own on-accent white (the
+     canvas's `.item.on .ct { color: #fff }`), 5.17:1 on the blue fill. */
   .nav-badge[data-active='true'] {
     color: var(--admin-font-on-accent);
-    background: rgb(255 255 255 / 0.22);
+    background: transparent;
   }
 
   /* `PoweredByNexadev` draws both marks and lets these pick one. The coloured mark's navy

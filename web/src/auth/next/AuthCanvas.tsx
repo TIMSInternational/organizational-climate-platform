@@ -227,12 +227,14 @@ function AuthStage({ variant }: { variant: StageVariant }) {
           things stranded at opposite corners. */}
       <div className="relative flex flex-1 flex-col justify-center px-12 pb-14">
         <span className="text-2xs font-bold uppercase tracking-eyebrow text-fg-tertiary">{t(eyebrow)}</span>
-        {/* The app's display face, from the element rule `index.css` puts on h1/h2. Weight
-            stays regular: the face ships ONE weight and a synthesised 600 is the fake bold
-            `fonts.css` exists to avoid. At `text-3xl` rather than the storefront's display
-            step, which clamps to 4.4rem and is what made the first version read as a
-            marketing page bolted to the front of a product. */}
-        <p className="m-0 mt-3 max-w-[29rem] font-store-serif text-3xl font-normal leading-tight text-fg-primary">
+        {/* The app's display face, the one the element rule in `index.css` puts on h1/h2:
+            `font-display` (New York, then the self-hosted Source Serif 4), at the 600 that
+            `fonts.css` ships, so the card's «Iniciar sesión» beside it is the same serif and
+            not a second one. It was `font-store-serif` (Goudy) while the headings were Goudy;
+            once they moved, keeping it put two serifs on one screen. At `text-3xl` rather
+            than the storefront's display step, which clamps to 4.4rem and is what made the
+            first version read as a marketing page bolted to the front of a product. */}
+        <p className="m-0 mt-3 max-w-[29rem] font-display text-3xl font-semibold leading-tight text-fg-primary">
           {t(lead)}
         </p>
         <dl className="m-0 mt-7 flex max-w-[34rem] flex-col border-t border-line-light">

@@ -7,7 +7,8 @@ import BandGlyph from './BandGlyph'
 import BandLegend from './BandLegend'
 import ProtectedCell from './ProtectedCell'
 import { ANONYMITY_FLOOR } from './suppression'
-import { BAND_PAINT, bandCellStyle, bandName, bandOf, scoreText, type ResultBands } from './resultBands'
+import { BAND_PAINT, bandName, bandOf, scoreText, type ResultBands } from './resultBands'
+import { byCount } from '../../i18n/plural'
 import { PROTECTED_HATCH, isSuppressed } from './suppression'
 
 /**
@@ -136,10 +137,13 @@ const DENSITY = {
 } as const
 
 /**
- * The Dashboard artboard's cells (10 Sep): 34px tall and printed at 12px, the column
- * heads at 9px, the group names at 13px in the primary ink.
+ * The Apple canvas's climate map (`table.hm`, Results, 11 Nov): 44px cells — the same
+ * height as WCAG 2.5.5's target, so an opened map is safe to aim at — read at 14px
+ * semibold, the column heads and group names at 13px (the design's table-metadata step;
+ * the canvas's 12px is reserved for chips and legends). It replaced the Dashboard
+ * artboard's 34px cells and 9px uppercase heads of 10 Sep.
  */
-const CANVAS_DENSITY = { box: 'h-8.5', reading: 'text-sm', header: 'text-3xs', label: 'text-base' } as const
+const CANVAS_DENSITY = { box: 'h-11', reading: 'text-ui', header: 'text-sm', label: 'text-sm' } as const
 
 /** A step of the diverging scale: 0 far below … 2 on target … 4 far above. */
 export type ClimateMapStep = 0 | 1 | 2 | 3 | 4
@@ -216,6 +220,17 @@ export interface ClimateMapProps {
    * (`target === null` still withholds every cell).
    */
   bands?: ResultBands
+  /**
+   * Prints each DISCLOSED group's size beside its name, in the secondary ink ("Operaciones
+   * 118", the canvas's `.hm th .muted`). Off by default, and never for a withheld row:
+   * the count is what the floor protects (see `ProtectedCell`).
+   *
+   * Opt-in because a count is a disclosure of its own. Turn it on only where the screen
+   * already publishes each group's count (the Panel de Control's "Quién respondió" does)
+   * and where the counts cannot be subtracted from a published total to recover a
+   * withheld group's — every count printed here is one term of that sum.
+   */
+  showGroupSize?: boolean
 }
 
 export default function ClimateMap({
@@ -234,6 +249,7 @@ export default function ClimateMap({
   variant = 'default',
   tintStep,
   bands,
+  showGroupSize = false,
 }: ClimateMapProps) {
   const { t, locale } = useTranslation()
   const canvas = variant === 'canvas'
@@ -245,6 +261,7 @@ export default function ClimateMap({
     bands?.scale === 'percent'
       ? scoreText(value, 'percent', locale, decimals ?? 1)
       : formatMetric(value, { kind: 'number', decimals }, locale)
+  const count = new Intl.NumberFormat(locale)
 
   return (
     <figure className={cn('m-0 flex flex-col', canvas ? 'gap-3' : 'gap-2')}>
@@ -262,7 +279,15 @@ export default function ClimateMap({
           "Ventanilla Única de Comercio Exterior": every one of the demo tenant's five group
           names was cut there, measured on production. `w-44` holds the longest of them on
           two wrapped lines, and the names below wrap rather than truncate — see the heads. */}
-      <Table className={canvas ? 'table-fixed border-separate border-spacing-0 text-sm' : 'text-sm'}>
+      {/* `minWidth` in the canvas: `table-fixed` + `w-full` share the width equally, which on a
+          phone left each reading a 25px sliver. The floor is the label column (`w-44`) plus
+          72px per reading and its 4px gutter — the canvas's `.hm td { min-width: 72px }` — so
+          under it `Table`'s container scrolls and the sticky group names stay put. In steps of
+          the 4px spacing token (`--admin-space-4`, what `--spacing` points at), not pixels. */}
+      <Table
+        className={canvas ? 'table-fixed border-separate border-spacing-0 text-sm' : 'text-sm'}
+        style={canvas ? { minWidth: `calc(var(--admin-space-4) * ${44 + dimensions.length * 19})` } : undefined}
+      >
         <caption className="sr-only">{t('charts.tableCaption')}</caption>
         {canvas && (
           <colgroup>
@@ -279,7 +304,8 @@ export default function ClimateMap({
                 shrink-to-content column: the table's surplus width then goes to
                 the reading columns, which is where the design puts it. */}
             {/* `border-0` in the canvas: `index.css` rules every bare th/td, and the artboard's grid has no rules. */}
-            <td className={canvas ? 'border-0 p-0' : 'w-px'} />
+            {/* Sticky with the group names below it, on the card's ground (the map stands on a card). */}
+            <td className={canvas ? 'sticky left-0 z-1 border-0 bg-surface-card p-0' : 'w-px'} />
             {dimensions.map((dimension) => (
               <th
                 key={dimension.key}
@@ -304,7 +330,7 @@ export default function ClimateMap({
                 // is the floor under it, for a single word wider than one column.
                 className={cn(
                   canvas
-                    ? 'border-0 p-0 pt-1 pb-0.25 pl-1 text-center align-bottom font-bold break-words hyphens-auto uppercase leading-tight tracking-label text-fg-label'
+                    ? 'border-0 p-0 pt-1 pb-1 pl-1 text-center align-bottom font-semibold break-words hyphens-auto leading-tight text-fg-secondary'
                     : 'px-1 pb-1.5 text-left font-semibold uppercase tracking-label text-fg-secondary',
                   density.header,
                 )}
@@ -340,7 +366,13 @@ export default function ClimateMap({
                   scope="row"
                   className={cn(
                     canvas
-                      ? 'border-0 p-0 pt-1 pr-2 text-left font-normal break-words text-fg-primary'
+                      ? // Sticky: when the grid scrolls sideways (a phone, a many-dimension
+                        // survey) the group names stay, so a reading never loses its row.
+                        // The ground follows the row's own tint when the row is open.
+                        cn(
+                          'sticky left-0 z-1 border-0 p-0 pt-1 pr-2 text-left font-medium break-words text-fg-primary',
+                          rowOpen ? 'bg-surface-icon-box' : 'bg-surface-card',
+                        )
                       : 'w-px whitespace-nowrap pr-2 text-left font-medium text-fg-secondary',
                     density.label,
                   )}
@@ -370,6 +402,18 @@ export default function ClimateMap({
                   ) : (
                     row.label
                   )}
+                  {showGroupSize && !suppressed && (
+                    // The visible figure is for the eye; the words are for AT, so a screen
+                    // reader hears "Operaciones, 118 respuestas" rather than a bare number.
+                    <>
+                      <span aria-hidden="true" className="ml-1.5 font-normal text-fg-secondary tabular-nums">
+                        {count.format(row.responses)}
+                      </span>
+                      <span className="sr-only">
+                        {`, ${t(byCount(row.responses, 'charts.groupSizeSrOne', 'charts.groupSizeSr'), { count: count.format(row.responses) })}`}
+                      </span>
+                    </>
+                  )}
                 </th>
                 {dimensions.map((dimension, index) => {
                   const name = dimension.fullLabel ?? dimension.label
@@ -393,10 +437,15 @@ export default function ClimateMap({
                           // and an `h-7` cell has no room for a word anyway — a
                           // dense grid repeating "protected" is noise, not clarity.
                           showWord={false}
+                          // The ruled pattern for a withheld group is the padlock
+                          // plus «Menos de N», so the row's FIRST cell says it in
+                          // words; the rest keep the padlock alone, one statement
+                          // per row rather than six (fix round 2, 12 Nov).
+                          mark={index === 0 ? 'floor' : 'shield'}
                           // The same `box` the disclosed reading uses. A withheld
                           // row between two disclosed ones must not be a different
                           // height, or the grid steps where the floor bites.
-                          suppressedClassName={cn(density.box, 'w-full')}
+                          suppressedClassName={cn(density.box, 'w-full rounded-md')}
                         >
                           {null}
                         </ProtectedCell>
@@ -411,25 +460,29 @@ export default function ClimateMap({
                     // Judged at the precision the cell prints, so the band and the
                     // figure on it can never disagree.
                     const band = bandOf(score, bands, decimals ?? 1)
+                    // The canvas's `.hm td.s / .o / .c`: the area's soft fill and its ink, no
+                    // border, 8px corners, the glyph BEFORE the figure, the system face with
+                    // tabular figures (no monospace: one UI face throughout).
                     const banded = (
                       <div
                         data-band={band}
                         title={bandName(band, bands, t)}
                         className={cn(
-                          'flex w-full items-center justify-center gap-1 rounded border font-mono font-semibold tabular-nums',
+                          'flex w-full items-center justify-center gap-1 rounded-md font-semibold tabular-nums',
                           density.box,
                           density.reading,
                         )}
                         style={{
-                          ...bandCellStyle(band),
+                          backgroundColor: BAND_PAINT[band].fill,
+                          color: BAND_PAINT[band].ink,
                           ...(cellOpenHere
                             ? { boxShadow: `inset 0 0 0 2px ${BAND_PAINT[band].fill}, inset 0 0 0 3.5px ${BAND_PAINT[band].ink}` }
                             : {}),
                         }}
                       >
                         <span className="sr-only">{`${description}: `}</span>
-                        {reading(score)}
                         <BandGlyph band={band} />
+                        {reading(score)}
                         <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
                       </div>
                     )
@@ -483,7 +536,7 @@ export default function ClimateMap({
                   const box = (
                     <div
                       className={cn(
-                        'flex w-full items-center justify-center rounded font-mono tabular-nums',
+                        'flex w-full items-center justify-center rounded-md tabular-nums',
                         density.box,
                         density.reading,
                       )}
@@ -579,13 +632,17 @@ export default function ClimateMap({
       </Table>
 
       {bands ? (
-        <BandLegend bands={bands} short testId="climate-map-legend">
+        <BandLegend bands={bands} testId="climate-map-legend">
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden="true" className={`inline-block size-4 rounded-xs bg-surface-icon-box ${PROTECTED_HATCH}`} />
             {onSelectCell || onSelectRow
               ? t('charts.protectedLegendInert', { threshold })
               : t('charts.next.legendProtected', { threshold })}
           </span>
+          {/* A dense grid prints one decimal where the bars and tiles beside it print two
+              (the dashboard's "Clima por dimensión"); the key says so, so a 3,6 here is not
+              read as a different measurement from a 3,62 there. */}
+          {(decimals ?? 1) === 1 ? <span data-testid="climate-map-decimals">{t('charts.next.legendOneDecimal')}</span> : null}
         </BandLegend>
       ) : canvas ? (
         <CanvasLegend threshold={threshold} hasTarget={target !== null} inert={Boolean(onSelectCell || onSelectRow)} />

@@ -107,6 +107,11 @@ const { values, positionals } = parseArgs({
     // layout, so the suite cannot see it either.
     storage: { type: 'string', multiple: true },
     viewport: { type: 'boolean', default: false },
+    // Emulate a phone's touch screen: `hasTouch` + `isMobile`, so `(pointer: coarse)` matches
+    // and the `pointer-coarse:` sizes (the 44px hit regions) are what gets photographed.
+    // Without it a 390-wide shot is a narrow DESKTOP window with a mouse, and every control
+    // measures at its dense desktop size.
+    touch: { type: 'boolean', default: false },
     // Write no token at all, for the surfaces whose whole subject is not having one:
     // `/s/:token`, `/survey-invitations/:token`, `/shared/reports/:token`, `/login`.
     // Until this existed those pages could only ever be photographed as a signed-in
@@ -151,6 +156,8 @@ Options:
                      state lives in the browser, e.g.
                      --storage surveyAnswered:<survey-id>=1
   --viewport         clip to the viewport instead of capturing the full page
+  --touch            emulate a touch screen, so (pointer: coarse) matches and
+                     controls take their 44px phone size
   --signed-out       write no token, for the token-addressed public pages and
                      /login. Anything behind RequireAuth redirects to /login
   --help             show this
@@ -284,6 +291,7 @@ async function main() {
     const context = await browser.newContext({
       viewport: { width, height },
       deviceScaleFactor: scale,
+      ...(values.touch ? { hasTouch: true, isMobile: true } : {}),
       // Deterministic frames: every transition in this app is CSS (framer-motion is
       // banned here) and every one is required to stop under prefers-reduced-motion,
       // so this also exercises that rule.

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, EyeOff, Link2Off, ShieldCheck } from 'lucide-react'
+import { CalendarDays, EyeOff, Link2Off, Lock, ShieldCheck } from 'lucide-react'
 import { useParams } from 'react-router'
 import { LanguageSwitcher, useTranslation } from '../../../../i18n'
+import { byCount } from '../../../../i18n/plural'
 import { BrandLockup, PoweredByNexadev, ThemeSwitcher } from '../../../../components/layout'
 import {
   Alert,
@@ -39,6 +40,7 @@ import {
   ReportCard,
   ScaleStrip,
 } from './parts'
+import { languageInSentence } from '../../../surveys/surveyVocabulary'
 
 const K = 'sharedReport.next'
 /** The 1-to-5 axis over the scale strip, drawn once for the whole column. */
@@ -52,7 +54,7 @@ const SCALE_TICKS = [1, 2, 3, 4, 5]
  * primitive's heading read a full weight heavier than the artboard's.
  */
 const TH =
-  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-left text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-left text-xs font-semibold whitespace-nowrap text-fg-label'
 
 /**
  * `/shared/reports/:token` — the SharedReport and SharedReportUnavailable artboards
@@ -194,16 +196,16 @@ function Unavailable() {
     <div className="flex justify-center px-2 pb-8 pt-16">
       <div
         role="alert"
-        className="flex w-full max-w-[32.5rem] flex-col gap-5 rounded-xl border border-line-default bg-surface-card px-7 pb-6 pt-7 shadow-sm"
+        className="flex w-full max-w-[32.5rem] flex-col gap-5 rounded-xl border border-line-panel bg-surface-card px-7 pb-6 pt-7"
       >
         <span
           aria-hidden="true"
-          className="inline-flex size-9 items-center justify-center rounded-lg bg-accent-amber-soft text-accent-amber-ink [&_svg]:size-4"
+          className="inline-flex size-9 items-center justify-center rounded-lg bg-surface-icon-box text-fg-secondary [&_svg]:size-4"
         >
           <Link2Off />
         </span>
         <div className="flex flex-col gap-2">
-          <span className="text-2xs font-bold uppercase tracking-eyebrow text-fg-tertiary">
+          <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
             {t('sharedReport.eyebrow')}
           </span>
           <h1 className="m-0">{t('sharedReport.unavailableTitle')}</h1>
@@ -225,7 +227,7 @@ function ReportBody({ report }: { report: SharedReport }) {
   return (
     <>
       <header className="grid gap-1.5 border-b border-line-light pb-4 pt-2">
-        <span className="text-2xs font-bold uppercase tracking-eyebrow text-fg-tertiary">
+        <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
           {t(`${K}.eyebrow`)}
         </span>
         <h1 className="m-0">{report.title || t('sharedReport.untitledReport')}</h1>
@@ -245,7 +247,7 @@ function ReportBody({ report }: { report: SharedReport }) {
           )}
           {view !== null && (
             <>
-              <Chip tone="good" icon={<ShieldCheck />} label={t(`${K}.chipFloor`, { floor: view.floor })} />
+              <Chip icon={<ShieldCheck />} label={t(`${K}.chipFloor`, { floor: view.floor })} />
               <Chip
                 icon={<EyeOff />}
                 label={view.hasOpenText ? t(`${K}.chipOpenText`) : t(`${K}.chipNoOpenText`)}
@@ -369,12 +371,25 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
             note={t(`${K}.participationNoneNote`)}
           />
         )}
-        <ReadingCard
-          label={t(`${K}.groupsLabel`)}
-          value={section.groups.readable.toLocaleString(locale)}
-          unit={t(`${K}.groupsUnit`, { total: section.groups.total.toLocaleString(locale) })}
-          note={groupsNote(section, t, locale)}
-        />
+        {section.suppressed ? (
+          // The whole survey is under the floor: no figure at all. "0 de 0 legibles" read
+          // as "there are no groups" rather than "the groups are withheld" (review 12 Nov).
+          <ReadingCard
+            label={t(`${K}.groupsLabel`)}
+            value={t(`${K}.groupsReserved`)}
+            numeric={false}
+            icon={<Lock />}
+            unit={t(`${K}.groupsReservedUnit`, { floor: section.floor })}
+            note={groupsNote(section, t, locale)}
+          />
+        ) : (
+          <ReadingCard
+            label={t(`${K}.groupsLabel`)}
+            value={section.groups.readable.toLocaleString(locale)}
+            unit={t(`${K}.groupsUnit`, { total: section.groups.total.toLocaleString(locale) })}
+            note={groupsNote(section, t, locale)}
+          />
+        )}
       </div>
 
       {/* Which language the *authored* text below is in, and only when it differs from
@@ -383,7 +398,8 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
       {section.resolvedLocale !== '' && section.resolvedLocale !== locale && (
         <p className="m-0 max-w-prose text-xs text-fg-tertiary">
           {t('sharedReport.contentLanguage', {
-            language: contentLanguageName(t, section.resolvedLocale),
+            // Mid-sentence, so lower case in Spanish: «Impreso en inglés».
+            language: languageInSentence(t, section.resolvedLocale),
           })}
         </p>
       )}
@@ -418,10 +434,14 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
                 caption={t(`${K}.mapCaption`, { field: map.field, floor: section.floor })}
                 groupHeading={t('surveyResults.next.groupHeading')}
               />
-              <ClimateMapLegend floor={section.floor} bands={section.bands} />
+              <ClimateMapLegend
+                floor={section.floor}
+                bands={section.bands}
+                showHatch={map.rows.some((row) => row.protected)}
+              />
               {map.withheldCount > 0 && (
                 <p className="m-0 max-w-prose text-xs text-fg-tertiary">
-                  {t('sharedReport.groupsWithheld', {
+                  {t(byCount(map.withheldCount, 'sharedReport.groupsWithheldOne', 'sharedReport.groupsWithheld'), {
                     count: map.withheldCount,
                     minimum: section.floor,
                   })}
@@ -429,7 +449,7 @@ function SurveyBlock({ section, named }: { section: SharedSection; named: boolea
               )}
               {map.unsegmented !== null && map.unsegmented > 0 && (
                 <p className="m-0 max-w-prose text-xs text-fg-tertiary">
-                  {t(`${K}.mapUnsegmented`, { count: map.unsegmented, field: map.field })}
+                  {t(byCount(map.unsegmented, `${K}.mapUnsegmentedOne`, `${K}.mapUnsegmented`), { count: map.unsegmented, field: map.field })}
                 </p>
               )}
             </ReportCard>
@@ -476,7 +496,7 @@ function DimensionsCard({ section, headingId }: { section: SharedSection; headin
             <TableHead className={TH}>{t('sharedReport.averageScore')}</TableHead>
             <TableHead className={TH}>
               <span className="sr-only">{t(percent ? `${K}.scaleHeaderPercent` : `${K}.scaleHeader`)}</span>
-              <span aria-hidden="true" className="flex w-50 justify-between font-mono text-2xs font-normal text-fg-tertiary">
+              <span aria-hidden="true" className="flex w-50 justify-between text-xs font-normal text-fg-tertiary tabular-nums">
                 {SCALE_TICKS.map((tick) => (
                   <span key={tick}>{percent ? scoreText(tick, scale, locale, 0) : tick.toLocaleString(locale)}</span>
                 ))}
@@ -493,7 +513,7 @@ function DimensionsCard({ section, headingId }: { section: SharedSection; headin
               <TableCell className="font-medium text-fg-primary">
                 {dimensionLabel(row.key, t)}
               </TableCell>
-              <TableCell className="font-mono text-base tabular-nums">
+              <TableCell className="text-base tabular-nums">
                 {row.average === null
                   ? t('surveyResults.notApplicable')
                   : row.offScale
@@ -520,10 +540,10 @@ function DimensionsCard({ section, headingId }: { section: SharedSection; headin
                   <BandChip band={row.band} bands={bands} />
                 )}
               </TableCell>
-              <TableCell className="font-mono tabular-nums">
+              <TableCell className="tabular-nums">
                 {row.questionCount.toLocaleString(locale)}
               </TableCell>
-              <TableCell className="font-mono tabular-nums">
+              <TableCell className="tabular-nums">
                 {row.answeredCount.toLocaleString(locale)}
               </TableCell>
             </TableRow>
@@ -579,10 +599,10 @@ function DepartmentsCard({ section, headingId }: { section: SharedSection; headi
                 </TableCell>
               ) : (
                 <>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {department.respondentCount.toLocaleString(locale)}
                   </TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {department.participationRate === null
                       ? t('surveyResults.notApplicable')
                       : formatMetric(department.participationRate, { kind: 'percentage' }, locale)}
@@ -595,7 +615,7 @@ function DepartmentsCard({ section, headingId }: { section: SharedSection; headi
       </Table>
       {section.withheldDepartments !== null && section.withheldDepartments > 0 && (
         <p className="m-0 max-w-prose text-xs text-fg-tertiary">
-          {t('sharedReport.departmentsWithheld', {
+          {t(byCount(section.withheldDepartments, 'sharedReport.departmentsWithheldOne', 'sharedReport.departmentsWithheld'), {
             count: section.withheldDepartments,
             minimum: section.floor,
           })}
@@ -644,14 +664,14 @@ function QuestionBlock({ question }: { question: SurveyQuestionResult }) {
             {question.distribution.map((bucket) => (
               <TableRow key={bucket.value}>
                 <TableCell>{bucket.label ?? bucket.value}</TableCell>
-                <TableCell className="font-mono tabular-nums">
+                <TableCell className="tabular-nums">
                   {bucket.count.toLocaleString(locale)}
                 </TableCell>
-                <TableCell className="font-mono tabular-nums">
+                <TableCell className="tabular-nums">
                   {formatMetric(bucket.percentage, { kind: 'percentage' }, locale)}
                 </TableCell>
                 {isRanking && (
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {bucket.averageRank === null
                       ? t('surveyResults.notApplicable')
                       : bucket.averageRank.toLocaleString(locale, { maximumFractionDigits: 2 })}
@@ -681,10 +701,10 @@ function QuestionBlock({ question }: { question: SurveyQuestionResult }) {
                   <TableRow key={`${word.language}:${word.word}`}>
                     <TableCell>{word.word}</TableCell>
                     <TableCell>{contentLanguageName(t, word.language)}</TableCell>
-                    <TableCell className="font-mono tabular-nums">
+                    <TableCell className="tabular-nums">
                       {word.count.toLocaleString(locale)}
                     </TableCell>
-                    <TableCell className="font-mono tabular-nums">
+                    <TableCell className="tabular-nums">
                       {word.responseCount.toLocaleString(locale)}
                     </TableCell>
                   </TableRow>
@@ -725,7 +745,7 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="m-0 text-base font-semibold text-fg-primary">{benchmark.name}</h3>
         <span className="text-xs text-fg-tertiary">
-          {t('sharedReport.benchmarkCategory', { category: benchmark.category })}
+          {t('sharedReport.benchmarkCategory', { category: benchmarkCategoryName(t, benchmark.category) })}
         </span>
         {benchmark.isGlobal && <Chip label={t('sharedReport.benchmarkGlobal')} />}
       </div>
@@ -746,7 +766,7 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
               {benchmark.metrics.map((metric) => (
                 <TableRow key={metric.id}>
                   <TableCell>{metric.metricName}</TableCell>
-                  <TableCell className="font-mono tabular-nums">{number(metric.value)}</TableCell>
+                  <TableCell className="tabular-nums">{number(metric.value)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -773,10 +793,10 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
               {prior.metrics.map((metric) => (
                 <TableRow key={metric.metricName}>
                   <TableCell>{metric.metricName}</TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {metric.value === null ? t('sharedReport.notRecorded') : number(metric.value)}
                   </TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {metric.priorValue === null
                       ? t('sharedReport.notRecorded')
                       : number(metric.priorValue)}
@@ -790,12 +810,12 @@ function BenchmarkBlock({ benchmark }: { benchmark: ReportBenchmarkComparison })
                   {metric.delta === null ? (
                     <TableCell className="text-fg-secondary">
                       {t('sharedReport.unitsDiffer', {
-                        unit: metric.unit ?? t('sharedReport.notRecorded'),
-                        priorUnit: metric.priorUnit ?? t('sharedReport.notRecorded'),
+                        unit: metric.unit === null ? t('sharedReport.notRecorded') : unitName(t, metric.unit),
+                        priorUnit: metric.priorUnit === null ? t('sharedReport.notRecorded') : unitName(t, metric.priorUnit),
                       })}
                     </TableCell>
                   ) : (
-                    <TableCell className="font-mono tabular-nums">{number(metric.delta)}</TableCell>
+                    <TableCell className="tabular-nums">{number(metric.delta)}</TableCell>
                   )}
                 </TableRow>
               ))}
@@ -824,7 +844,7 @@ function InsightBlock({ insight }: { insight: ReportAIInsight }) {
     <div className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-surface-icon-box px-3.5 py-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="m-0 text-base font-semibold text-fg-primary">{insight.title}</h3>
-        <span className="font-mono text-xs tabular-nums text-fg-tertiary">
+        <span className="text-xs tabular-nums text-fg-tertiary">
           {formatMetric(insight.confidenceScore, { kind: 'percentage' }, locale)}
         </span>
       </div>
@@ -846,7 +866,7 @@ function PrivacyNotes({ floor, hasOpenText }: { floor: number; hasOpenText: bool
   return (
     <section
       aria-label={t(`${K}.notesLabel`)}
-      className="grid grid-cols-1 gap-5 rounded-xl border border-line-default bg-surface-card px-5 py-4 shadow-sm sm:grid-cols-2 xl:grid-cols-3"
+      className="grid grid-cols-1 gap-5 rounded-xl border border-line-panel bg-surface-card px-5 py-4 sm:grid-cols-2 xl:grid-cols-3"
     >
       <PrivacyNote icon={<EyeOff />} title={t(`${K}.noteTextTitle`)}>
         {hasOpenText
@@ -913,4 +933,38 @@ function priorPeriodSentence(status: string, t: (key: string) => string): string
   if (status === 'none') return t('sharedReport.priorPeriodNone')
   if (status === 'unlinked') return t('sharedReport.priorPeriodUnlinked')
   return t('sharedReport.priorPeriodUnavailable')
+}
+
+/**
+ * The benchmark's category in the reader's words. `category` is a free string on the
+ * server; the ones this product writes have a name here, and anything else is printed as
+ * stored rather than as a catalogue key. "Categoría: engagement" was English on a Spanish
+ * public page (review 12 Nov).
+ */
+const BENCHMARK_CATEGORIES = new Set(['climate', 'engagement', 'absence', 'turnover', 'satisfaction', 'performance'])
+
+function benchmarkCategoryName(t: (key: string) => string, category: string): string {
+  const key = category.trim().toLowerCase()
+  return BENCHMARK_CATEGORIES.has(key) ? t(`sharedReport.benchmarkCategoryNames.${key}`) : category
+}
+
+/**
+ * A metric's unit as a word: "s" and "ms" printed bare inside a Spanish sentence read as
+ * code (review 12 Nov). Codes this product records have a name; anything else as stored.
+ */
+const UNIT_KEYS: Readonly<Record<string, string>> = {
+  ms: 'milliseconds',
+  s: 'seconds',
+  min: 'minutes',
+  h: 'hours',
+  d: 'days',
+  days: 'days',
+  '%': 'percent',
+  percent: 'percent',
+  points: 'points',
+}
+
+function unitName(t: (key: string) => string, unit: string): string {
+  const key = UNIT_KEYS[unit.trim().toLowerCase()] as string | undefined
+  return key === undefined ? unit : t(`sharedReport.unitNames.${key}`)
 }

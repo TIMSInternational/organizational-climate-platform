@@ -765,7 +765,7 @@
     ],
     "isSuppressed": false,
     "suppressionReason": null,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-07-25T09:00:00Z"
   },
   "GET /notifications/mine": {

@@ -115,14 +115,20 @@ export function teamClosedWave(climate: DashboardTeamClimate | null, asOf?: stri
 }
 
 /**
+ * The decimals the leader's climate bar prints a reading at: two, the climate range
+ * bar's own contract and the admin dashboard's, so one score reads the same on every home.
+ */
+export const TEAM_DECIMALS = 2
+
+/**
  * The move of the team against the organisation AS PRINTED — the difference of the two
- * one-decimal readings, never the rounding of the difference (`derive.printedMove`). The
+ * readings at `TEAM_DECIMALS`, never the rounding of the difference (`derive.printedMove`). The
  * canvas's Seguridad psicológica is 4,00 against 3,75: the raw difference rounds to +0,3
  * beside two numbers a reader subtracts to 0,2. `null` when either side is missing.
  */
 export function dimensionMove(dimension: TeamDimension, scale: ResultScale = 'mean'): number | null {
   if (dimension.team === null || dimension.organization === null) return null
-  return printedMove(dimension.team, dimension.organization, 1, scale)
+  return printedMove(dimension.team, dimension.organization, TEAM_DECIMALS, scale)
 }
 
 /**
@@ -137,7 +143,7 @@ export function dimensionMove(dimension: TeamDimension, scale: ResultScale = 'me
  */
 export function dimensionBand(dimension: TeamDimension, bands: ResultBands): ResultBandKey | null {
   if (dimension.team === null) return null
-  return bandOf(dimension.team, bands)
+  return bandOf(dimension.team, bands, TEAM_DECIMALS)
 }
 
 /** The surveys open to the team, soonest close first, each count held to the floor. */

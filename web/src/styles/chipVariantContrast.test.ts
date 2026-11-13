@@ -256,15 +256,18 @@ describe('status chip contrast', () => {
     // Unresolved, `parseColor` would throw rather than pass — but a future
     // resolver bug that returned a default instead would pass silently, so
     // assert the values.
-    // The light values moved with the blue-on-the-shell recolour (the neutrals are
-    // blue-biased now); what this test asserts is unchanged — that the resolver
-    // FOLLOWS the reference instead of returning a default.
+    // The values moved with the Apple design (11 Nov): the neutral ink is the new
+    // muted body ink, still a `var()` reference, and the neutral fill is now the
+    // canvas's own chip fill (a literal, so it is asserted as one). What this test
+    // asserts is unchanged — that the resolver FOLLOWS the reference instead of
+    // returning a default, which the ink still exercises in both themes.
     const { light, dark } = palettes()
-    expect(resolve(light['--admin-chip-ink-neutral'], light)).toBe('#374565')
-    expect(resolve(dark['--admin-chip-ink-neutral'], dark)).toBe('#a0acc5')
-    expect(resolve(light['--admin-chip-bg-neutral'], light)).toBe('#eff2fb')
-    expect(resolve(dark['--admin-chip-bg-neutral'], dark)).toBe('#10192a')
-    expect(resolve(dark['--admin-chip-ink-accent'], dark)).toBe('#6a90d8')
+    expect(light['--admin-chip-ink-neutral']).toBe('var(--admin-font-secondary)')
+    expect(resolve(light['--admin-chip-ink-neutral'], light)).toBe('#48484d')
+    expect(resolve(dark['--admin-chip-ink-neutral'], dark)).toBe('#c7cddb')
+    expect(resolve(light['--admin-chip-bg-neutral'], light)).toBe('#ececee')
+    expect(resolve(dark['--admin-chip-bg-neutral'], dark)).toBe('#323b54')
+    expect(resolve(dark['--admin-chip-ink-accent'], dark)).toBe('#7aaeff')
   })
 
   it('measures a known failure, so a broken measurement cannot pass everything', () => {

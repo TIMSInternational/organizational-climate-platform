@@ -164,15 +164,21 @@ describe('the protected hatch', () => {
     expect(darkToken(ground)).toBe(darkToken('--admin-bg-icon-box'))
   })
 
-  it('is the canvas’s stripe in light, only as much darker as the floor needs', () => {
-    // The canvas's own pair is under the floor above — which is why the stripe is not
-    // the canvas's hex.
+  it('is the ground’s own grey in light, only as much darker as the floor needs', () => {
+    // The 10 Sep canvas's own pair was under the floor above — which is why the stripe
+    // was never the canvas's hex.
     expect(contrast('#e0e5ef', '#f5f8fc')).toBeLessThan(1.2)
-    // Within 3 of it on every channel, and fainter than 1.21:1 on the ground: neither
-    // under the floor nor darkened by eye into a texture the artboards do not draw.
+    // The Apple design (11 Nov) moved the ground to the canvas's `--bg2` #f5f5f7, where
+    // no stripe within 3 of that old #e0e5ef can reach the floor (the darkest, #dde2ec,
+    // is 1.19:1), and the new canvas draws no hatch of its own. So the reference is the
+    // new ground's own neutral: the stripe must stay a grey (channels within 5 of each
+    // other — Apple's greys carry a few points of blue, never a hue) and stay fainter
+    // than 1.21:1 on the ground — neither under the floor nor darkened by eye into a
+    // texture the canvas does not draw.
     const stripe = channels(lightToken(token))
-    const canvas = channels('#e0e5ef')
-    expect(Math.max(...stripe.map((channel, i) => Math.abs(channel - canvas[i])))).toBeLessThanOrEqual(3)
+    const ground_ = channels(lightToken(ground))
+    expect(Math.max(...stripe) - Math.min(...stripe)).toBeLessThanOrEqual(5)
+    expect(Math.max(...ground_) - Math.min(...ground_)).toBeLessThanOrEqual(5)
     expect(contrast(lightToken(token), lightToken(ground))).toBeLessThan(1.21)
   })
 

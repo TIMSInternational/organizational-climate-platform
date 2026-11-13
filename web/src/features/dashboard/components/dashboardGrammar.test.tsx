@@ -33,8 +33,12 @@ const t = ((key: string, params?: Record<string, unknown>) => {
 afterEach(cleanup)
 
 describe('MonoReadings', () => {
-  const monoTextOf = (container: HTMLElement) =>
-    [...container.querySelectorAll('span.font-mono')].map((el) => el.textContent)
+  // The readings are the tabular-figure spans; none of them, and nothing else in the
+  // sentence, may be set in a monospaced third face (Apple design, 11 Nov).
+  const monoTextOf = (container: HTMLElement) => {
+    expect(container.querySelector('.font-mono')).toBeNull()
+    return [...container.querySelectorAll('span[data-slot="reading"].tabular-nums')].map((el) => el.textContent)
+  }
 
   it('sets the interpolated number in mono and leaves the prose alone', () => {
     const { container } = render(

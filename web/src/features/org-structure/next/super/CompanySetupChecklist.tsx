@@ -12,9 +12,9 @@ export default function CompanySetupChecklist({ steps }: { steps: readonly Setup
     <section
       aria-labelledby="company-setup-title"
       data-testid="company-setup"
-      className="rounded-xl border border-line-default bg-surface-card p-5 shadow-sm"
+      className="rounded-xl border border-line-panel bg-surface-card px-5 py-4.5"
     >
-      <h2 id="company-setup-title" className="m-0 font-store-serif text-xl font-normal text-fg-primary">
+      <h2 id="company-setup-title" className="m-0 font-display text-2xl font-semibold tracking-title text-fg-primary">
         {copy('title')}
       </h2>
       <p className="m-0 mt-1 text-sm text-fg-secondary">{left === 0 ? copy('allDone') : copy('intro')}</p>
@@ -22,7 +22,7 @@ export default function CompanySetupChecklist({ steps }: { steps: readonly Setup
         {steps.map((step) => (
           <li key={step.id} data-step={step.id} data-done={step.done} className="flex items-start gap-2.5 text-sm">
             {step.done ? (
-              <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-chip-good-ink" />
+              <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-fg-primary" />
             ) : (
               <Circle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-fg-secondary" />
             )}

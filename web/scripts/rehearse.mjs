@@ -1,7 +1,8 @@
 /**
  * Walk `docs/runbooks/demo-script.md` on the REAL local stack, one full-page screenshot per
- * step, console errors and failed HTTP responses recorded per step. Read-only, and enforced:
- * the login `POST` is the only request this file sends with a method (it writes nothing), and
+ * step, console errors and failed HTTP responses recorded per step. Read-only by default, and
+ * enforced: without the two opt-ins below, the login `POST` is the only request this file
+ * sends with a method (it writes nothing), and
  * every browser context aborts any request that is not a GET/HEAD/OPTIONS and records it
  * against the step. The pages are not read-only in general — the wizard offers to DELETE a
  * leftover draft, and `/microclimate-invitations/<token>` POSTs an `opened` step when its
@@ -12,6 +13,7 @@
  *   node scripts/rehearse.mjs                     # every step, as Grupo Meridiano, into .rehearsal/
  *   node scripts/rehearse.mjs --only 04           # one step (a case-insensitive name prefix)
  *   node scripts/rehearse.mjs --theme dark --out .rehearsal-dark
+ *   node scripts/rehearse.mjs --open-microclimate  # step 14 opens a session when none is live
  *
  * The steps follow the runbook's numbering (01 login … 13 benchmarks), then two the runbook
  * mentions without numbering: 14 the live microclimate and its respond link opened as the
@@ -23,6 +25,15 @@
  * closes and archives afterwards, see the runbook's "Resetting between rehearsals"). Never
  * point it at the demo's unanswered respondent; a person answers once.
  *
+ * Step 14 needs a LIVE microclimate. When the tenant has none, it fails "no live
+ * microclimate" — unless `--open-microclimate` is passed, the other opt-in write: then the
+ * script itself (Node-side, as the admin, never through the browser, whose guard stays on)
+ * sends `POST /microclimates` with `microclimateDraft` (`rehearse-harness.mjs`, titled
+ * `REHEARSAL_MICROCLIMATE_TITLE`) and `PUT /microclimates/{id}/status { status: 'active' }`,
+ * and after the last step closes it with `PUT … { status: 'closed' }` through
+ * `teardownRequests` (`flows-harness.mjs`). A session that is already live is used as it is
+ * and never touched. A close the server refuses is printed as RESIDUE LEFT and fails the run.
+ *
  * Signs in through `POST /auth/login` and hands the token to the page — the password never
  * touches a browser field. Runs on 5173 for the same CORS reason `e2e.mjs` and `flows.mjs` do.
  */
@@ -31,7 +42,8 @@ import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright-core'
 import { STORAGE_KEYS, nextViewportHeight } from './shot-harness.mjs'
-import { NAMES, RESPOND_LINK, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode } from './rehearse-harness.mjs'
+import { NAMES, RESPOND_LINK, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode, pickResultsSurvey, microclimateDraft, MIN_RESULTS_RESPONSES } from './rehearse-harness.mjs'
+import { teardownRequests, teardownFallback, summariseTeardown } from './flows-harness.mjs'
 
 /**
  * The worst vertical overflow hidden inside any scroll container, in CSS px. Runs in the
@@ -63,6 +75,8 @@ const { values } = parseArgs({
     supervisor: { type: 'string', default: 'sofia.vargas' },
     theme: { type: 'string', default: 'light' },
     only: { type: 'string', default: '' },
+    // The opt-in write behind step 14 — see the header.
+    'open-microclimate': { type: 'boolean', default: false },
     out: { type: 'string', default: '.rehearsal' },
   },
 })
@@ -84,6 +98,14 @@ async function api(path, token) {
   const r = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } })
   return r.ok ? r.json() : null
 }
+/** A Node-side write, sent only under `--open-microclimate`; throws with the status when refused. */
+async function mutate(method, path, body, token) {
+  const r = await fetch(`${API}${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
+  if (!r.ok) throw new Error(`${method} ${path} -> ${r.status}`)
+  return r
+}
+/** What `--open-microclimate` opened and the teardown must close. Nothing else is ever added. */
+const created = { microclimates: [] }
 
 const browser = await chromium.launch()
 const results = []
@@ -192,8 +214,9 @@ await step('03 surveys list', values.admin, async ({ page }) => {
 
 await step('04 results Q3 and drill-in', values.admin, async ({ page, token }) => {
   const list = await api(`/surveys?lang=es`, token)
-  const q3 = (list?.surveys ?? []).find((s) => /Q3/.test(s.title) && s.status === 'closed')
-  if (!q3) throw new Error('no closed Q3')
+  // Any closed survey with enough responses, the runbook's Q3 first when there is one.
+  const q3 = pickResultsSurvey(list?.surveys)
+  if (!q3) throw new Error(`no closed survey with ${MIN_RESULTS_RESPONSES}+ responses`)
   await go(page, `/surveys/${q3.id}/results`)
   await page.getByRole('table').first().waitFor({ timeout: 15000 })
   await page.waitForTimeout(1000)
@@ -208,7 +231,7 @@ await step('04 results Q3 and drill-in', values.admin, async ({ page, token }) =
   for (const path of ['/export/csv', '/export/pdf']) { const r = await fetch(`${API}/surveys/${q3.id}${path}`, { headers: { Authorization: `Bearer ${token}` } }); if (!r.ok) throw new Error(`${path} -> ${r.status}`) }
   const hatched = /Finanzas/.test(before) ? 'Finanzas row present' : 'Finanzas row NOT found'
   const heads = ['Seguridad psicológica', 'Carga de trabajo', 'Confianza', 'Reconocimiento', 'Desarrollo', 'Pertenencia'].filter((h) => before.includes(h))
-  return `${q3.id.slice(0, 8)} ${hatched}; ${heads.length}/6 Spanish headings; csv+pdf 200`
+  return `${q3.title} (${q3.id.slice(0, 8)}) ${hatched}; ${heads.length}/6 Spanish headings; csv+pdf 200`
 })
 
 await step('05 climate trends', values.admin, async ({ page }) => {
@@ -332,8 +355,19 @@ await step('13 benchmarks', values.admin, async ({ page }) => {
 
 await step('14 microclimate live page and respond link as a signed-in employee', values.admin, async ({ page, token, profile }) => {
   const list = await api(`/microclimates?companyId=${profile.companyId}&lang=es`, token)
-  const live = (list?.microclimates ?? []).find((m) => m.status === 'active')
-  if (!live) throw new Error('no live microclimate')
+  let live = (list?.microclimates ?? []).find((m) => m.status === 'active')
+  let opened = ''
+  if (!live && values['open-microclimate']) {
+    // The opt-in write (header): Node-side, as the admin, through the endpoints the create
+    // page calls. Recorded BEFORE the activation, so a refused PUT still leaves a draft the
+    // teardown closes rather than one nobody knows about.
+    const draft = await (await mutate('POST', '/microclimates', microclimateDraft(profile.companyId), token)).json()
+    created.microclimates.push(draft.id)
+    await mutate('PUT', `/microclimates/${draft.id}/status`, { status: 'active' }, token)
+    live = { id: draft.id, title: draft.title }
+    opened = `opened ${draft.id.slice(0, 8)} for this run (closed at teardown); `
+  }
+  if (!live) throw new Error('no live microclimate (pass --open-microclimate to open one for the run)')
   await go(page, `/microclimates/${live.id}/live`); await page.waitForTimeout(1500)
   await snap(page, '14a-microclimate-live')
   const text = await page.locator('main').innerText()
@@ -358,7 +392,7 @@ await step('14 microclimate live page and respond link as a signed-in employee',
   await snap(pub, '14b-microclimate-respond-signed-in-employee')
   await employeeContext.close()
   if (!radios) throw new Error(`signed-in employee got no question controls; alerts: ${alert.join(' / ').slice(0, 160)}`)
-  return `${url.replace(ORIGIN, '')} opens for ${values.employee} with ${radios} radios${pubErrors.length ? '; console: ' + pubErrors[0].slice(0, 100) : ''}${employeeBlocked.length ? '; blocked writes: ' + employeeBlocked.join('; ').slice(0, 120) : ''}`
+  return `${opened}${url.replace(ORIGIN, '')} opens for ${values.employee} with ${radios} radios${pubErrors.length ? '; console: ' + pubErrors[0].slice(0, 100) : ''}${employeeBlocked.length ? '; blocked writes: ' + employeeBlocked.join('; ').slice(0, 120) : ''}`
 })
 
 await step('15 supervisor dashboard', values.supervisor, async ({ page }) => {
@@ -369,10 +403,27 @@ await step('15 supervisor dashboard', values.supervisor, async ({ page }) => {
 })
 
 await browser.close()
+
+// Close what `--open-microclimate` opened — nothing else is ever on the list. Each status is
+// recorded; a close the server refused is residue, printed and folded into the exit code.
+const teardown = await (async () => {
+  const requests = teardownRequests(created)
+  if (!requests.length) return null
+  const { token } = await login(values.admin)
+  const send = async ({ method, path, body, headers }) => (await fetch(`${API}${path}`, { method, headers: { ...headers, Authorization: `Bearer ${token}` }, body: body ? JSON.stringify(body) : undefined })).status
+  const outcomes = []
+  for (const request of requests) {
+    let last = { ...request, status: await send(request).catch(() => 0) }
+    for (const fallback of teardownFallback(request, last.status)) last = { ...fallback, status: await send(fallback).catch(() => 0) }
+    outcomes.push(last)
+  }
+  return summariseTeardown(outcomes)
+})().catch((error) => ({ line: `teardown: RESIDUE LEFT: ${error.message.split('\n')[0]} — microclimate(s) ${created.microclimates.join(', ')} not closed`, failed: created.microclimates }))
+if (teardown) log(teardown.line)
 writeFileSync(resolve(OUT, 'results.json'), JSON.stringify(results, null, 2))
 const failed = results.filter((r) => r.status === 'FAIL')
-const code = exitCode(results)
+const code = exitCode(results, teardown?.failed)
 log(code === 2
   ? `\nrehearsal: --only "${values.only}" matched no step`
-  : `\nrehearsal: ${results.length - failed.length} passed, ${failed.length} failed — screenshots in ${OUT}`)
+  : `\nrehearsal: ${results.length - failed.length} passed, ${failed.length} failed${teardown?.failed.length ? `, ${teardown.failed.length} teardown request(s) refused` : ''} — screenshots in ${OUT}`)
 process.exit(code)

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
+import es from '../../../i18n/es.json'
 import { setToken, clearToken } from '../../../auth/token'
 import type { ReportShareSummary } from '../api/reportShares'
 import ReportShareDialog from './ReportShareDialog'
@@ -103,7 +104,7 @@ describe('ReportShareDialog', () => {
     expect(within(dialog).getByRole('heading', { name: 'Compartir con un enlace público' })).toBeTruthy()
     const warning = dialog.querySelector('[data-slot="share-warning"]')!
     expect(warning.textContent).toContain('Este enlace no pide contraseña')
-    expect(warning.textContent).toContain('Revoca los enlaces que ya no necesites')
+    expect(warning.textContent).toContain(es.reports.next.shareWarning)
   })
 
   it('lists the active link only, and keeps the revoked ones behind "Mostrar revocados"', async () => {
@@ -232,7 +233,7 @@ describe('ReportShareDialog', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Copiar' }))
     // Announced, and in words: the loading region owns another live region, so the
     // sentence is found by its text and then proved to be a status.
-    const said = await screen.findByText('No se pudo copiar. Selecciona el enlace y cópialo a mano.')
+    const said = await screen.findByText(es.reports.next.copyFailed)
     expect(said.getAttribute('role')).toBe('status')
     expect(screen.queryByText('Copiado.')).toBeNull()
   })

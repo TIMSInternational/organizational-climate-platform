@@ -177,6 +177,46 @@ describe('PlatformDashboardView', () => {
     expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe(A)
   })
 
+  it('sets a failing system apart from a healthy one without a result colour', async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+      if (url.includes('/dashboard/super-admin')) return ok(DASHBOARD)
+      if (url.includes('/admin/system/status'))
+        return ok({
+          ...STATUS,
+          database: { ...STATUS.database, status: 'unreachable' },
+          notificationQueue: { ...STATUS.notificationQueue, status: 'backlog' },
+        })
+      if (url.includes('/admin/system-settings')) return ok(SETTINGS)
+      if (url.includes('/admin/companies')) return ok(COMPANIES)
+      if (url.includes('/surveys')) return ok(SURVEYS)
+      return Promise.resolve(new Response(null, { status: 404 }))
+    })
+    const { container } = renderView()
+    await screen.findByRole('heading', { level: 2, name: copy.system.heading })
+    const chip = (status: string) =>
+      container.querySelector<HTMLElement>(`[data-system-status="${status}"] [data-slot="chip"]`)!
+    await waitFor(() => expect(container.querySelector('[data-system-status="unreachable"]')).not.toBeNull())
+    expect(chip('unreachable').className).toContain('bg-fg-primary')
+    expect(chip('backlog').className).toContain('text-fg-primary')
+    expect(chip('ok').className).not.toContain('bg-fg-primary')
+    expect(chip('ok').className).not.toContain('text-fg-primary')
+    for (const status of ['unreachable', 'backlog', 'ok'])
+      expect(chip(status).className).not.toMatch(/chip-(good|warning|critical)/)
+  })
+
+  it('paints the survey mix from its own table, the archived part as an outline', async () => {
+    serve()
+    const { container } = renderView()
+    await screen.findByRole('heading', { level: 2, name: copy.mix.heading })
+    await waitFor(() => expect(container.querySelector('[data-mix-swatch="archived"]')).not.toBeNull())
+    const archived = container.querySelector<HTMLElement>('[data-mix-swatch="archived"]')!
+    expect(archived.className).toContain('border-line-control')
+    for (const node of Array.from(container.querySelectorAll<HTMLElement>('[data-mix-swatch], [data-mix-segment]')))
+      expect(node.className).not.toMatch(/bg-line-(hover|default|light)/)
+  })
+
   it('says the system read failed rather than drawing a blank card, and keeps every other region', async () => {
     serve(['system'])
     renderView()
@@ -198,6 +238,9 @@ describe('PlatformDashboardView', () => {
     renderView()
     expect(await screen.findByText(copy.loadFailed)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    // The 500 is said in the reader's words; the server's own "down" is never printed.
+    expect(screen.getByText(en.errors.api.server)).toBeTruthy()
+    expect(screen.queryByText('down')).toBeNull()
   })
 })
 

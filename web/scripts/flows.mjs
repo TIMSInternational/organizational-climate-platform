@@ -50,6 +50,8 @@ const { values } = parseArgs({
     supervisor: { type: 'string', default: 'fede.supervisor' },
     locale: { type: 'string', default: 'es' },
     out: { type: 'string', default: '.flows' },
+    // Run only the flows whose name contains this text (case-insensitive), e.g. --only survey.
+    only: { type: 'string' },
   },
 })
 const API = values.api.replace(/\/$/, '')
@@ -85,7 +87,7 @@ let shot = 0
  * created OR reused (both go back to cancelled / inactive either way), and every share link
  * the page minted. See `teardownRequests` for what happens to each.
  */
-const created = { surveys: [], plans: [], departments: [], shares: [] }
+const created = { surveys: [], plans: [], departments: [], shares: [], microclimates: [] }
 
 async function contextFor(who) {
   const { token, profile } = await login(who)
@@ -97,6 +99,7 @@ async function contextFor(who) {
 }
 
 async function flow(name, who, run) {
+  if (values.only && !name.toLowerCase().includes(values.only.toLowerCase())) return
   const errors = []
   const start = Date.now()
   // The sign-in is inside the try: a login that fails (an account the tenant does not have)
@@ -108,7 +111,14 @@ async function flow(name, who, run) {
     context = auth.context
     page = await context.newPage()
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
-    page.on('console', (m) => { if (m.type() === 'error' && !/favicon|net::ERR_ABORTED|Download the React DevTools/.test(m.text())) errors.push(m.text()) })
+    page.on('console', (m) => {
+      if (m.type() !== 'error' || /favicon|net::ERR_ABORTED|Download the React DevTools/.test(m.text())) return
+      // A new survey has no distribution row yet, and the API answers its read with 404 — "the
+      // normal state of a new survey" (`useDistributionModel`), which the page handles. Only
+      // that request, by its URL, is excused.
+      if (/status of 404/.test(m.text()) && /\/surveys\/[0-9a-f-]{36}\/distribution(\?|$)/.test(m.location()?.url ?? '')) return
+      errors.push(m.text())
+    })
     const note = await run({ page, token: auth.token, profile: auth.profile })
     const status = errors.length ? 'FAIL' : 'PASS'
     results.push({ name, who, status, note, errors, ms: Date.now() - start })
@@ -137,20 +147,27 @@ await flow('survey: build from template and launch', values.admin, async ({ page
   // The template picker is a custom combobox (a <button role=combobox>), not a <select>.
   await page.getByRole('combobox', { name: /Partir de una plantilla|template/i }).first().click()
   await page.getByRole('option', { name: /Pulso de compromiso|Engagement pulse/ }).first().click()
-  // A bilingual template instantiates a bilingual survey, and that needs both titles.
-  await page.getByLabel(/Título \(inglés\)|Title \(English\)/i).first().fill(`Test pulse ${title.slice(-5)}`)
-  await page.getByLabel(/Título \(español\)|Title \(Spanish\)/i).first().fill(title)
+  // One «Título» since the single-title builder: the content language is chosen in the step
+  // bar, and the title is written in it.
+  await page.getByLabel(/^Título|^Title/i).first().fill(title)
   await click(page, /Siguiente|Next/)
   // Step 2: schedule — defaults or fill dates if required.
   // The schedule inputs are datetime-local, so the value carries a time.
-  const stamp = (offsetDays, hh) => { const d = new Date(Date.now() + offsetDays * 864e5); return `${d.toISOString().slice(0, 10)}T${hh}` }
-  await page.getByLabel(/Fecha de Inicio|Start date/i).first().fill(stamp(0, '09:00'))
-  await page.getByLabel(/Fecha de Finalización|End date/i).first().fill(stamp(14, '18:00'))
+  // Local wall-clock, as a datetime-local input reads it. It was the UTC date with a local
+  // 09:00, so from 18:00 in Costa Rica (already tomorrow in UTC) the survey opened tomorrow and
+  // could not be activated. The start is a few minutes ago so «Activar» opens it now.
+  const local = (at) => { const d = new Date(at); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}` }
+  await page.getByLabel(/Fecha de Inicio|Start date/i).first().fill(local(Date.now() - 5 * 60e3))
+  await page.getByLabel(/Fecha de Finalización|End date/i).first().fill(local(Date.now() + 14 * 864e5))
   await click(page, /Siguiente|Next/)
-  // Step 3: audience (defaults), step 4: questions (from template), step 5: review.
+  // Step 3: audience (defaults), step 4: questions (from template), step 5: settings
+  // (defaults), step 6: review — six steps since the 11 Nov builder.
   await click(page, /Siguiente|Next/)
   await click(page, /Siguiente|Next/)
-  const create = page.getByRole('button', { name: /Crear|Guardar|Create|Save|Lanzar|Launch/ }).first()
+  await click(page, /Siguiente|Next/)
+  // The review step's own action, by its exact name: a loose /Guardar/ matched the header's
+  // «Guardar borrador», which saves and stays on the builder.
+  const create = page.getByRole('button', { name: /^(Crear el borrador|Create the draft)$/ }).first()
   await create.waitFor({ timeout: 10000 })
   await create.click()
   await page.waitForURL(/\/surveys\/[0-9a-f-]{36}/, { timeout: 15000 })
@@ -159,9 +176,24 @@ await flow('survey: build from template and launch', values.admin, async ({ page
   created.surveys.push(id)
   if (!survey) throw new Error('created survey not readable back')
   // Launch it: the detail page offers a status change.
-  const activate = page.getByRole('button', { name: /Activar|Cambiar a Activa|Lanzar|Publicar/ }).first()
-  if (await activate.count()) { await activate.click(); await page.waitForTimeout(1500) }
+  await page.waitForLoadState('networkidle')
+  const activate = page.getByRole('button', { name: /^Activar$|^Activate$/ }).first()
+  // Waited for, not counted: the status card renders after the survey's own read, and a bare
+  // `count()` ran before it and silently skipped the launch.
+  if (await activate.waitFor({ state: 'visible', timeout: 15000 }).then(() => true, () => false)) {
+    await activate.click()
+    // A confirmation, when the page asks for one, is answered with the same verb.
+    const confirm = page.locator('[role="dialog"], [role="alertdialog"]').getByRole('button', { name: /^Activar|^Activate|^Confirmar|^Confirm/ }).first()
+    await confirm.waitFor({ state: 'visible', timeout: 3000 }).then(() => confirm.click()).catch(() => {})
+    await page.waitForTimeout(2000)
+  }
   const after = await api(`/surveys/${id}?lang=es`, token)
+  // The flow is "build AND launch": a survey left in draft is a failure, said with what the page
+  // offered, not a pass with "status draft" in its note.
+  if (after?.status !== 'active') {
+    const alerts = (await page.getByRole('alert').allInnerTexts().catch(() => [])).map((t) => t.trim()).filter(Boolean)
+    throw new Error(`not launched (status ${after?.status}): ${alerts.join(' / ').slice(0, 160) || 'no alert on the page'}`)
+  }
   return `id ${id.slice(0, 8)} status ${after.status} questions ${survey.questions?.length ?? '?'}`
 })
 
@@ -169,15 +201,24 @@ await flow('employee: answer the open survey', values.employee, async ({ page })
   await go(page, '/dashboard')
   await click(page, /Empezar a responder|Continuar|Responder|Start/, 'link').catch(async () => click(page, /Empezar a responder|Continuar|Responder|Start/))
   await page.waitForURL(/\/respond/, { timeout: 15000 })
-  await page.getByRole('radio').first().waitFor({ timeout: 15000 })
-  // Answer every likert group by clicking its "4", every text with a sentence.
-  // Likert answers are radios, five per question; pick the fourth of each group of five.
-  const radios = page.getByRole('radio')
-  const count = await radios.count()
-  for (let i = 3; i < count; i += 5) await radios.nth(i).click()
-  const b = Math.floor(count / 5)
-  const textareas = page.locator('textarea'); const t = await textareas.count(); for (let i = 0; i < t; i++) await textareas.nth(i).fill('Más claridad en las prioridades.')
-  await click(page, /Enviar mis respuestas|Enviar|Submit/)
+  // One question per page since the paged respond form: answer what this page shows (the «4»
+  // of a scale, a sentence in a text box), then Siguiente, until the last page offers
+  // «Enviar mis respuestas».
+  const submit = page.getByRole('button', { name: /^Enviar mis respuestas|^Enviar$|^Submit/ }).first()
+  const next = page.getByRole('button', { name: /^Siguiente|^Next/ }).first()
+  let b = 0
+  for (let guard = 0; guard < 80; guard += 1) {
+    await page.waitForTimeout(150)
+    const radios = page.getByRole('radio')
+    const count = await radios.count()
+    if (count > 0) { await radios.nth(Math.min(3, count - 1)).click(); b += 1 }
+    const boxes = page.locator('textarea'); const t = await boxes.count()
+    for (let k = 0; k < t; k += 1) await boxes.nth(k).fill('Más claridad en las prioridades.')
+    if (await submit.isVisible().catch(() => false)) break
+    if (!(await next.isVisible().catch(() => false))) break
+    await next.click()
+  }
+  await submit.click()
   await page.waitForTimeout(2000)
   const done = await page.getByText(/gracias|enviad|recibid|thank/i).first().count()
   if (b === 0) throw new Error('no likert radios found on the respond page')
@@ -189,9 +230,12 @@ await flow('results: closed survey, drill into a finding, exports answer', value
   const closed = (list?.surveys ?? []).find((s) => s.status === 'closed' && (s.responseCount ?? 0) >= 20)
   if (!closed) throw new Error('no closed survey with responses')
   await go(page, `/surveys/${closed.id}/results`)
-  await page.getByRole('table', { name: /tabla|table/i }).first().waitFor({ timeout: 15000 })
-  const cell = page.locator('td button').first(); await cell.waitFor({ timeout: 10000 }); await cell.click()
-  await page.getByText(/Cada pregunta se compara|compared/i).first().waitFor({ timeout: 10000 })
+  // The redesigned page opens on «Resumen», whose climate grid is the drill-in: a disclosed
+  // cell is a button, and it opens the cell panel beside the grid.
+  const grid = page.locator('[data-testid="climate-grid"]').first()
+  await grid.waitFor({ timeout: 15000 })
+  const cell = grid.locator('td button').first(); await cell.waitFor({ timeout: 10000 }); await cell.click()
+  await page.locator('[data-testid="cell-panel"]').first().waitFor({ timeout: 10000 })
   for (const path of ['/export/csv', '/export/pdf']) { const r = await fetch(`${API}/surveys/${closed.id}${path}`, { headers: { Authorization: `Bearer ${token}` } }); if (!r.ok) throw new Error(`${path} -> ${r.status}`) }
   return `${closed.title} drill-in ok, csv+pdf 200`
 })
@@ -210,7 +254,7 @@ await flow('action plan: the driver\'s own plan, created from the form when abse
     return `${title} reused (${existing.reopen ? 'reopened' : 'already open'}) and listed`
   }
   await go(page, '/action-plans')
-  await click(page, /Nuevo Plan de Acción|New Action Plan/)
+  await click(page, /Nuevo Plan de Acción|New Action Plan/i)
   await page.getByLabel(/^Título|Title/i).first().fill(title)
   await page.getByLabel(/^Descripción|Description/i).first().fill('Creado por el recorrido automatizado; se puede borrar.')
   const due = page.getByLabel(/vencimiento|due/i).first(); if (await due.count()) await due.fill(new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10))
@@ -229,7 +273,9 @@ await flow('action plan: the driver\'s own plan, created from the form when abse
 
 await flow('report: share link created, opens anonymously, revoked at teardown', values.admin, async ({ page, profile }) => {
   await go(page, `/admin/companies/${profile.companyId}/reports`)
-  await click(page, /Compartir|Share/)
+  // Compartir lives in each row's «Más acciones» menu since the redesign.
+  await click(page, /^Más acciones para|^More actions for/)
+  await click(page, /^Compartir|^Share/, 'menuitem')
   // The mint response is the only place the share id ever appears (`reportShares.ts`), so it
   // is caught on the wire, before the click that causes it, and revoked at teardown.
   const minted = page.waitForResponse((r) => r.request().method() === 'POST' && MINT_PATH.test(r.url()), { timeout: 15000 })
@@ -252,8 +298,22 @@ await flow('report: share link created, opens anonymously, revoked at teardown',
 
 await flow('microclimate: live page shows the respond link, and it opens anonymously', values.admin, async ({ page, token, profile }) => {
   const list = await api(`/microclimates?companyId=${profile.companyId}&lang=es`, token)
-  const live = (list?.microclimates ?? []).find((m) => m.status === 'active')
-  if (!live) throw new Error('no live microclimate')
+  let live = (list?.microclimates ?? []).find((m) => m.status === 'active')
+  if (!live) {
+    // The tenant has no session running: open one for this walk, through the endpoints the
+    // create page calls, and close it at teardown (`teardownRequests`).
+    const now = Date.now()
+    const response = await mutate('POST', '/microclimates', {
+      title: 'Recorrido automatizado', companyId: profile.companyId,
+      startTime: new Date(now - 60e3).toISOString(), endTime: new Date(now + 2 * 3600e3).toISOString(),
+      targetParticipantCount: 10, anonymousResponses: true, timezone: 'America/Costa_Rica',
+      questions: [{ text: '¿Cómo va la semana?', type: 'likert', required: true, order: 0 }],
+    }, token)
+    const draft = await response.json()
+    created.microclimates.push(draft.id)
+    await mutate('PUT', `/microclimates/${draft.id}/status`, { status: 'active' }, token)
+    live = { id: draft.id, title: draft.title }
+  }
   await go(page, `/microclimates/${live.id}/live`)
   const text = await page.locator('main').innerText()
   const m = text.match(/https?:\/\/[^\s]+\/(microclimate-invitations|s|m)\/[A-Za-z0-9_-]+|\/microclimate[^\s]*respond[^\s]*/)
@@ -269,7 +329,7 @@ await flow('microclimate: live page shows the respond link, and it opens anonymo
 
 await flow('leader: dashboard reads the team, not a person', values.leader, async ({ page }) => {
   await go(page, '/dashboard')
-  await page.getByText(/Tu equipo|Your team/).first().waitFor({ timeout: 15000 })
+  await page.getByText(/Su equipo|Your team/).first().waitFor({ timeout: 15000 })
   return 'team row rendered'
 })
 
@@ -293,7 +353,7 @@ await flow('admin: the driver\'s own department, created from the form when abse
     return `${name} reused (${existing.reactivate ? 'reactivated' : 'already active'}) and listed`
   }
   await go(page, '/departments')
-  await click(page, /Nuevo Departamento|New Department/)
+  await click(page, /Nuevo Departamento|New Department/i)
   await page.getByLabel(/^Nombre|Name/i).first().fill(name)
   await click(page, /Crear|Guardar|Create|Save/)
   await page.waitForTimeout(1500)

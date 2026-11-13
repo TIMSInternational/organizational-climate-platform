@@ -116,8 +116,11 @@ describe('MicroclimateAnalyticsNextPage', () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     expect(await screen.findByText(copy.underFloor.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     const row = rowOf('Pulso semanal — ¿cómo fue la semana?')
-    expect(within(row).getByText(copy.protectedOne)).toBeTruthy()
-    expect(within(row).getByText(copy.protectedMany)).toBeTruthy()
+    // The pulse and the words cells are both the ProtectedState primitive: the padlock and
+    // "Menos de 3", the floor and never a count.
+    const marks = within(row).getAllByText(es.ui.protected.short.replace('{floor}', String(MINIMUM_RESPONDENTS)))
+    expect(marks).toHaveLength(2)
+    for (const mark of marks) expect(mark.closest('[data-slot="protected-state"]')).toBeTruthy()
     expect(await within(row).findByText('2 preguntas · anónimo')).toBeTruthy()
     expect(screen.getByText(copy.pulseOne.replace('{floor}', String(MINIMUM_RESPONDENTS)))).toBeTruthy()
     // A protected session's words are not even fetched.
@@ -190,6 +193,54 @@ describe('MicroclimateAnalyticsNextPage', () => {
     expect(links[0]).toBe('Pulso semanal — ¿cómo fue la semana?')
   })
 
+  it('floors the participation rate: 31 of 48 reads 64 %, never a rounded 65 %', async () => {
+    const closed = session({ id: 'm3', title: 'Pulso de octubre', status: 'closed', responseCount: 31, targetParticipantCount: 48 })
+    vi.mocked(listMicroclimates).mockResolvedValue([closed])
+    vi.mocked(getLiveResults).mockResolvedValue({
+      sentimentScore: null,
+      engagementLevel: 'low',
+      responseCount: 31,
+      targetParticipantCount: 48,
+      isSuppressed: false,
+      suppressionReason: null,
+      minimumGroupSize: 5,
+      wordCloud: [],
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    const row = await waitFor(() => rowOf('Pulso de octubre'))
+    expect(within(row).getByText('64 %')).toBeTruthy()
+    expect(within(row).queryByText('65 %')).toBeNull()
+  })
+
+  it('draws each pulse point as a neutral tile with a no-figure glyph, never a dashed box with an empty circle', async () => {
+    const closed = session({ id: 'm4', title: 'Pulso de octubre', status: 'closed', responseCount: 6, createdAt: '2026-10-20T00:00:00Z' })
+    vi.mocked(listMicroclimates).mockResolvedValue([session({}), closed])
+    vi.mocked(getLiveResults).mockResolvedValue({
+      sentimentScore: null,
+      engagementLevel: 'low',
+      responseCount: 6,
+      targetParticipantCount: 20,
+      isSuppressed: false,
+      suppressionReason: null,
+      minimumGroupSize: 5,
+      wordCloud: [],
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="pulse-point"]')).toHaveLength(2))
+    const points = [...document.querySelectorAll<HTMLElement>('[data-slot="pulse-point"]')]
+    for (const point of points) {
+      const classes = point.className.split(/\s+/)
+      expect(classes).toContain('bg-surface-fill-subtle')
+      expect(classes).not.toContain('border-dashed')
+      // No empty disc that reads as an unselected radio button.
+      expect(point.querySelector('.rounded-full')).toBeNull()
+    }
+    // Under the floor: the padlock. Above it, the pulse is simply not kept: an em dash.
+    const glyphs = points.map((point) => point.firstElementChild as HTMLElement)
+    expect(glyphs.some((glyph) => glyph.querySelector('svg') !== null)).toBe(true)
+    expect(glyphs.some((glyph) => glyph.textContent === '—')).toBe(true)
+  })
+
   it('asks a super administrator with no company chosen to choose one before anything is read', async () => {
     renderAs({ role: 'super_admin' })
     expect(await screen.findByText(es.companyContext.chooseACompany)).toBeTruthy()
@@ -216,8 +267,8 @@ describe('MicroclimateAnalyticsNextPage', () => {
    * TZ=America/Chicago and TZ=UTC.
    */
   it.each([
-    ['America/Costa_Rica', '9–11 sept', '9 sept', 'America/Costa_Rica (GMT-6)'],
-    ['Asia/Tokyo', '10–12 sept', '10 sept', 'Asia/Tokyo (GMT+9)'],
+    ['America/Costa_Rica', '9–11 sept', '9 sept', 'Costa Rica (GMT-6)'],
+    ['Asia/Tokyo', '10–12 sept', '10 sept', 'Tokyo (GMT+9)'],
   ])('prints every day on the company’s zone (%s) and names it', async (zone, range, day, label) => {
     vi.mocked(getCompanySettings).mockResolvedValue({ settings: { timezone: zone } } as unknown as CompanySettingsResponse)
     renderAs({ role: 'company_admin', companyId: COMPANY })
@@ -231,7 +282,8 @@ describe('MicroclimateAnalyticsNextPage', () => {
 
   it('falls back to the browser’s zone when the company’s cannot be read, and says which', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    // The label names the browser zone's place (`Chicago`), not its IANA id.
+    const browser = (Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop() ?? '').replace(/_/g, ' ')
     const range = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' }).formatRange(
       new Date('2026-09-10T02:06:08.991+00:00'),
       new Date('2026-09-12T02:06:08.992+00:00'),

@@ -1,7 +1,7 @@
-import { Shield } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { cn } from '../../lib/cn'
-import { ANONYMITY_FLOOR, PROTECTED_HATCH, isSuppressed } from './suppression'
+import { ANONYMITY_FLOOR, PROTECTED_HATCH, PROTECTED_LABEL, isSuppressed } from './suppression'
 
 /**
  * The anonymity floor, made visible.
@@ -80,7 +80,8 @@ export interface ProtectedCellProps {
    *
    * - `ClimateMap` has too little room — `h-7` cells, and a dense grid repeating
    *   one word is noise. `charts.protectedLegend` explains the hatch for the whole
-   *   matrix at once.
+   *   matrix at once, and the row's first cell uses `mark='floor'` to say
+   *   «Menos de {floor}» once per row, so the row still carries the words.
    * - `LiveOpenAnswers` has too much already — a `liveProtectedChip` badge with a
    *   padlock and the word above the panel, and `liveProtectedDescription` naming
    *   the floor in a sentence below it. A word inside the box would be the third
@@ -103,7 +104,7 @@ export interface ProtectedCellProps {
    */
   suppressedClassName?: string
   /**
-   * What the hatched box carries: the shield (the default), or the word itself,
+   * What the hatched box carries: the padlock (the default), or the word itself,
    * set small inside the box.
    *
    * The SurveyResults artboard (10 Sep) prints *protegido* inside a withheld
@@ -111,8 +112,17 @@ export interface ProtectedCellProps {
    * it the hatched box stands in for the number, so the word goes where the number
    * would have been. With `'word'` the box already says it, so `showWord` has
    * nothing left to add beside it and is ignored.
+   *
+   * `'shield'` is the value's historical name, kept so no caller breaks; since the
+   * Apple design it draws the padlock (see the glyph below).
+   *
+   * `'floor'` draws the padlock AND «Menos de {threshold}» inside the box — the
+   * ruled pattern for a withheld group. `ClimateMap` puts it on the first cell of a
+   * withheld row, so the row states its own reason without the legend; the floor is
+   * not sensitive, the group's count is never in it. Like `'word'`, it makes
+   * `showWord` redundant and ignores it.
    */
-  mark?: 'shield' | 'word'
+  mark?: 'shield' | 'word' | 'floor'
 }
 
 export default function ProtectedCell({
@@ -146,11 +156,11 @@ export default function ProtectedCell({
       title={label}
       className={cn(
         // No border: the approved artboards (Dashboard and SurveyResults, 10 Sep)
-        // draw a withheld cell as the hatch and the shield alone, flush with the
+        // draw a withheld cell as the hatch and the glyph alone, flush with the
         // tinted cells beside it; the dashed hairline that shipped first read as a
         // third state between "withheld" and "empty".
         'flex items-center justify-center rounded',
-        // `text-fg-tertiary`, not `text-fg-light`: the shield is the message, and
+        // `text-fg-tertiary`, not `text-fg-light`: the padlock is the message, and
         // `--admin-font-light` is #999 on #f0f0f0 in light (2.0:1) and #555 on
         // #2a2a2a in dark (2.2:1) — a glyph a reader has to hunt for. #818181 is
         // the same value in both themes and clears 3:1 against both surfaces.
@@ -167,21 +177,36 @@ export default function ProtectedCell({
         suppressedClassName,
       )}
     >
-      {/* The shield, not a padlock: the canvas draws a shield in every withheld
-          cell and in the privacy note beside the opened cell, so the one glyph
-          means "the floor is enforced here" wherever it appears. */}
+      {/* The padlock, as of the Apple design (11 Nov): its canvas draws a padlock
+          on every withheld group (`.prot`, TeamHome) and keeps the shield for the
+          privacy NOTE that explains the rule. So the padlock says "this group is
+          withheld" and the shield says "here is why", wherever either appears —
+          and `ProtectedMark` beside a climate bar wears the same padlock. */}
       {mark === 'word' ? (
         // `aria-hidden`: the box's own label already says it, in a full sentence.
-        <span aria-hidden="true" className="font-mono text-2xs lowercase">
+        // On a solid pill (`PROTECTED_LABEL`): the word straight on the stripes was 3.97:1.
+        <span aria-hidden="true" data-slot="protected-label" className={cn(PROTECTED_LABEL, 'text-2xs lowercase')}>
           {t('charts.protectedWord')}
         </span>
+      ) : mark === 'floor' ? (
+        // `aria-hidden`: the box's accessible name already states the floor.
+        <span
+          aria-hidden="true"
+          data-slot="protected-floor"
+          // Wraps rather than overflows: at 390 a map column is ~72px and the
+          // one-line pill spilled past both edges of its cell.
+          className={cn(PROTECTED_LABEL, 'inline-flex max-w-full items-center gap-1 text-center text-2xs leading-tight')}
+        >
+          <Lock className="size-3 shrink-0" />
+          {t('charts.protectedUnderFloor', { threshold })}
+        </span>
       ) : (
-        <Shield aria-hidden="true" className="size-3" />
+        <Lock aria-hidden="true" className="size-3" />
       )}
     </span>
   )
 
-  if (!showWord || mark === 'word') return box
+  if (!showWord || mark === 'word' || mark === 'floor') return box
 
   return (
     <span className="inline-flex items-center gap-1.5">

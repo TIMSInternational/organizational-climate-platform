@@ -216,7 +216,7 @@ describe('Nueva encuesta — the company clock (G16)', () => {
     restoreDraft(2)
     await openRestored()
     expect((await screen.findByTestId('builder-zone')).textContent).toBe(
-      'Fechas y horas en la zona de la empresa: America/Costa_Rica (GMT-6).',
+      'Fechas y horas en la zona de la empresa: Costa Rica (GMT-6).',
     )
   })
 })

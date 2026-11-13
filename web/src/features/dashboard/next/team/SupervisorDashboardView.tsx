@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
-import { AlertCircle, ArrowRight, Plus } from 'lucide-react'
+import { ArrowRight, ClipboardList, Plus, Target } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { Button, Chip } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../../lib/calendarDay'
@@ -40,30 +40,18 @@ import { CoverageBox, HatchedCount, TeamCard, TeamPlanRow } from './parts'
 export default function SupervisorDashboardView({ model }: { model: SupervisorDashboardModel }) {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
-  const eyebrow = [t('dashboard.next.supervisor.proposal'), model.departmentName, t('users.supervisor')].join(' · ')
+  // No "Propuesta" in the eyebrow and no proposal note: that was the canvas's meta-copy
+  // about the design's status, and it shipped to the supervisor (review finding 7).
+  const eyebrow = [model.departmentName, t('users.supervisor')].join(' · ')
 
   return (
     <div>
-      <PageTopBar eyebrow={eyebrow} title={t('dashboard.next.title')} description={t('dashboard.next.supervisor.description')} />
+      <PageHeader eyebrow={eyebrow} title={t('dashboard.next.title')} description={t('dashboard.next.supervisor.description')} />
 
       <div data-slot="team-sections" className="-mt-1 flex flex-col gap-section">
-        {/* 20px between the note and the card, as the artboard sets them. */}
-        <div className="flex flex-col gap-5">
-          <div
-            role="note"
-            data-slot="proposal-note"
-            className="flex gap-2.5 rounded-md border border-accent-amber-ring bg-accent-amber-soft px-3.5 py-3 text-sm text-accent-amber-ink"
-          >
-            <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            <p className="m-0">
-              <b className="font-semibold">{t('dashboard.next.supervisor.proposalLead')}</b>{' '}
-              {t('dashboard.next.supervisor.proposalBody', { floor: model.floor })}
-            </p>
-          </div>
-          <CoverageCard model={model} t={t} locale={locale} />
-        </div>
+        <CoverageCard model={model} t={t} locale={locale} />
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
           <PlansCard model={model} canRecord={capabilities.canRecordProgress} t={t} locale={locale} />
           <TasksCard model={model} t={t} locale={locale} />
         </div>
@@ -105,7 +93,7 @@ function CoverageCard({ model, t, locale }: { model: SupervisorDashboardModel; t
   return (
     <TeamCard id="supervisor-coverage" heading={t('dashboard.next.supervisor.coverageHeading')} meta={meta}>
       {survey === null ? (
-        <p className="m-0 text-sm text-fg-label">
+        <p className="m-0 text-sm text-fg-tertiary">
           {t('dashboard.next.supervisor.coverageNone', { department: model.departmentName })}
         </p>
       ) : (
@@ -115,7 +103,7 @@ function CoverageCard({ model, t, locale }: { model: SupervisorDashboardModel; t
               label={t('dashboard.next.supervisor.peopleLabel')}
               sub={t('dashboard.next.supervisor.peopleSub', { department: model.departmentName })}
             >
-              <span className="font-mono text-kpi-hero leading-none tabular-nums">{count(model.activeMemberCount, locale)}</span>
+              <span className="text-kpi-hero leading-none font-semibold tabular-nums">{count(model.activeMemberCount, locale)}</span>
             </CoverageBox>
             <CoverageBox
               label={t('dashboard.next.supervisor.respondedLabel')}
@@ -127,12 +115,12 @@ function CoverageCard({ model, t, locale }: { model: SupervisorDashboardModel; t
             >
               {model.responded === null ? (
                 <HatchedCount
-                  className="w-full"
+                  className="py-1.5 text-lg"
                   text={t('dashboard.next.supervisor.respondedHidden', { floor })}
                   label={t('dashboard.next.supervisor.respondedHiddenLabel', { floor })}
                 />
               ) : (
-                <span data-slot="coverage-responded" className="font-mono text-kpi-hero leading-none tabular-nums">
+                <span data-slot="coverage-responded" className="text-kpi-hero leading-none font-semibold tabular-nums">
                   {count(model.responded, locale)}
                 </span>
               )}
@@ -147,18 +135,18 @@ function CoverageCard({ model, t, locale }: { model: SupervisorDashboardModel; t
             >
               {model.remaining === null ? (
                 <HatchedCount
-                  className="w-full"
+                  className="py-1.5 text-lg"
                   text={t('dashboard.next.supervisor.remainingHidden')}
                   label={t('dashboard.next.supervisor.remainingHiddenLabel', { floor })}
                 />
               ) : (
-                <span data-slot="coverage-remaining" className="font-mono text-kpi-hero leading-none tabular-nums">
+                <span data-slot="coverage-remaining" className="text-kpi-hero leading-none font-semibold tabular-nums">
                   {count(model.remaining, locale)}
                 </span>
               )}
             </CoverageBox>
           </div>
-          <p className="m-0 max-w-[70ch] text-sm text-fg-label">
+          <p className="m-0 max-w-[70ch] text-sm text-fg-tertiary">
             {t('dashboard.next.supervisor.coverageNote')} {daysLeftSentence(survey, t)}
           </p>
         </>
@@ -195,19 +183,19 @@ function PlansCard({
       meta={plans.source === 'tracking' ? plansMeta(plans.plans, t) : undefined}
       className="xl:col-span-7"
     >
-      {plans.source === 'off' && <p className="m-0 text-sm text-fg-label">{t('dashboard.next.supervisor.plansOff')}</p>}
+      {plans.source === 'off' && <p className="m-0 text-sm text-fg-tertiary">{t('dashboard.next.supervisor.plansOff')}</p>}
       {plans.source === 'failed' && (
-        <p role="status" className="m-0 text-sm text-fg-label">
+        <p role="status" className="m-0 text-sm text-fg-tertiary">
           {t('dashboard.next.supervisor.plansFailedNoReason')}
         </p>
       )}
       {plans.source === 'refused' && (
-        <p role="status" className="m-0 text-sm text-fg-label">
+        <p role="status" className="m-0 text-sm text-fg-tertiary">
           {t('dashboard.next.supervisor.plansRefused')}
         </p>
       )}
       {plans.source === 'tracking' && plans.plans.length === 0 && (
-        <p className="m-0 text-sm text-fg-label">{t('dashboard.next.supervisor.plansNone')}</p>
+        <p className="m-0 text-sm text-fg-tertiary">{t('dashboard.next.supervisor.plansNone')}</p>
       )}
       {plans.source === 'tracking' &&
         plans.plans.map((plan) => (
@@ -222,7 +210,7 @@ function PlansCard({
                 <Chip label={plan.code} className="font-mono" />
                 <SemaforoChip estado={plan.estado} long />
                 {plan.nodoName && (
-                  <span className="text-sm text-fg-label">{t('tracking.next.nodoLabel', { nodo: plan.nodoName })}</span>
+                  <span className="text-sm text-fg-tertiary">{t('tracking.next.nodoLabel', { nodo: plan.nodoName })}</span>
                 )}
               </>
             }
@@ -318,7 +306,7 @@ function TasksCard({ model, t, locale }: { model: SupervisorDashboardModel; t: T
       className="xl:col-span-5"
     >
       {tasks.length === 0 ? (
-        <p className="m-0 text-sm text-fg-label">{t('dashboard.next.supervisor.tasksNone')}</p>
+        <p className="m-0 text-sm text-fg-tertiary">{t('dashboard.next.supervisor.tasksNone')}</p>
       ) : (
         <ul className="m-0 flex list-none flex-col p-0">
           {tasks.map((task) => {
@@ -328,27 +316,32 @@ function TasksCard({ model, t, locale }: { model: SupervisorDashboardModel; t: T
                 key={`${task.kind}-${task.id}`}
                 data-slot="supervisor-task"
                 data-kind={task.kind}
-                className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2.5 border-b border-line-light py-2.5 last:border-b-0"
+                className="grid grid-cols-[--spacing(7)_minmax(0,1fr)_auto] items-start gap-3 border-b border-line-default py-3 last:border-b-0"
               >
-                {/* The artboard's empty square: a to-do mark, not a control — ticking a
-                    task off is not something any endpoint records. */}
-                <span aria-hidden="true" className="mt-0.5 inline-flex size-4 rounded border border-line-default" />
+                {/* A glyph for the kind of task, not a checkbox: an empty square read as a
+                    control to tick by hand, and no endpoint records a tick (finding 7). */}
+                <span
+                  aria-hidden="true"
+                  className="inline-flex size-7 items-center justify-center rounded-lg bg-surface-fill-subtle text-fg-secondary [&>svg]:size-4"
+                >
+                  {task.kind === 'answer-survey' ? <ClipboardList /> : <Target />}
+                </span>
                 <div className="flex min-w-0 flex-col gap-0.5">
                   {task.kind === 'answer-survey' ? (
                     // The survey she owes opens where the employee Home's "Empezar a
                     // responder" goes (`EmployeeHomeView`): the task is the way in, not a note.
                     <Link
                       to={`/surveys/${task.id}/respond`}
-                      className="text-base font-medium text-fg-primary underline-offset-2 hover:underline"
+                      className="text-base font-medium text-accent-blue-ink underline-offset-2 hover:underline"
                     >
                       {copy.heading}
                     </Link>
                   ) : (
                     <span className="text-base text-fg-primary">{copy.heading}</span>
                   )}
-                  <span className="text-sm text-fg-label">{copy.sub}</span>
+                  <span className="text-sm text-fg-tertiary">{copy.sub}</span>
                 </div>
-                <span className="font-mono text-sm whitespace-nowrap text-fg-label tabular-nums">
+                <span className="text-sm whitespace-nowrap text-fg-tertiary tabular-nums">
                   {calendarDay(Date.parse(task.dueOn), locale)}
                 </span>
               </li>
@@ -357,7 +350,7 @@ function TasksCard({ model, t, locale }: { model: SupervisorDashboardModel; t: T
         </ul>
       )}
       {model.surveysUnread && (
-        <p role="status" className="m-0 text-sm text-fg-label">
+        <p role="status" className="m-0 text-sm text-fg-tertiary">
           {t('dashboard.next.supervisor.tasksSurveysUnread')}
         </p>
       )}

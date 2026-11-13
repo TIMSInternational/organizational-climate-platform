@@ -2,20 +2,26 @@ import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
 import { buildNavSections, type NavItem } from './navSections'
 import {
+  RailActivityIcon,
   RailAnalyticsIcon,
   RailBenchmarksIcon,
+  RailCompaniesIcon,
   RailConsolidatedIcon,
-  RailDashboardIcon,
   RailDepartmentsIcon,
+  RailHomeIcon,
   RailInsightsIcon,
   RailMicroclimatesIcon,
-  RailNotificationsIcon,
+  RailMySurveysIcon,
+  RailPeopleIcon,
   RailPlansIcon,
   RailQuestionBankIcon,
   RailQuestionLibraryIcon,
+  RailQuestionsIcon,
   RailReportsIcon,
-  RailShieldIcon,
+  RailSettingsIcon,
+  RailStatusIcon,
   RailSurveysIcon,
+  RailTasksIcon,
   RailTemplatesIcon,
   RailTrendsIcon,
 } from './railIcons'
@@ -30,25 +36,50 @@ function iconsOf(role: string, trackingEnabled: boolean) {
 }
 
 describe('the rail draws the canvas glyphs', () => {
-  it('gives every row of the company administrator rail the glyph its artboard draws', () => {
-    // Dashboard.png / SurveysList.png / ClimateTrends.png, rail rows top to bottom.
+  it('gives every row of the company administrator rail its glyph', () => {
     const icon = iconsOf('company_admin', true)
-    expect(icon('navigation.dashboard')).toBe(RailDashboardIcon)
-    expect(icon('navigation.companyAdministration')).toBe(RailShieldIcon)
-    expect(icon('navigation.trackingConsolidado')).toBe(RailConsolidatedIcon)
-    expect(icon('navigation.trackingPlans')).toBe(RailPlansIcon)
-    expect(icon('navigation.microclimates')).toBe(RailMicroclimatesIcon)
+    expect(icon('navigation.home')).toBe(RailHomeIcon)
     expect(icon('navigation.surveys')).toBe(RailSurveysIcon)
-    expect(icon('navigation.surveyTemplates')).toBe(RailTemplatesIcon)
+    expect(icon('navigation.templates')).toBe(RailTemplatesIcon)
     expect(icon('navigation.climateTrends')).toBe(RailTrendsIcon)
-    expect(icon('navigation.benchmarks')).toBe(RailBenchmarksIcon)
-    expect(icon('navigation.aiInsights')).toBe(RailInsightsIcon)
-    expect(icon('navigation.reports')).toBe(RailReportsIcon)
-    expect(icon('navigation.analytics')).toBe(RailAnalyticsIcon)
-    expect(icon('navigation.departments')).toBe(RailDepartmentsIcon)
+    expect(icon('navigation.questions')).toBe(RailQuestionsIcon)
     expect(icon('navigation.questionBank')).toBe(RailQuestionBankIcon)
     expect(icon('navigation.questionLibrary')).toBe(RailQuestionLibraryIcon)
-    expect(icon('notifications.title')).toBe(RailNotificationsIcon)
+    expect(icon('navigation.trackingPlans')).toBe(RailPlansIcon)
+    expect(icon('navigation.trackingConsolidado')).toBe(RailConsolidatedIcon)
+    expect(icon('navigation.microclimates')).toBe(RailMicroclimatesIcon)
+    expect(icon('navigation.overview')).toBe(RailAnalyticsIcon)
+    expect(icon('navigation.references')).toBe(RailBenchmarksIcon)
+    expect(icon('navigation.aiInsights')).toBe(RailInsightsIcon)
+    expect(icon('navigation.reports')).toBe(RailReportsIcon)
+    expect(icon('navigation.people')).toBe(RailPeopleIcon)
+    expect(icon('navigation.departments')).toBe(RailDepartmentsIcon)
+    expect(icon('navigation.companySettings')).toBe(RailCompaniesIcon)
+    expect(icon('navigation.activity')).toBe(RailActivityIcon)
+  })
+
+  it('gives the super administrator’s Sistema rows and a leader’s rows their glyphs', () => {
+    const superIcon = iconsOf('super_admin', false)
+    expect(superIcon('navigation.companies')).toBe(RailCompaniesIcon)
+    expect(superIcon('navigation.systemConfiguration')).toBe(RailSettingsIcon)
+    expect(superIcon('navigation.status')).toBe(RailStatusIcon)
+    const leaderIcon = iconsOf('leader', true)
+    expect(leaderIcon('navigation.myTeam')).toBe(RailPeopleIcon)
+    expect(leaderIcon('navigation.mySurveys')).toBe(RailMySurveysIcon)
+    expect(leaderIcon('navigation.trackingMisTareas')).toBe(RailTasksIcon)
+    expect(leaderIcon('navigation.trackingDashboard')).toBe(RailConsolidatedIcon)
+  })
+
+  it('never draws two rows of one rail with the same glyph', () => {
+    for (const role of ['super_admin', 'company_admin', 'leader']) {
+      for (const trackingEnabled of [false, true]) {
+        const items = flatten(buildNavSections(role, 'company-1', { trackingEnabled }).flatMap((section) => section.items))
+        // A group and its first child share an href, never a glyph: two rows with one picture is
+        // how a reader learns to stop trusting the pictures.
+        const glyphs = items.map((item) => item.icon)
+        expect(glyphs.length, `${role} tracking=${trackingEnabled}`).toBe(new Set(glyphs).size)
+      }
+    }
   })
 
   it('keeps the two-ring target on the action plans row when tracking is off', () => {

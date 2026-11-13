@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
+import { Lock } from 'lucide-react'
 import { cn } from '../../../../lib/cn'
 
 /**
@@ -29,15 +29,16 @@ export function TeamCard({
     <section
       aria-labelledby={id}
       className={cn(
-        'flex min-w-0 flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs',
+        // The spec's `.card`: 12px radius, the panel hairline, no shadow.
+        'flex min-w-0 flex-col gap-3.5 rounded-xl border border-line-panel bg-surface-card px-5 pt-4.5 pb-5',
         className,
       )}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 id={id} className="m-0 text-2xl">
+        <h2 id={id} className="m-0 text-2xl font-semibold">
           {heading}
         </h2>
-        {meta ? <span className="inline-flex flex-wrap items-center gap-x-1 text-sm text-fg-label">{meta}</span> : null}
+        {meta ? <span className="inline-flex flex-wrap items-center gap-x-1 text-sm text-fg-tertiary">{meta}</span> : null}
       </div>
       {children}
     </section>
@@ -45,26 +46,26 @@ export function TeamCard({
 }
 
 /**
- * A count withheld under the floor: the canvas's `.cell.hatched` — 34px, the hatch, the
- * light ink — carrying the sentence that stands in for the number ("menos de {floor}
- * respuestas"). `role="img"` with a full sentence as its name, so a screen reader hears why
- * there is no number, never an empty cell. The hatch is `PROTECTED_HATCH`, the one copy
- * `protectedHatch.test.ts` allows.
+ * A count withheld under the floor, carrying the words that stand in for the number
+ * ("Menos de {floor}"). `role="img"` with a full sentence as its name, so a screen reader
+ * hears why there is no number, never an empty cell.
  */
 export function HatchedCount({ text, label, className }: { text: string; label: string; className?: string }) {
   return (
+    // The protected state of the spec (`.prot`, the `ProtectedState` primitive): a padlock
+    // and the words, in the tertiary ink — no number, and no striped box competing with
+    // the readings around it. One accessible name, so the words are read once.
     <span
       role="img"
       aria-label={label}
       title={label}
       data-slot="hatched-count"
-      className={cn(
-        'inline-flex h-8.5 min-w-0 items-center justify-center rounded bg-surface-icon-box px-3 text-xs whitespace-nowrap text-fg-tertiary',
-        PROTECTED_HATCH,
-        className,
-      )}
+      className={cn('inline-flex min-w-0 items-center gap-1.5 text-sm font-medium whitespace-nowrap text-fg-tertiary', className)}
     >
-      <span aria-hidden="true">{text}</span>
+      <Lock aria-hidden="true" className="size-3.5 shrink-0" />
+      <span aria-hidden="true" data-slot="protected-label">
+        {text}
+      </span>
     </span>
   )
 }
@@ -119,10 +120,10 @@ export function TeamPlanRow({
 /** One of the supervisor's three coverage boxes: a label, the reading, a line under it. */
 export function CoverageBox({ label, children, sub }: { label: string; children: ReactNode; sub: ReactNode }) {
   return (
-    <div data-slot="coverage-box" className="flex min-w-0 flex-col gap-1.5 rounded-md border border-line-light px-3.5 py-3">
-      <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
+    <div data-slot="coverage-box" className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-surface-fill-subtle px-4 py-3.5">
+      <span className="text-2xs font-semibold uppercase tracking-tile text-fg-label">{label}</span>
       {children}
-      <span className="text-sm text-fg-label">{sub}</span>
+      <span className="text-sm text-fg-tertiary">{sub}</span>
     </div>
   )
 }

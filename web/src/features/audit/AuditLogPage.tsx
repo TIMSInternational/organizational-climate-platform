@@ -1,28 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { CATALOGUES } from '../../i18n/locale'
 import type { Locale } from '../../i18n/translate'
-import { PageTopBar } from '../../components/layout'
+import { PageHeader } from '../../components/layout'
 import {
   Button,
   Chip,
+  DatePicker,
   EmptyState,
+  Label,
+  LoadingState,
   NetworkError,
   SelectField,
-  SkeletonText,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-  TextField,
 } from '../../components/ui'
 import { ApiError } from '../../api/authFetch'
 import { useCompanyScope } from '../../company-context'
-import { useCompanyName } from '../../company-context/useCompanyName'
-import { TH_CLASS } from '../shared-next/parts'
 import { getCompanySettings } from '../org-structure/api/companySettings'
 import { getAuditLogs, type AuditLogPage } from './api'
 import {
@@ -60,7 +59,6 @@ type LoadState =
 export default function AuditLogPage() {
   const { t, locale } = useTranslation()
   const scope = useCompanyScope()
-  const companyName = useCompanyName()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const companyId = scope.status === 'ready' ? scope.companyId : undefined
 
@@ -115,12 +113,14 @@ export default function AuditLogPage() {
     }
   }, [baseUrl, companyId, timeZone, action, fromDay, toDay, page, attempt])
 
-  const header = { eyebrow: companyName ?? undefined, title: t('audit.title'), description: t('audit.description') }
+  // The eyebrow is the sidebar section (Sistema), as on every admin screen; the company in
+  // scope is named by the top bar (review 12 Nov).
+  const header = { eyebrow: t('navigation.sectionSystem'), title: t('audit.title'), description: t('audit.description') }
 
   if (scope.status === 'needs-selection') {
     return (
       <div>
-        <PageTopBar {...header} />
+        <PageHeader {...header} />
         <EmptyState title={t('companyContext.chooseACompany')} description={t('companyContext.chooseACompanyDescription')} />
       </div>
     )
@@ -128,7 +128,7 @@ export default function AuditLogPage() {
   if (!companyId || state.status === 'forbidden') {
     return (
       <div>
-        <PageTopBar {...header} />
+        <PageHeader {...header} />
         <EmptyState title={t('audit.notAllowedTitle')} description={t('audit.notAllowedBody')} />
       </div>
     )
@@ -146,7 +146,7 @@ export default function AuditLogPage() {
 
   return (
     <div>
-      <PageTopBar {...header} />
+      <PageHeader {...header} />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
         <SelectField
@@ -158,8 +158,8 @@ export default function AuditLogPage() {
             ...actions.map((code) => ({ value: code, label: auditActionLabel(t, code) })),
           ]}
         />
-        <TextField label={t('audit.filterFrom')} type="date" value={fromDay} onChange={resetTo(setFromDay)} />
-        <TextField label={t('audit.filterTo')} type="date" value={toDay} onChange={resetTo(setToDay)} />
+        <DayFilter label={t('audit.filterFrom')} placeholder={t('audit.filterAnyDay')} day={fromDay} onChange={resetTo(setFromDay)} />
+        <DayFilter label={t('audit.filterTo')} placeholder={t('audit.filterAnyDay')} day={toDay} onChange={resetTo(setToDay)} />
         <Button
           type="button"
           variant="outline"
@@ -176,13 +176,13 @@ export default function AuditLogPage() {
       </div>
 
       {timeZone !== null ? (
-        <p className="mb-3 mt-0 text-xs text-fg-secondary" data-slot="audit-zone">
+        <p className="mb-3 mt-0 text-sm text-fg-tertiary" data-slot="audit-zone">
           {t('audit.timeZoneNote', { zone: timeZone })}
         </p>
       ) : null}
 
       {state.status === 'loading' ? (
-        <SkeletonText lines={8} />
+        <LoadingState rows={8} />
       ) : state.status === 'error' ? (
         <NetworkError
           title={t('audit.loadFailed')}
@@ -193,23 +193,25 @@ export default function AuditLogPage() {
         <EmptyState title={filtered ? t('audit.emptyFiltered') : t('audit.empty')} />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-md border border-line-light">
-            <Table className="text-sm">
-              <TableHeader className="bg-surface-icon-box">
+          {/* A flush `.card` holding the `.tbl`: the primitive's sentence-case 12px heads, zebra
+              rows, the hairline between them (`occ.css`). */}
+          <div data-slot="audit-table-card" className="overflow-hidden rounded-xl border border-line-panel bg-surface-card">
+            <Table zebra className="text-ui">
+              <TableHeader>
                 <TableRow>
-                  <TableHead scope="col" className={TH_CLASS}>{t('audit.colWhen')}</TableHead>
-                  <TableHead scope="col" className={TH_CLASS}>{t('audit.colActor')}</TableHead>
-                  <TableHead scope="col" className={TH_CLASS}>{t('audit.colAction')}</TableHead>
-                  <TableHead scope="col" className={TH_CLASS}>{t('audit.colTarget')}</TableHead>
+                  <TableHead scope="col" className="px-4">{t('audit.colWhen')}</TableHead>
+                  <TableHead scope="col" className="px-4">{t('audit.colActor')}</TableHead>
+                  <TableHead scope="col" className="px-4">{t('audit.colAction')}</TableHead>
+                  <TableHead scope="col" className="px-4">{t('audit.colTarget')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {state.page.items.map((item) => (
                   <TableRow key={item.id} data-audit-id={item.id}>
-                    <TableCell className="whitespace-nowrap px-3 py-2 tabular-nums">
+                    <TableCell className="whitespace-nowrap px-4 py-2.5 tabular-nums">
                       {formatAuditInstant(item.timestamp, locale, timeZone ?? 'UTC')}
                     </TableCell>
-                    <TableCell className="px-3 py-2">
+                    <TableCell className="px-4 py-2.5">
                       {item.userName === null && item.userId === null ? (
                         <span className="text-fg-secondary">{t('audit.actorSystem')}</span>
                       ) : item.userName === null ? (
@@ -218,19 +220,24 @@ export default function AuditLogPage() {
                         <span className="flex min-w-0 flex-col">
                           <span className="truncate font-medium">{item.userName}</span>
                           {item.userEmail ? (
-                            <span className="truncate font-mono text-xs text-fg-secondary">{item.userEmail}</span>
+                            <span className="truncate text-sm text-fg-secondary">{item.userEmail}</span>
                           ) : null}
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="px-3 py-2">
+                    <TableCell className="px-4 py-2.5">
                       <span className="flex flex-wrap items-center gap-2">
                         <span>{auditActionLabel(t, item.action)}</span>
-                        {item.success ? null : <Chip tone="critical" label={t('audit.failed')} />}
+                        {/* A failed operation, not a result area: the gray chip in the danger ink,
+                            with its glyph, so the word is never carried by colour alone. */}
+                        {item.success ? null : (
+                          <Chip tone="neutral" className="text-accent-red-ink" icon={<CircleAlert />} label={t('audit.failed')} />
+                        )}
                       </span>
                     </TableCell>
-                    <TableCell className="px-3 py-2">
+                    <TableCell className="px-4 py-2.5">
                       {item.resourceId ? (
+                        // An identifier is a token, so it keeps the code face.
                         <span className="break-all font-mono text-xs text-fg-secondary">{item.resourceId}</span>
                       ) : (
                         <span className="text-fg-secondary">—</span>
@@ -243,7 +250,7 @@ export default function AuditLogPage() {
           </div>
 
           <nav aria-label={t('audit.pagination')} className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-fg-secondary">
+            <span className="text-sm tabular-nums text-fg-secondary">
               {t('audit.pageOf', { page: state.page.page, pages, total: state.page.total })}
             </span>
             <span className="flex gap-2">
@@ -259,6 +266,44 @@ export default function AuditLogPage() {
           </nav>
         </>
       )}
+    </div>
+  )
+}
+
+/** "2026-10-21" as that calendar day at local midnight, the shape the picker holds. */
+function dayToDate(day: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : undefined
+}
+
+/** The picked calendar day back as "2026-10-21" — the day, never an instant. */
+function dateToDay(date: Date | undefined): string {
+  if (!date) return ''
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/**
+ * A day filter in the screen's language. The native `type="date"` field printed the
+ * browser's own «mm/dd/yyyy» on a Spanish screen, and its `lang` attribute does not change
+ * that in Chromium (measured 12 Nov). The shared picker writes the day with the UI's locale
+ * and opens a calendar in it. The day still reaches the request as "2026-10-21", read in
+ * the company's zone by `zonedDayBoundary`, exactly as before.
+ */
+function DayFilter({ label, placeholder, day, onChange }: { label: string; placeholder: string; day: string; onChange: (day: string) => void }) {
+  return (
+    <div data-slot="day-filter" className="grid max-w-field gap-1.5">
+      {/* The trigger names itself with the same words (`aria-label`); this is the visible title. */}
+      <Label aria-hidden="true">{label}</Label>
+      {/* 36px, the height of the action select beside it on the same row (`select.tsx`). */}
+      <DatePicker
+        label={label}
+        placeholder={placeholder}
+        dateFormat="d MMM yyyy"
+        className="h-9 pointer-coarse:min-h-11"
+        value={dayToDate(day)}
+        onChange={(date) => onChange(dateToDay(date))}
+      />
     </div>
   )
 }

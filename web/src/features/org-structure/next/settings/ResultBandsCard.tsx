@@ -128,7 +128,7 @@ export default function ResultBandsCard({
       <BandScaleBar bands={preview} segments={segments} ticks={ticks} badTicks={badTicks} />
 
       <div role="group" aria-labelledby={`${ids}-heading`} className="flex flex-col gap-2.5">
-        <div aria-hidden="true" className={cn(COLS, 'text-2xs font-semibold uppercase tracking-tile text-fg-label')}>
+        <div aria-hidden="true" className={cn(COLS, 'text-xs font-semibold text-fg-secondary')}>
           <span>{t('resultBands.settings.colourCol')}</span>
           <span>{t('resultBands.settings.nameCol')}</span>
           <span className="text-right">{t('resultBands.settings.fromCol')}</span>
@@ -144,7 +144,7 @@ export default function ResultBandsCard({
                 aria-label={label}
                 value={boundaryText(fixed, locale)}
                 disabled
-                className="text-right font-mono tabular-nums"
+                className="text-right tabular-nums"
               />
             ) : (
               <Input
@@ -154,7 +154,7 @@ export default function ResultBandsCard({
                 aria-invalid={flagged.has(field) || undefined}
                 aria-describedby={flagged.has(field) ? errorId : undefined}
                 onChange={(event) => set({ [field]: event.target.value })}
-                className={cn('text-right font-mono tabular-nums', flagged.has(field) && 'border-accent-red ring-1 ring-accent-red')}
+                className={cn('text-right tabular-nums', flagged.has(field) && 'border-accent-red ring-1 ring-accent-red')}
               />
             )
             if (draft.scale !== 'percent') return input
@@ -163,7 +163,7 @@ export default function ResultBandsCard({
             return (
               <span className="flex flex-col items-end gap-0.5">
                 {input}
-                <span data-equivalent="" className="font-mono text-2xs text-fg-tertiary tabular-nums">
+                <span data-equivalent="" className="text-xs text-fg-tertiary tabular-nums">
                   {value === null ? '\u00a0' : t('resultBands.settings.equivalent', { value: boundaryText(value, locale, 'percent') })}
                 </span>
               </span>
@@ -201,7 +201,7 @@ export default function ResultBandsCard({
       </div>
 
       {verdict.ok ? (
-        <p role="status" className="m-0 flex items-start gap-2 rounded-xl border border-accent-green-ring bg-chip-good-fill px-3 py-2.5 text-base text-chip-good-ink">
+        <p role="status" className="m-0 flex items-start gap-3 rounded-xl bg-surface-fill-subtle px-4 py-3 text-sm text-fg-secondary">
           <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           {t('resultBands.settings.valid')}
         </p>
@@ -209,7 +209,7 @@ export default function ResultBandsCard({
         <div
           id={errorId}
           role="alert"
-          className="flex items-start gap-2 rounded-xl border border-accent-red-ring bg-chip-critical-fill px-3 py-2.5 text-base text-chip-critical-ink"
+          className="flex items-start gap-3 rounded-xl border border-line-default bg-surface-fill-subtle px-4 py-3 text-sm text-accent-red-ink"
         >
           <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <span className="flex flex-col gap-1">

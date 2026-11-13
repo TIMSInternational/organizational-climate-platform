@@ -62,9 +62,9 @@ export default function CredentialModeCard({
           return (
             <div key={mode} className="flex min-w-0 items-start gap-2.5">
               <RadioGroupItem id={itemId} value={mode} aria-describedby={`${itemId}-help`} className="mt-1" />
-              <label htmlFor={itemId} className="min-w-0 cursor-pointer">
+              <label htmlFor={itemId} className="m-0 min-w-0 cursor-pointer font-normal">
                 <span className="block text-base font-medium text-fg-primary">{credentialModeLabel(t, mode)}</span>
-                <span id={`${itemId}-help`} className="block text-sm text-fg-secondary">
+                <span id={`${itemId}-help`} className="block text-sm font-normal text-fg-secondary">
                   {t(mode === 'per_survey' ? `${K}.perSurveyHelp` : `${K}.sharedHelp`)}
                 </span>
               </label>
@@ -72,7 +72,7 @@ export default function CredentialModeCard({
           )
         })}
       </RadioGroup>
-      <p className="m-0 flex items-start gap-2 rounded-md bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary">
+      <p className="m-0 flex items-start gap-3 rounded-xl bg-surface-fill-subtle px-4 py-3.5 text-sm text-fg-secondary">
         <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
         <span>
           {value !== saved ? `${t(`${K}.pending`, { mode: credentialModeLabel(t, value) })} ` : ''}

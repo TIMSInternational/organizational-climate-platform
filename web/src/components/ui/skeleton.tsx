@@ -20,7 +20,10 @@ export function Skeleton({ className, ...props }: ComponentProps<'div'>) {
       // Decorative: a screen reader should hear the loading state from the
       // region's own aria-busy, not from a stack of empty boxes.
       aria-hidden="true"
-      className={cn('animate-pulse rounded-md bg-surface-icon-box', className)}
+      // The Apple design's `.sk`: the control fill (`--admin-bg-fill`, translucent grey), so a
+      // placeholder reads on the panel, on a card and on the recessed tile alike. It was the
+      // recessed tile's own colour, which vanishes on that tile and on the respond ground.
+      className={cn('animate-pulse rounded-md bg-surface-fill', className)}
       {...props}
     />
   )

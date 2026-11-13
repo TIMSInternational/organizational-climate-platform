@@ -47,27 +47,45 @@ import { chipVariants, type ChipTone } from './chipVariants'
  * It does not translate. `label` arrives already translated, like every other
  * `ui/` primitive's copy, because these have no translation context of their own.
  */
+/**
+ * `live` is not a sixth colour: it is the `accent` pair (`#1d4ed8` on `#e9effd`, 5.82:1;
+ * dark `#7aaeff` on `#1d3262`, 5.54:1 — both measured by `styles/chipVariantContrast.test.ts`
+ * as the accent tone) with the canvas's 6px dot before the word (`.chip.live::before`). It is
+ * the ONE status chip that is blue — Activa, a survey that is open now — because blue means
+ * live (the user's ruling of 11 Nov); every other status is `neutral`.
+ */
+export type ChipStatusTone = ChipTone | 'live'
+
 export interface ChipProps extends Omit<ComponentProps<'span'>, 'children'> {
   /**
    * The word. **Already translated**, and required: the colour is never the
    * only carrier of the state.
    */
   label: string
-  /** Which state. Defaults to `neutral`. */
-  tone?: ChipTone
+  /** Which state. Defaults to `neutral`. `live` is for Activa / open-now only. */
+  tone?: ChipStatusTone
   /**
    * An optional glyph before the word. Rendered `aria-hidden`, because the word
    * beside it already says the same thing and a screen reader should not hear it
-   * twice. Drawn 13px (3.25 x the 4px `--spacing` token): every chip glyph on the
-   * approved canvas of 10 Sep is `width: 13px; height: 13px`, 23 of 23 across 12
-   * artboards.
+   * twice. Drawn 13px (3.25 x the 4px `--spacing` token).
    */
   icon?: ReactNode
 }
 
 export function Chip({ label, tone, icon, className, ...props }: ChipProps) {
+  const live = tone === 'live'
   return (
-    <span data-slot="chip" className={cn(chipVariants({ tone }), className)} {...props}>
+    <span
+      data-slot="chip"
+      data-live={live || undefined}
+      className={cn(
+        chipVariants({ tone: live ? 'accent' : tone }),
+        // The live dot: 6px, the word's own ink, decoration (the word says "Activa").
+        live && "before:size-1.5 before:shrink-0 before:rounded-full before:bg-current",
+        className,
+      )}
+      {...props}
+    >
       {icon && (
         <span aria-hidden="true" className="inline-flex shrink-0 items-center [&>svg]:size-3.25">
           {icon}

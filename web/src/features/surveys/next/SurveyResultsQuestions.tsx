@@ -1,4 +1,4 @@
-import type { ResultScale } from '../../../components/charts'
+import type { ResultBands, ResultScale } from '../../../components/charts'
 import { useMemo, useState } from 'react'
 import { useTranslation } from '../../../i18n'
 import { EmptyState, H2 } from '../../../components/ui'
@@ -14,6 +14,7 @@ import {
   type QuestionFilter,
 } from '../surveyResultsView'
 import { UNCATEGORISED_DIMENSION, dimensionKeyOf, surveyQuestionStandings } from '../surveyResultsMap'
+import { questionNumber } from '../questionNumber'
 
 interface SurveyResultsQuestionsProps {
   questions: readonly SurveyQuestionResult[]
@@ -21,7 +22,15 @@ interface SurveyResultsQuestionsProps {
   dimensionName: (key: string) => string
   /** The company's result scale, which each 1–5 question's average is read on. */
   scale?: ResultScale
+  /** The company's result bands: a 1–5 question's mean is named in its area (glyph + name). */
+  bands?: ResultBands
 }
+
+/** The native select at the Input primitive's geometry: 36px, the control edge, 15px. */
+const SELECT =
+  'h-9 rounded-md border border-line-control bg-surface-input px-3 text-base text-fg-primary pointer-coarse:h-11 hover:border-line-hover'
+/** The field label (ui/label): 13px semibold above its control. */
+const FIELD = 'flex flex-col gap-1.5 text-sm font-semibold text-fg-primary'
 
 /**
  * Every question of the survey, one row each, under the map — the complete,
@@ -52,7 +61,7 @@ interface SurveyResultsQuestionsProps {
  * `QuestionResultCard` for everything the strip cannot paint honestly —
  * `distributionStripModel` returns `null` exactly where the server refused a mean.
  */
-export default function SurveyResultsQuestions({ questions, dimensionName, scale = 'mean' }: SurveyResultsQuestionsProps) {
+export default function SurveyResultsQuestions({ questions, dimensionName, scale = 'mean', bands }: SurveyResultsQuestionsProps) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<QuestionFilter>(EMPTY_QUESTION_FILTER)
 
@@ -61,16 +70,23 @@ export default function SurveyResultsQuestions({ questions, dimensionName, scale
   const visible = useMemo(() => filterQuestions(questions, filter), [questions, filter])
   const standings = useMemo(() => surveyQuestionStandings(questions), [questions])
 
-  const shortLabel = (question: SurveyQuestionResult) => t('surveyResults.questionShort', { order: question.order })
+  // `order` is the 0-based position the builder stores; a reader counts from 1 ("P1", not "P0"),
+  // through the one helper the CSV and the legacy page also use.
+  const shortLabel = (question: SurveyQuestionResult) => t('surveyResults.questionShort', { order: questionNumber(question) })
 
   return (
-    <section aria-labelledby="results-next-questions" className="flex flex-col gap-panel-gap">
-      <H2 id="results-next-questions">{t('surveyResults.questions')}</H2>
-      <p className="m-0 max-w-prose text-sm text-fg-secondary">{t('surveyResults.questionsIntro')}</p>
-      <div className="flex flex-wrap items-end gap-inline">
-        <label>
+    <section aria-labelledby="results-next-questions" className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <H2 id="results-next-questions" className="mb-0 text-2xl">
+          {t('surveyResults.questions')}
+        </H2>
+        <p className="m-0 max-w-measure text-sm text-fg-secondary">{t('surveyResults.questionsIntro')}</p>
+      </div>
+      <div className="flex flex-wrap items-end gap-4">
+        <label className={FIELD}>
           {t('surveyResults.filterCategory')}
           <select
+            className={SELECT}
             value={filter.category}
             onChange={(event) => setFilter({ ...filter, category: event.target.value })}
           >
@@ -82,9 +98,9 @@ export default function SurveyResultsQuestions({ questions, dimensionName, scale
             ))}
           </select>
         </label>
-        <label>
+        <label className={FIELD}>
           {t('surveyResults.filterType')}
-          <select value={filter.type} onChange={(event) => setFilter({ ...filter, type: event.target.value })}>
+          <select className={SELECT} value={filter.type} onChange={(event) => setFilter({ ...filter, type: event.target.value })}>
             <option value="">{t('surveyResults.allTypes')}</option>
             {types.map((type) => (
               <option key={type} value={type}>
@@ -101,7 +117,7 @@ export default function SurveyResultsQuestions({ questions, dimensionName, scale
           description={t('surveyResults.noQuestionsMatchDescription')}
         />
       ) : (
-        <div className="grid gap-panel-gap" data-testid="question-list">
+        <div className="grid gap-3" data-testid="question-list">
           {visible.map((question) => {
             const strip = distributionStripModel(question)
             const dimensionKey = dimensionKeyOf(question)
@@ -115,6 +131,7 @@ export default function SurveyResultsQuestions({ questions, dimensionName, scale
                 dimensionName={dimensionName(dimensionKey)}
                 uncategorised={dimensionKey === UNCATEGORISED_DIMENSION}
                 scale={scale}
+                bands={bands}
               />
             ) : (
               <QuestionResultCard key={question.questionId} question={question} shortLabel={shortLabel(question)} />

@@ -132,7 +132,10 @@ function selectedRow(): { fill: string; ink: string } {
 }
 
 /** Every ground the chrome prints those inks on. */
-const GROUNDS = ['--admin-bg-shell', '--admin-shell-bg-raised'] as const
+// The sunken well joined with the Apple design (11 Nov): `.on-shell` puts the company
+// select on `--admin-shell-bg-sunken` (the canvas's `.cosel` on `--chrome2`), so every
+// shell ink is printed there too and is measured there too.
+const GROUNDS = ['--admin-bg-shell', '--admin-shell-bg-raised', '--admin-shell-bg-sunken'] as const
 
 describe('shell ink contrast', () => {
   /**

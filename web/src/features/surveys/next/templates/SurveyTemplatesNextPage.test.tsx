@@ -118,8 +118,18 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     expect(await screen.findByRole('heading', { name: '2 templates' })).toBeTruthy()
     const names = [...document.querySelectorAll('[data-slot="template-card"] h3')].map((node) => node.textContent)
     expect(names).toEqual(['Engagement pulse', 'Climate standard'])
-    const chips = [...document.querySelectorAll('[data-slot="category-chip"]')].map((node) => node.textContent)
+    const chips = [...document.querySelectorAll('[data-slot="segmented-control-item"]')].map((node) => node.textContent)
     expect(chips).toEqual(['All 2', 'Climate 1', 'Pulse 1', 'Engagement 0', 'Exit 0'])
+    // The board's segmented control: the chosen category is raised and pressed, never a result tone.
+    const group = screen.getByRole('group', { name: copy.categoriesLabel })
+    expect(group.getAttribute('data-slot')).toBe('segmented-control')
+    for (const segment of group.querySelectorAll('button')) {
+      expect(segment.className.split(/\s+/).filter((name) => /chip-(good|warning|critical)/.test(name))).toEqual([])
+    }
+    // A template's name is a card title, so the display serif.
+    for (const title of document.querySelectorAll('[data-slot="template-card"] h3')) {
+      expect(title.className.split(/\s+/)).toContain('font-display')
+    }
     expect(screen.getByText('Climate · 2 questions · Likert 1–5')).toBeTruthy()
     expect(screen.getByText('Trust · Workload')).toBeTruthy()
     expect(screen.getByText(copy.dimensionsUnavailable)).toBeTruthy()
@@ -129,7 +139,7 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     vi.mocked(listSurveyTemplates).mockRejectedValue(new Error('boom'))
     renderAs({ role: 'company_admin', companyId: 'c1' })
     expect(await screen.findByText(copy.loadFailed)).toBeTruthy()
-    expect(document.querySelectorAll('[data-slot="category-chip"]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-slot="segmented-control-item"]')).toHaveLength(0)
     expect(screen.queryByRole('group', { name: copy.categoriesLabel })).toBeNull()
   })
 
@@ -151,6 +161,24 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     await screen.findByRole('heading', { name: '2 templates' })
     expect(screen.queryByRole('link', { name: copy.use })).toBeNull()
     expect(screen.getAllByRole('link', { name: copy.preview })).toHaveLength(2)
+  })
+
+  it('lays its filter bar out as the survey list does: the segmented control, then the search on its own line, at one height', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: '2 templates' })
+    const form = screen.getByRole('search')
+    expect(form.className.split(/\s+/)).not.toContain('justify-between')
+    const scroller = form.querySelector('[data-slot="segment-scroller"]') as HTMLElement
+    const row = form.querySelector('[data-slot="templates-search-row"]') as HTMLElement
+    const order = [...form.children]
+    expect(order.indexOf(scroller)).toBeGreaterThanOrEqual(0)
+    expect(order.indexOf(row)).toBeGreaterThan(order.indexOf(scroller))
+    // A full line of its own, never pushed to the trailing edge.
+    expect(row.className.split(/\s+/)).toEqual(expect.arrayContaining(['w-full']))
+    expect(row.className.split(/\s+/)).not.toContain('ml-auto')
+    // The artboard's 32px filter row: the field at the button's `h-control-lg`.
+    expect(screen.getByRole('searchbox').className.split(/\s+/)).toContain('h-control-lg')
+    expect(row.querySelector('svg[aria-hidden="true"]')).toBeTruthy()
   })
 
   it('pushes the search to the server as q, and filters the category on the chips', async () => {

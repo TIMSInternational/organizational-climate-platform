@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '../../../../api/authFetch'
 import { describeKnownRefusal } from '../../../../api/describeApiError'
@@ -13,6 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Note,
 } from '../../../../components/ui'
 import { audienceChange, targetsWholeCompany } from '../../../../components/distribution/audience'
 import type { Department } from '../../../org-structure/api/departments'
@@ -197,10 +199,10 @@ export function EditAudienceDialog({
                 </p>
               )}
               {change.widensToCompany && (
-                <p role="note" className="m-0 text-accent-amber-ink" data-testid="audience-widens">{copy('widens')}</p>
+                <Note role="note" icon={<Info />} className="px-3 py-2.5 text-sm" data-testid="audience-widens">{copy('widens')}</Note>
               )}
               {change.narrowsFromCompany && (
-                <p role="note" className="m-0 text-accent-amber-ink" data-testid="audience-narrows">{copy('narrows')}</p>
+                <Note role="note" icon={<Info />} className="px-3 py-2.5 text-sm" data-testid="audience-narrows">{copy('narrows')}</Note>
               )}
               {reachesNobody && (
                 <p role="alert" className="m-0 text-accent-red-ink" data-testid="audience-nobody">{copy('reachesNobody')}</p>

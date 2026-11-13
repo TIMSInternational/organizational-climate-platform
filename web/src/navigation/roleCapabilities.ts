@@ -154,7 +154,9 @@ const SELF_SERVICE: readonly RoleCapability[] = [
     route: '/notifications',
     labelKey: 'notifications.title',
     authorizedBy: 'GET /notifications/mine — scoped to the caller’s own user id, never to a company or a role.',
-    inNav: true,
+    // Reached from the bell in the top bar ("Ver todas"), not from a rail row: the 11 Nov
+    // regroup moved it there, as the Apple-design boards draw it. Still every role's.
+    inNav: false,
   },
   {
     route: '/profile',
@@ -299,6 +301,21 @@ const ADMIN_SHARED: readonly RoleCapability[] = [
     inNav: false,
   },
   {
+    // Recorded 12 Nov: routed since the history page shipped, and the e2e harness refused to run
+    // while nothing listed it. Not in the nav — it is reached from the survey's own page.
+    route: '/surveys/:id/history',
+    labelKey: 'surveys.next.history.title',
+    authorizedBy: 'GET /surveys/{id}/history — SurveyEndpoints.CanAdminister (SurveyHistoryEndpoints.GetHistoryAsync).',
+    inNav: false,
+  },
+  {
+    // The climate workbook importer (#584), reached from the survey list's import action.
+    route: '/surveys/import',
+    labelKey: 'climateWorkbook.title',
+    authorizedBy: 'POST /admin/climate-workbooks/preview — ClimateWorkbookEndpoints gates on Roles.Admin.',
+    inNav: false,
+  },
+  {
     route: '/surveys/:surveyId/distribution',
     labelKey: 'surveys.distribution.title',
     authorizedBy: 'GET/PUT /surveys/{id}/distribution — SurveyEndpoints.CanAdminister.',
@@ -381,6 +398,13 @@ const ADMIN_SHARED: readonly RoleCapability[] = [
     inNav: false,
   },
   {
+    // A draft microclimate's editor (the create page in edit mode), reached from its detail page.
+    route: '/microclimates/:id/edit',
+    labelKey: 'microclimates.next.edit.title',
+    authorizedBy: 'PUT /microclimates/{id} — Roles.Admin plus a company match, and only while it is a draft.',
+    inNav: false,
+  },
+  {
     route: '/microclimates/:id/results',
     labelKey: 'microclimates.results',
     authorizedBy: 'GET /microclimates/{id}/export — Roles.Admin plus a company match.',
@@ -395,7 +419,7 @@ const ADMIN_SHARED: readonly RoleCapability[] = [
   },
   {
     route: '/analytics/benchmarks',
-    labelKey: 'navigation.benchmarks',
+    labelKey: 'navigation.references',
     authorizedBy: 'GET /admin/benchmarks — BenchmarkEndpoints gates on Roles.Admin.',
     inNav: true,
   },

@@ -185,8 +185,8 @@ describe('MicroclimateResultsNextPage', () => {
    * so the same assertions hold under TZ=America/Chicago and TZ=UTC.
    */
   it.each([
-    ['America/Costa_Rica', '11 de septiembre a las 20:06', '9 sept 2026, 20:06', '11 sept 2026, 20:06', 'America/Costa_Rica (GMT-6)'],
-    ['Asia/Tokyo', '12 de septiembre a las 11:06', '10 sept 2026, 11:06', '12 sept 2026, 11:06', 'Asia/Tokyo (GMT+9)'],
+    ['America/Costa_Rica', '11 de septiembre a las 20:06', '9 sept 2026, 20:06', '11 sept 2026, 20:06', 'Costa Rica (GMT-6)'],
+    ['Asia/Tokyo', '12 de septiembre a las 11:06', '10 sept 2026, 11:06', '12 sept 2026, 11:06', 'Tokyo (GMT+9)'],
   ])('prints every date and time on the company’s zone (%s) and names it', async (zone, closes, sheetOpens, sheetCloses, label) => {
     vi.mocked(getCompanySettings).mockResolvedValue({ settings: { timezone: zone } } as unknown as CompanySettingsResponse)
     const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
@@ -201,7 +201,8 @@ describe('MicroclimateResultsNextPage', () => {
 
   it('falls back to the browser’s zone when the company’s cannot be read, and says which', async () => {
     const { container } = renderAs({ role: 'company_admin', companyId: COMPANY })
-    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone
+    // The label names the browser zone's place (`Chicago`), not its IANA id.
+    const browser = (Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop() ?? '').replace(/_/g, ' ')
     const time = new Date(detail.endTime).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
     expect(await screen.findByText(new RegExp(`^cierra el .* a las ${time}; hasta entonces`))).toBeTruthy()
     const run = container.querySelector('[data-slot="page-meta-sentences"]') as HTMLElement

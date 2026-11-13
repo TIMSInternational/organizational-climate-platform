@@ -223,6 +223,38 @@ describe('ActionPlanDetailNextPage', () => {
     expect(screen.getByRole('button', { name: new RegExp(copy.changeStatus) })).toBeTruthy()
   })
 
+  it('counts a late plan’s days in primary ink: the large red numeral is the Crítica area’s alone', async () => {
+    vi.setSystemTime(new Date(2026, 9, 20, 12, 0))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByRole('heading', { level: 1, name: plan.title })
+    const count = document.querySelector('[data-slot="deadline-count"]') as HTMLElement
+    expect(count.textContent).toBe('5')
+    expect(count.className).toContain('text-fg-primary')
+    expect(count.className).not.toContain('text-accent-red-ink')
+  })
+
+  it('gives a late plan’s header sentence one red cue, the clock, and keeps its words out of the danger ink', async () => {
+    vi.setSystemTime(new Date(2026, 9, 20, 12, 0))
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByRole('heading', { level: 1, name: plan.title })
+    const sentence = document.querySelector('[data-slot="plan-due-sentence"]') as HTMLElement
+    expect(sentence.className).not.toContain('text-accent-red-ink')
+    const clock = sentence.querySelector('[data-slot="plan-due-clock"]') as SVGElement
+    expect(clock.getAttribute('class')).toContain('text-accent-red-ink')
+  })
+
+  it('floors a KPI’s progress and prints it in the Spanish percent form: 58 of 70 is 82 %, never 83%', async () => {
+    vi.mocked(getActionPlan).mockResolvedValue({
+      ...plan,
+      kpis: [{ id: 'k1', name: 'Rotación', currentValue: 58, targetValue: 70, unit: '%' } as never],
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    await screen.findByText('Rotación')
+    const bar = screen.getByRole('progressbar', { name: 'Rotación' })
+    const text = (bar.nextElementSibling?.textContent ?? '').replace(/\s/g, ' ')
+    expect(text).toBe('82 %')
+  })
+
   it('draws the header’s actions at the canvas’s 34px', async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     const record = await screen.findByRole('button', { name: new RegExp(copy.recordProgress) })
@@ -329,7 +361,10 @@ describe('ActionPlanDetailNextPage', () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
     expect(await screen.findByText(copy.finding.moveLabel)).toBeTruthy()
     expect(screen.getByText('Q2 2,6 → Q3 3,1')).toBeTruthy()
-    expect(screen.getByText(/\+0,5/)).toBeTruthy()
+    const delta = screen.getByText(/\+0,5/)
+    // The sign carries the direction; ▲/▼ and green/red are the result areas' and not a move's.
+    expect(delta.textContent).not.toMatch(/[\u25b2\u25bc]/)
+    expect(delta.className).not.toMatch(/accent-(green|red)/)
   })
 
   it('withholds the move, and any number with it, when the later wave does not disclose the group', async () => {
@@ -340,7 +375,8 @@ describe('ActionPlanDetailNextPage', () => {
     })
     vi.mocked(getClimateTrends).mockResolvedValue(twoWaves({ q2: [2.6, 2.4], q3: null }))
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    expect(await screen.findByText(copy.finding.moveProtected.replace('{code}', 'Q2').replace('{floor}', String(ANONYMITY_FLOOR)))).toBeTruthy()
+    // The payload's own floor (the fixture's `minimumGroupSize`), never a constant.
+    expect(await screen.findByText(copy.finding.moveProtected.replace('{code}', 'Q2').replace('{floor}', '5'))).toBeTruthy()
     expect(screen.queryByText(copy.finding.moveLabel)).toBeNull()
     // The Q2 baseline still prints; what is withheld is the later reading, and only it.
     expect(screen.getByText('2,6')).toBeTruthy()
@@ -358,10 +394,27 @@ describe('ActionPlanDetailNextPage', () => {
     expect(await screen.findByText(copy.finding.moveAwaiting.replace('{code}', 'Q3'))).toBeTruthy()
   })
 
+  it('reads a department the server disclosed at its own floor, as the departments page does', async () => {
+    // Administrators see a single department from one response (ruling 2026-10-15), so the
+    // server's payload says minimumGroupSize 1. Two respondents are then a disclosed reading
+    // here too: this page withheld them under a constant 3 and said «Menos de 3» about a
+    // department the departments page printed (review 12 Nov).
+    vi.mocked(getClimateTrends).mockResolvedValue({
+      ...trendsWith({ respondentCount: 2, isSuppressed: false, scores: [3.2, 2.4] }),
+      minimumGroupSize: 1,
+    })
+    renderAs({ role: 'company_admin', companyId: COMPANY })
+    expect(await screen.findByText('2,4')).toBeTruthy()
+    expect(screen.queryByText(es.ui.protected.short.replace('{floor}', '3'))).toBeNull()
+    expect(screen.queryByText(es.ui.protected.short.replace('{floor}', '1'))).toBeNull()
+  })
+
   it('prints no number for a department under the floor, even when the payload carries its scores', async () => {
     vi.mocked(getClimateTrends).mockResolvedValue(trendsWith({ respondentCount: ANONYMITY_FLOOR - 1, isSuppressed: false, scores: [3.2, 2.4] }))
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    expect(await screen.findByText(copy.finding.protected)).toBeTruthy()
+    // The padlock and "Menos de 5" (`ProtectedState`) — the floor the payload applied, never a
+    // constant — and no figure of the group's own.
+    expect(await screen.findByText(es.ui.protected.short.replace('{floor}', '5'))).toBeTruthy()
     expect(screen.queryByText('2,4')).toBeNull()
     expect(screen.queryByText('Carga de trabajo')).toBeNull()
   })

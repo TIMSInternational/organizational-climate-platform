@@ -253,7 +253,7 @@
       "anonymous": false,
       "highestRecordableState": "completed",
       "suppressedStates": [],
-      "guarantee": "This survey is not anonymous. The full invitation lifecycle is recorded per invitee."
+      "guarantee": "This survey is anonymous: your organisation sees who has answered, never what they answered. The results are received and analysed by TIMS International, which gives your organisation grouped results only. The full invitation lifecycle is recorded per invitee."
     },
     "createdAt": "2026-09-10T02:03:39.200839+00:00",
     "updatedAt": "2026-09-10T17:56:58.082596+00:00"
@@ -274,7 +274,7 @@
       "anonymous": false,
       "highestRecordableState": "completed",
       "suppressedStates": [],
-      "guarantee": "Esta encuesta no es anónima. El ciclo completo de la invitación se registra por cada persona invitada."
+      "guarantee": "Esta encuesta es anónima: su organización ve quién ha respondido, nunca qué respondió. TIMS International recibe los resultados y los analiza, y entrega a su organización únicamente resultados agrupados. El ciclo completo de la invitación se registra por cada persona invitada."
     }
   },
   "GET /surveys/dimensions": {

@@ -106,7 +106,7 @@ describe('benchmarks derive — the index, and the percentile no payload gives',
     expect(indexGapPhrase(es, 67, null)).toBeNull()
   })
 
-  it('prints no band under "Tu percentil": the gap it keeps has the gap\'s own sign', () => {
+  it('prints no band under "Su percentil": the gap it keeps has the gap\'s own sign', () => {
     // Meridiano sits one point BELOW its median. The retired line added "por encima de dos
     // tercios del grupo" off the cohort's stored 68 — above two thirds while below the median.
     const below = percentileNote(es, 67, 68)

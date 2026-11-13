@@ -54,10 +54,10 @@ describe('Switch', () => {
     }
   })
 
-  it('draws the SurveyBuilder artboard’s 16×28 track and 12px knob at size sm, and the 18×32 default elsewhere', () => {
+  it('draws the SurveyBuilder artboard’s 16×28 track and 12px knob at size sm, and the Apple design’s 26×42 default', () => {
     // SurveyBuilder.dc.html draws `width: 28px; height: 16px` with the knob at `left: 14px`;
-    // Departments.dc.html and Notifications.dc.html draw 32×18. The classes are the pin, the
-    // builder shot the evidence (switch measured 28×16 at the artboard's x, 1px apart).
+    // the Apple design's `.tg` is 42×26 with a 22px knob at `left: 2px` / `left: 18px`, which
+    // inside the 1px border are translates of 1px and 17px.
     render(<Switch aria-label="small" size="sm" checked />)
     const small = screen.getByRole('switch')
     expect(small.getAttribute('data-size')).toBe('sm')
@@ -69,9 +69,50 @@ describe('Switch', () => {
     render(<Switch aria-label="default" checked />)
     const normal = screen.getByRole('switch')
     expect(normal.getAttribute('data-size')).toBe('default')
-    expect(normal.className.split(' ')).toEqual(expect.arrayContaining(['h-4.5', 'w-8']))
+    expect(normal.className.split(' ')).toEqual(expect.arrayContaining(['h-6.5', 'w-10.5']))
     expect(normal.querySelector('[data-slot="switch-thumb"]')?.className.split(' ')).toEqual(
-      expect.arrayContaining(['size-3.5', 'translate-x-0.5', 'data-[state=checked]:translate-x-3.5']),
+      expect.arrayContaining(['size-5.5', 'translate-x-px', 'data-[state=checked]:translate-x-4.25']),
     )
   })
 })
+
+describe('Switch colour', () => {
+  it('is blue when on — the identity blue, never green', () => {
+    // The identity blue, not the fill blue: on and off stay 4.79:1 apart in dark with it, and
+    // 2.36:1 with the fill blue (`switch.tsx`). Green is a result area, never a toggle.
+    render(<Switch aria-label="Recordatorios" checked />)
+    const classes = screen.getByRole('switch').className.split(' ')
+    expect(classes).toContain('data-[state=checked]:bg-accent-blue')
+    expect(classes.join(' ')).not.toMatch(/green|band-str/)
+  })
+
+  it('grows its hit region under a finger without redrawing the track', () => {
+    render(<Switch aria-label="Recordatorios" />)
+    const classes = screen.getByRole('switch').className.split(' ')
+    expect(classes).toEqual(expect.arrayContaining(['relative', 'pointer-coarse:after:absolute', 'pointer-coarse:after:-inset-2.5']))
+    expect(classes).toContain('h-6.5')
+  })
+
+  it('stays blue when a caller tries to repaint the on state green', () => {
+    // Eight screens passed `data-[state=checked]:bg-accent-green`; one passed
+    // `bg-chip-good-ink`. The ruling is one colour, one meaning, so the primitive keeps blue.
+    render(
+      <>
+        <Switch aria-label="a" checked className="data-[state=checked]:bg-accent-green" />
+        <Switch aria-label="b" checked className="data-[state=checked]:bg-chip-good-ink" />
+      </>,
+    )
+    for (const name of ['a', 'b']) {
+      const classes = screen.getByRole('switch', { name }).className.split(' ')
+      expect(classes, name).toContain('data-[state=checked]:bg-accent-blue')
+      expect(classes, name).not.toContain('data-[state=checked]:bg-accent-green')
+      expect(classes, name).not.toContain('data-[state=checked]:bg-chip-good-ink')
+    }
+  })
+
+  it('still takes a caller’s layout classes', () => {
+    render(<Switch aria-label="c" className="mt-0.5" />)
+    expect(screen.getByRole('switch', { name: 'c' }).className.split(' ')).toContain('mt-0.5')
+  })
+})
+

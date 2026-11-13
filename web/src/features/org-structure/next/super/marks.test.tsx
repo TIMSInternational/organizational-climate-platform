@@ -39,6 +39,28 @@ describe('the canvas’s select and chip', () => {
     expect((container.firstElementChild as HTMLElement).className.split(/\s+/)).toContain('w-40')
   })
 
+  /**
+   * The select is a field like the `Input` primitive beside it on every filter bar and form
+   * (`ui/input.tsx`: `h-9 … border-line-control`), and the Apple design's `.in` sets both at
+   * 36px. It was 32px (`h-control-lg`) on the hairline (`border-line-default`, #d7deeb,
+   * 1.35:1 on white — the pairing `styles/controlBoundaryContrast.test.ts` forbids for a
+   * control fill inside `ui/`, a scan this file under `features/` is outside of). So a search
+   * box and the select next to it stood 4px apart in height, and the select's edge failed
+   * WCAG 1.4.11.
+   */
+  it('draws the select at the Input primitive’s 36px, on the control edge rather than the hairline', () => {
+    const { container } = render(
+      <CanvasSelect aria-label="plan" className="w-40" defaultValue="a">
+        <option value="a">A</option>
+      </CanvasSelect>,
+    )
+    const classes = (container.querySelector('select') as HTMLSelectElement).className.split(/\s+/)
+    expect(classes).toContain('h-9')
+    expect(classes).toContain('border-line-control')
+    expect(classes).not.toContain('border-line-default')
+    expect(classes).toContain('bg-surface-input')
+  })
+
   it('gives every chip the hairline the canvas’s .chip carries: the tone’s ink at 20%', () => {
     const { container } = render(
       <>

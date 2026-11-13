@@ -124,14 +124,14 @@ export default function SuperAdminDashboardView() {
                     {data.companies.map((company) => (
                       <tr key={company.id}>
                         <td>{company.name}</td>
-                        <td className="font-mono tabular-nums">{company.userCount}</td>
-                        <td className="font-mono tabular-nums">{company.activeSurveyCount}</td>
-                        <td className="font-mono tabular-nums">
+                        <td className="tabular-nums">{company.userCount}</td>
+                        <td className="tabular-nums">{company.activeSurveyCount}</td>
+                        <td className="tabular-nums">
                           {company.completedResponseCount}
                         </td>
                         {/* UTC, not the browser's zone: a calendar day, and a reader west of
                             UTC was shown the day before. See `calendarDay`. */}
-                        <td className="whitespace-nowrap font-mono tabular-nums">
+                        <td className="whitespace-nowrap tabular-nums">
                           {calendarDay(Date.parse(company.createdAt), locale)}
                         </td>
                       </tr>

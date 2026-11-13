@@ -4,11 +4,8 @@ import { Menu } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useTranslation } from '../../i18n'
 import RoleBasedNav from '../../navigation/RoleBasedNav'
-import { leafNavItems, type NavSection } from '../../navigation/navSections'
+import { activeHref, leafNavItems, mobileTabs, type NavSection } from '../../navigation/navSections'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '../ui'
-
-/** Tab slots before the "More" button. The legacy bar used four. */
-const TAB_SLOTS = 4
 
 export interface MobileNavProps {
   sections: NavSection[]
@@ -51,11 +48,21 @@ export function MobileNav({ sections, footer }: MobileNavProps) {
   // Nothing to show for a role with no admin pages (see navSections.ts).
   if (sections.length === 0) return null
 
-  const tabs = leafNavItems(sections).slice(0, TAB_SLOTS)
+  // One tab per section of the rail — see `mobileTabs` for why not its first four rows.
+  const tabs = mobileTabs(sections)
 
+  // A titled section's tab stands for the whole section, so it is the current tab on every
+  // page of that section: "Encuestas" on Plantillas' page as on Todas las encuestas'. A home row (Inicio, Mis encuestas) is
+  // only ever current on its own page. Which page owns the path is the rail's own answer
+  // (`activeHref`: segment-aware, most specific row wins), so the two cannot disagree.
+  const current = activeHref(pathname, sections)
+  const currentSection = sections.find((section) =>
+    section.items.some((item) => item.href === current || (item.sub ?? []).some((sub) => sub.href === current)),
+  )
   function isActive(href: string): boolean {
-    if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/'
-    return pathname.startsWith(href)
+    if (current === null || !currentSection) return false
+    if (!currentSection.titleKey) return href === current
+    return leafNavItems([currentSection]).some((item) => item.href === href)
   }
 
   return (

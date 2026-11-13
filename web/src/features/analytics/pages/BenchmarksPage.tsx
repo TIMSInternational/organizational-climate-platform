@@ -249,7 +249,7 @@ export default function BenchmarksPage() {
         // The design's eyebrow here is the cohort this company is read against, which is
         // a property of the data rather than of the route.
         eyebrow={cohortLabel}
-        title={t('navigation.benchmarks')}
+        title={t('navigation.references')}
         description={t('benchmarks.description')}
         actions={
           createCompanyId !== undefined ? (

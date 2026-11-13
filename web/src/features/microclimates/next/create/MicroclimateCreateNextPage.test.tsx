@@ -437,9 +437,9 @@ describe('Crear — the company clock (G16)', () => {
 
   it("draws a new session's default window on the company's clock and names the zone beside it", async () => {
     renderAs({ role: 'company_admin', companyId: COMPANY })
-    await waitFor(() => expect(screen.getByTestId('microclimate-zone').textContent).toContain('America/Costa_Rica (GMT-6)'))
+    await waitFor(() => expect(screen.getByTestId('microclimate-zone').textContent).toContain('Costa Rica (GMT-6)'))
     expect(screen.getByTestId('microclimate-zone').textContent).toContain(
-      copy.timezoneCompany.replace('{zone}', 'America/Costa_Rica (GMT-6)'),
+      copy.timezoneCompany.replace('{zone}', 'Costa Rica (GMT-6)'),
     )
     // The current quarter hour in Costa Rica: 22 Oct, 23:30 -- not 23 Oct, as UTC or a UTC-5 laptop reads it.
     expect(fieldText(copy.opens)).toBe('22/10/2026 · 23:30')
@@ -457,7 +457,7 @@ describe('Crear — the company clock (G16)', () => {
     expect(fieldText(copy.closes)).toBe('23/10/2026 · 11:00')
     // Read for the draft's own company.
     expect(vi.mocked(getCompanySettings).mock.calls[0]?.[1]).toBe(draft.companyId)
-    expect(screen.getByTestId('microclimate-zone').textContent).toContain('America/Costa_Rica (GMT-6)')
+    expect(screen.getByTestId('microclimate-zone').textContent).toContain('Costa Rica (GMT-6)')
 
     await userEvent.click(screen.getByRole('button', { name: es.microclimates.next.edit.save }))
     await waitFor(() => expect(replaceMicroclimateContent).toHaveBeenCalledTimes(1))

@@ -1,29 +1,25 @@
+import { Tags } from 'lucide-react'
 import {
-  CircleAlert,
-  Copy,
-  Building2,
-  Settings,
-  Users,
-  Tags,
-  Inbox,
-  ListChecks,
-  ScrollText,
-} from 'lucide-react'
-import {
+  RailActivityIcon,
   RailAnalyticsIcon,
   RailBenchmarksIcon,
+  RailCompaniesIcon,
   RailConsolidatedIcon,
-  RailDashboardIcon,
   RailDepartmentsIcon,
+  RailHomeIcon,
   RailInsightsIcon,
   RailMicroclimatesIcon,
-  RailNotificationsIcon,
+  RailMySurveysIcon,
+  RailPeopleIcon,
   RailPlansIcon,
   RailQuestionBankIcon,
   RailQuestionLibraryIcon,
+  RailQuestionsIcon,
   RailReportsIcon,
-  RailShieldIcon,
+  RailSettingsIcon,
+  RailStatusIcon,
   RailSurveysIcon,
+  RailTasksIcon,
   RailTemplatesIcon,
   RailTrendsIcon,
 } from './railIcons'
@@ -49,6 +45,12 @@ export interface NavItem {
   // here is a lucide component or one of the canvas's rail glyphs (`railIcons.tsx`);
   // both take the full SVG prop set.
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  /**
+   * A count drawn as a small pill at the row's end. Nothing in this module sets one: the
+   * shell fetches no per-row tally, and inventing one would be a second copy of a number a
+   * page already prints, or a fresh request per rail render. The field stays so a count the
+   * shell already holds can be handed to a row without a schema change.
+   */
   badge?: string
   sub?: NavItem[]
   /**
@@ -58,242 +60,160 @@ export interface NavItem {
    */
   activeUnder?: readonly string[]
   /**
-   * Draw this group flat: its own row and its children as plain rows beside it, with no
-   * chevron and nothing to expand — the super administrator's "Administración del Sistema",
-   * which the 10 Sep per-role canvas draws as four flat rows. Presentational only: the
-   * data (and so `leafNavItems` and the mobile tab bar) is the same as any group's.
+   * Paths under this row's `href` that are NOT this row's — another destination that merely
+   * shares the prefix, and that this role's rail has no row for. `/surveys/my` sits under
+   * `/surveys` but is "Mis encuestas", not "Todas las encuestas": an administrator who opens
+   * it from a link must see no row lit rather than the wrong one (HIG `sidebars.md`: the
+   * selected row says where you are).
    */
-  flat?: boolean
+  activeExcept?: readonly string[]
 }
 
 export interface NavSection {
-  /** Catalogue path for the section heading, or `''` for an unheaded section. */
+  /**
+   * Catalogue path for the section heading, or `''` for the unheaded home section.
+   *
+   * Only the FIRST section may be unheaded, and only to hold the reader's home row(s) —
+   * Inicio, or a leader's Mi equipo and Mis encuestas. Every Apple-design board (Main,
+   * CompanyHome, TeamHome, 11 Nov) draws exactly that: the home row on its own at the top
+   * of the rail, then the titled sections. `navSections.test.ts` pins both halves, because
+   * `climate-project#22` was a rail whose headed and unheaded groups interleaved.
+   */
   titleKey: string
   items: NavItem[]
 }
 
-// Nav is role-aware: neither SuperAdmin's nor CompanyAdmin's entries point
-// anywhere the backend would 403 for that role.
+// ---------------------------------------------------------------------------
+// The rail, regrouped (user ruling, 11 Nov 2026)
+// ---------------------------------------------------------------------------
 //
-// - SuperAdmin: platform-wide pages (Companies, System settings). Previously
-//   this list was static and only ever contained "Companies" -- SystemSettingsPage
-//   existed and worked but had no nav entry, reachable only by typing the URL.
-// - CompanyAdmin: their own company's pages. Previously there was no nav path
-//   to any of these at all -- CompanyDetailPage.tsx (Settings/Departments) and
-//   DemographicFieldsPage were reachable only via a link buried inside
-//   CompanyDetailPage, which is itself unreachable without a nav entry (a
-//   CompanyAdmin has no companies-list page to click into one from).
-// - Any other role (employee/supervisor/leader): a real nav since #109/#132 -- the
-//   pages that authorize per USER rather than per role. It was `[]` when none of
-//   those existed, on the principle that an empty rail beats a broken link.
+// Every role's rail follows the Apple-design canvas: an unheaded home row, then
+// Encuestas · Seguimiento · Analítica · Organización · Sistema for the administrators,
+// and Seguimiento for a leader (TeamHome.dc.html). The grouping is presentation. The
+// DESTINATIONS are exactly the ones each role had before the regroup — same hrefs, same
+// gating — with one move: Notificaciones left the rail for the bell in the top bar, which
+// links to the inbox ("Ver todas") and carries the unread count.
 //
-// Since #138 the rule above is checked rather than merely stated.
-// `navigation/roleCapabilities.ts` records, per role, every destination that role
-// can load and the endpoint that authorizes it, and `roleCapabilities.test.ts`
-// fails if anything this module returns for a role is not in that role's list --
-// with tracking on and off, and for a role neither module has heard of. Add a row
-// here and the table has to gain the destination, with its `authorizedBy`, or the
-// suite goes red. That table is also what non-nav links are checked against: the
-// defect that prompted it was a primary button on `/action-plans` drawn on a page
-// only `leader` and `supervisor` ever see, which 403s for both.
+// Nav is role-aware: no entry points anywhere the backend would 403 for that role.
+// Since #138 that rule is checked rather than merely stated:
+// `navigation/roleCapabilities.ts` records, per role, every destination that role can
+// load and the endpoint that authorizes it, and `roleCapabilities.test.ts` fails if
+// anything this module returns for a role is not in that role's list -- with tracking on
+// and off, and for a role neither module has heard of. Add a row here and the table has
+// to gain the destination, with its `authorizedBy`, or the suite goes red.
 //
-// Action Plans, Microclimates and AI Insights ARE in the SuperAdmin section, as
-// of #124. They were withheld because those pages had no company-picker, so a
-// SuperAdmin landing on one would have been silently scoped to whatever company
-// their own user row happened to point at (Action Plans, Microclimates) or would
-// have had nothing at all to ask the API for, since #191 makes a global
-// SuperAdmin's companyId claim the empty string (AI Insights).
-//
-// The picker now exists: `company-context/` holds one selection for the whole
-// shell, `components/layout/CompanyContextSwitcher.tsx` renders it in the header
-// for this role only, and `resolveCompanyScope` is where the rule that a
-// SuperAdmin's company is their *explicit selection and never their claim* lives.
-// A SuperAdmin who has selected nothing lands on "choose a company", which is the
-// outcome these entries were held back to avoid getting wrong -- so the reason to
-// withhold them is gone, and with it the reason to make the pages unreachable.
-//
-// Notifications (#99) is the one entry every role gets, including the roles that
-// previously got an empty array. `/notifications/mine` authorizes per **user**,
-// not per company or per role -- any authenticated caller can load their own
-// inbox, and a CompanyAdmin calling it gets their own, not their tenant's. So it
-// is the first entry that satisfies the role-awareness rule for `employee`,
-// `supervisor` and `leader`, and the reason the fallback stopped being `[]`.
-const NOTIFICATIONS_ITEM: NavItem = {
-  labelKey: 'notifications.title',
-  href: '/notifications',
-  icon: RailNotificationsIcon,
-}
+// A super administrator's rows carry no company id: their company is their explicit
+// selection in the header (`company-context/`), never their claim (#124, #191). A company
+// administrator's company-scoped rows interpolate their own claim.
 
-// The landing page (#132), and the other entry every role gets — for the same
-// structural reason as Notifications, arrived at differently. `/dashboard` is not one
-// page: `DashboardPage` dispatches on the role claim and each of the four endpoints
-// behind it refuses the other three roles, so there is no role for which this row leads
-// to a 403. That includes a role this module has never heard of, which falls through to
-// the per-user employee view.
-//
-// **First in every branch, deliberately, and it moves each role's mobile tab bar.**
-// `leafNavItems` feeds MobileNav the first four leaves; Dashboard taking the first slot
-// pushes the fourth entry each role previously had behind "More". That is the right
-// trade rather than an accidental one: this is the page every user is now landed on
-// after login, and a bottom bar that cannot return to it is a bar missing its home
-// button. navSections.test.ts and MobileNav.test.tsx pin the new order.
-const DASHBOARD_ITEM: NavItem = {
-  labelKey: 'navigation.dashboard',
+// The landing page (#132) and every role's first row. `/dashboard` is not one page:
+// `DashboardPage` dispatches on the role claim and each of the four endpoints behind it
+// refuses the other three roles, so there is no role for which this row leads to a 403 —
+// including a role this module has never heard of, which falls through to the per-user
+// employee view. Named "Inicio" in the rail, as every board names it; the page keeps its
+// own title.
+const HOME_ITEM: NavItem = {
+  labelKey: 'navigation.home',
   href: '/dashboard',
-  icon: RailDashboardIcon,
+  icon: RailHomeIcon,
 }
 
-// "My surveys" (#109) is the second entry, after Notifications, that a non-admin role
-// can load -- and for the same structural reason: `GET /surveys/my` resolves the
-// caller's OWN user row and filters by that row's company and department, reading no
-// role claim at all. So employee/supervisor/leader get a real, non-empty page.
+// The same destination for a leader, named for what it shows them: their own team
+// (TeamHome.dc.html, "Mi equipo"). `DashboardPage` dispatches a leader to the team view.
+const MY_TEAM_ITEM: NavItem = {
+  labelKey: 'navigation.myTeam',
+  href: '/dashboard',
+  icon: RailPeopleIcon,
+}
+
+// "My surveys" (#109). `GET /surveys/my` resolves the caller's OWN user row and filters by
+// that row's company and department, reading no role claim at all, so
+// employee/supervisor/leader get a real, non-empty page.
 //
 // Deliberately NOT offered to super_admin. A global super admin's `User.CompanyId` is
 // NULL since #191, so the endpoint correctly returns an empty list for them -- and an
-// always-empty page is not a destination. It sits in the fallback branch instead,
-// which is also where a company_admin with no companyId claim lands.
+// always-empty page is not a destination.
 const MY_SURVEYS_ITEM: NavItem = {
   labelKey: 'navigation.mySurveys',
   href: '/surveys/my',
-  icon: Inbox,
+  icon: RailMySurveysIcon,
 }
 
-// The admin listing. Safe for BOTH admin roles, unlike Action Plans: `ListAsync`
-// applies no company predicate at all for a super_admin who sends no `companyId`, so
-// the page is a genuine cross-company view rather than a silently single-company one
-// (the `/admin/benchmarks` shape). For anyone else the server overwrites the scope
-// with their own company whatever they send. No companyId is interpolated, so this
-// one entry serves both branches.
+// The admin listing. Safe for BOTH admin roles: `ListAsync` applies no company predicate
+// at all for a super_admin who sends no `companyId`, so the page is a genuine
+// cross-company view; for anyone else the server overwrites the scope with their own
+// company whatever they send.
 const SURVEYS_ITEM: NavItem = {
   labelKey: 'navigation.surveys',
   href: '/surveys',
   icon: RailSurveysIcon,
+  // The admin rails carry no "Mis encuestas"; where a rail does, its own longer href wins.
+  activeExcept: ['/surveys/my'],
 }
 
-// The template catalogue (#107's endpoints, #109's page). Admin-only, like the
-// listing above and for the same reason: `GET /survey-templates` gates on
-// `Roles.Admin` and then scopes by role -- a super_admin sees every tenant's plus the
-// global ones, a company_admin the global ones plus their own. So one entry, no
-// companyId interpolated, correct for both branches and offered to neither employee
-// nor supervisor, who would get a 403.
+// The template catalogue (#107's endpoints, #109's page). `GET /survey-templates` gates on
+// `Roles.Admin` and then scopes by role, so one entry serves both admin branches. "Plantillas"
+// in the rail: it sits under Encuestas, which already says whose templates they are.
 const SURVEY_TEMPLATES_ITEM: NavItem = {
-  labelKey: 'navigation.surveyTemplates',
+  labelKey: 'navigation.templates',
   href: '/surveys/templates',
   icon: RailTemplatesIcon,
 }
 
-// Climate over time. Admin-only for the same reason the listing above is: the endpoint
-// authorizes through the same CanAdminister rule the results routes use, so a leader or
-// supervisor following this link would get a 403. No companyId is interpolated -- a
-// super_admin's selection comes from `company-context` and a company_admin's from their
-// claim, exactly as DEPARTMENTS_ITEM does it.
-//
-// Placed immediately after the template catalogue and NOT nested under a group, on the
-// warning DEPARTMENTS_ITEM records: `leafNavItems` flattens a group's children ahead of
-// the top-level rows that follow it, so a nested entry would take another item's mobile
-// tab slot.
+// Climate over time. Admin-only: the endpoint authorizes through the same CanAdminister
+// rule the results routes use, so a leader or supervisor following this link would get a
+// 403. No companyId is interpolated -- a super_admin's selection comes from
+// `company-context` and a company_admin's from their claim.
 const CLIMATE_TRENDS_ITEM: NavItem = {
   labelKey: 'navigation.climateTrends',
   href: '/surveys/climate-trends',
   icon: RailTrendsIcon,
 }
 
-// The question bank (#114). Admin-only, and correct for BOTH admin branches with no
-// companyId interpolated, exactly like SURVEY_TEMPLATES_ITEM above: every
-// `/admin/question-bank` route gates on `Roles.Admin` and then scopes by role -- a
-// super_admin reads every tenant's rows plus the global ones, a company_admin the global
-// ones plus their own. Offered to neither employee, supervisor nor leader, who would all
-// get a 403.
+// The question bank (#114) and the question LIBRARY's authoring screen (#423), under the one
+// "Preguntas" row the boards draw. They are two surfaces over two sets of tables (#58 settles
+// that they must not be merged), so the row is a disclosure holding both rather than a link to
+// one of them. Both gate on `Roles.Admin` and then scope by role: a super_admin reads the
+// global rows plus every tenant's, a company_admin the global ones plus their own; everyone
+// else would get a 403 and is not offered the row.
 //
-// This is the BANK, not the library. `/dev/question-library` is #112's picker and reaches
-// a different set of tables; #58 settles that they must not be merged.
-//
-// Appended LAST in each Workspace group rather than inserted among the existing rows, on
-// the warning DEPARTMENTS_ITEM and the System Health entry both record: `leafNavItems`
-// flattens sections in order and the first four leaves ARE the mobile tab bar, so an
-// entry placed higher would silently take another page's tab slot. This is a curation
-// surface an admin visits occasionally, not one of the four things they do most.
-const QUESTION_BANK_ITEM: NavItem = {
-  labelKey: 'navigation.questionBank',
+// The group's own `href` is the bank's, as a group's always is its first child's: it is what
+// a collapsed rail's row links to, and what the closed group lights up for.
+const QUESTIONS_ITEM: NavItem = {
+  labelKey: 'navigation.questions',
   href: '/admin/question-bank',
-  // Not ListChecks: TRACKING_MIS_TAREAS_ITEM already carries it, and two sidebar rows
-  // with one glyph is how a reader learns to stop trusting the glyphs. The canvas draws
-  // this open book on the super administrator's and the company administrator's rails alike.
-  icon: RailQuestionBankIcon,
+  icon: RailQuestionsIcon,
+  sub: [
+    // The open book and the shelf: the two children sit next to each other, so sharing a
+    // glyph would make the pair unreadable at exactly the place a reader tells them apart.
+    { labelKey: 'navigation.questionBank', href: '/admin/question-bank', icon: RailQuestionBankIcon },
+    { labelKey: 'navigation.questionLibrary', href: '/admin/question-library', icon: RailQuestionLibraryIcon },
+  ],
 }
 
-// The question LIBRARY's authoring screen (#423). Sits beside the bank and is not the
-// bank: this is the repository the survey and microclimate wizards pick from, with a real
-// category hierarchy and both languages mandatory. Same two admin roles for the same
-// reason -- `/admin/question-categories` and `/admin/question-library` gate on
-// `Roles.Admin` and then scope by role, so a super_admin authors the global tree and a
-// company_admin their own; everyone else would get a 403 and is not offered the row.
-const QUESTION_LIBRARY_ITEM: NavItem = {
-  labelKey: 'navigation.questionLibrary',
-  href: '/admin/question-library',
-  // The canvas's shelf of books, NOT the open book QUESTION_BANK_ITEM above carries. These
-  // two rows sit next to each other, so sharing a glyph would make the pair unreadable at
-  // exactly the place a reader most needs to tell them apart.
-  icon: RailQuestionLibraryIcon,
-}
-
-// The audit log (G21). Both admin roles: `GET /audit/logs` admits a super_admin (the page
-// sends the company chosen in the header) and a company_admin held to their own tenant, and
-// 403s everyone else. Appended LAST in each Workspace group, like the question bank, so the
-// mobile tab bar's first four leaves do not move.
-const AUDIT_LOG_ITEM: NavItem = {
-  labelKey: 'audit.title',
-  href: '/admin/audit',
-  icon: ScrollText,
-}
-
-// Departments (#142). Admin-only: `/admin/departments` allows a super_admin
-// always and a company_admin on their own company, and 403s everyone else, so it
-// belongs to the two admin branches and not the fallback.
-//
-// No companyId is interpolated even though the endpoint *requires* one — the page
-// takes it from `company-context` (#124), which is what lets a single entry serve
-// a super_admin (their explicit selection) and a company_admin (their claim)
-// without two different hrefs.
-//
-// Appended immediately before NOTIFICATIONS_ITEM in both branches, and
-// deliberately NOT inside the company_admin group's `sub`: `leafNavItems` flattens
-// a group's children ahead of the top-level rows that follow it, so a nested entry
-// would become the fourth leaf and take Action Plans' mobile tab slot.
-const DEPARTMENTS_ITEM: NavItem = {
-  labelKey: 'navigation.departments',
-  href: '/departments',
-  icon: RailDepartmentsIcon,
-}
-
-// The generic action-plan listing, lifted out of both admin branches so the one
-// place that can hide it is `workspaceActionPlanItems` below.
+// The generic action-plan listing. The one place that can hide it is `planItems` below.
 const ACTION_PLANS_ITEM: NavItem = {
   labelKey: 'navigation.actionPlans',
   href: '/action-plans',
   icon: RailPlansIcon,
 }
 
-// The tracking module's two dashboards (#125). Both labels already existed in the
-// catalogue from the legacy port and had no caller.
-//
-// The consolidado is offered to the two admin roles ONLY, and that is the
-// role-awareness rule rather than a preference: `DashboardEndpoints.ConsolidadoAsync`
-// returns `Results.Forbid()` for anything outside `Roles.Admin` (`company_admin`,
-// `super_admin`), so this row would 403 for anyone else.
+// The tracking module's consolidado (#125). Offered to the two admin roles ONLY, and that is
+// the role-awareness rule rather than a preference: `DashboardEndpoints.ConsolidadoAsync`
+// returns `Results.Forbid()` for anything outside `Roles.Admin`.
 const TRACKING_CONSOLIDADO_ITEM: NavItem = {
   labelKey: 'navigation.trackingConsolidado',
   href: '/tracking',
   icon: RailConsolidatedIcon,
+  // An administrator's own task list is not the consolidado; the admin rail has no row for it.
+  activeExcept: ['/tracking/mis-tareas'],
 }
 
-// A node leader's own board. Deliberately NOT offered to either admin role even
-// though the endpoint admits them: `TableroAsync` falls back to the caller's own
-// `nodoId` claim, and an administrator's is `unassigned-<companyId>` or empty
-// (`TrackingIdentifiers.NodoIdClaimForUser`), so the row would lead to an empty
-// board every time. An always-empty page is not a destination — the same rule that
-// keeps `/surveys/my` out of the super_admin branch. Admins reach a board by
-// drilling into a nodo from the consolidado, which is where the id comes from.
+// A node leader's own board. Deliberately NOT offered to either admin role even though the
+// endpoint admits them: `TableroAsync` falls back to the caller's own `nodoId` claim, and an
+// administrator's is `unassigned-<companyId>` or empty
+// (`TrackingIdentifiers.NodoIdClaimForUser`), so the row would lead to an empty board every
+// time. Admins reach a board by drilling into a nodo from the consolidado.
 const TRACKING_TABLERO_ITEM: NavItem = {
   labelKey: 'navigation.trackingDashboard',
   href: '/tracking/tablero',
@@ -302,39 +222,77 @@ const TRACKING_TABLERO_ITEM: NavItem = {
   icon: RailConsolidatedIcon,
 }
 
-// The plans listing (#126). `PlanesAccionEndpoints.ListAsync` scopes the query
-// itself — an admin gets the tenant, everyone else gets their own nodo plus the
-// plans they are responsable or involucrado on — so this row is safe for every role
-// that has one. It is offered to the roles that MANAGE plans; an involucrado gets
-// the task view below instead, which is §7's split.
+// The plans listing (#126). `PlanesAccionEndpoints.ListAsync` scopes the query itself — an
+// admin gets the tenant, everyone else gets their own nodo plus the plans they are
+// responsable or involucrado on — so this row is safe for every role that has one.
 const TRACKING_PLANES_ITEM: NavItem = {
   labelKey: 'navigation.trackingPlans',
   href: '/tracking/planes',
   icon: RailPlansIcon,
-  // Where tracking is on this is the rail's one "Planes de Acción", so it is also the row a
-  // reader is in on `/action-plans` — reached from the Panel de Control's "Crear plan" and
-  // from search — as the ActionPlansList artboard draws it. The row still LEADS to the
-  // tracking listing (the 2026-08-21 decision below); it only lights up for both.
+  // Where tracking is on this is the rail's one "Planes de acción", so it is also the row a
+  // reader is in on `/action-plans` — reached from the dashboard's "Crear plan" and from
+  // search. The row still LEADS to the tracking listing (the 2026-08-21 decision below); it
+  // only lights up for both.
   activeUnder: ['/action-plans'],
 }
 
-// The involucrado's view (#126). `MisTareasAsync` reads no role claim at all — it
-// filters on the caller's own `sub` — so every authenticated role is a first-class
-// caller, and this is the one tracking row a plain employee gets.
+// The involucrado's view (#126). `MisTareasAsync` reads no role claim at all — it filters on
+// the caller's own `sub` — so every authenticated role is a first-class caller.
 const TRACKING_MIS_TAREAS_ITEM: NavItem = {
   labelKey: 'navigation.trackingMisTareas',
   href: '/tracking/mis-tareas',
-  icon: ListChecks,
+  icon: RailTasksIcon,
+}
+
+const MICROCLIMATES_ITEM: NavItem = {
+  labelKey: 'navigation.microclimates',
+  href: '/microclimates',
+  icon: RailMicroclimatesIcon,
+}
+
+// `GET /admin/benchmarks` returns every tenant's benchmarks plus the global ones for a
+// super_admin, so the page is a real cross-company view; #124 deliberately does NOT push the
+// selected company onto it. "Referencias" in the rail, as the boards name it.
+const BENCHMARKS_ITEM: NavItem = {
+  labelKey: 'navigation.references',
+  href: '/analytics/benchmarks',
+  icon: RailBenchmarksIcon,
+}
+
+// AI Insights takes a required company id: a company_admin's own claim, a super_admin's
+// header selection (#124) — until they choose one the page says so rather than guessing.
+const AI_INSIGHTS_ITEM: NavItem = {
+  labelKey: 'navigation.aiInsights',
+  href: '/analytics/ai-insights',
+  icon: RailInsightsIcon,
+}
+
+// Departments (#142). `/admin/departments` allows a super_admin always and a company_admin
+// on their own company, and 403s everyone else. No companyId is interpolated even though the
+// endpoint *requires* one — the page takes it from `company-context` (#124).
+const DEPARTMENTS_ITEM: NavItem = {
+  labelKey: 'navigation.departments',
+  href: '/departments',
+  icon: RailDepartmentsIcon,
+}
+
+// The audit log (G21). Both admin roles: `GET /audit/logs` admits a super_admin (the page
+// sends the company chosen in the header) and a company_admin held to their own tenant.
+// "Actividad" in the rail, under Sistema.
+const AUDIT_LOG_ITEM: NavItem = {
+  labelKey: 'navigation.activity',
+  href: '/admin/audit',
+  icon: RailActivityIcon,
 }
 
 /**
  * Options that are properties of the DEPLOYMENT rather than of the caller.
  *
- * Kept as an options object with a default so the two existing call sites and the
- * forty-odd assertions in `navSections.test.ts` keep meaning what they meant. The
- * risk that buys — a caller forgetting to pass it and silently losing the tracking
- * rows — is covered by `navSections.test.ts`, which reads `AdminLayout.tsx` and
- * `PageTopBar.tsx` and fails if either stops asking.
+ * Kept as an options object with a default so the call sites and the assertions in
+ * `navSections.test.ts` keep meaning what they meant. The risk that buys — a caller
+ * forgetting to pass it and silently losing the tracking rows — is covered by
+ * `navSections.test.ts`, which reads `AdminLayout.tsx` and `PageTopBar.tsx` and fails if
+ * either stops asking.
  */
 export interface NavOptions {
   /**
@@ -348,28 +306,34 @@ export interface NavOptions {
 }
 
 /**
- * The work-surface rows for managing plans, which is **either** the generic
- * listing **or** the tracking module and never both.
+ * The administrators' rows for managing plans, which is **either** the generic listing
+ * **or** the tracking module and never both.
  *
- * Federico's decision of 2026-08-21: where a tenant uses tracking, `/action-plans`
- * and `/tracking` are two different models of the same idea, and the client should
- * see one place to manage plans rather than two that disagree. They are not being
- * converged — the models stay separate — so the nav is what resolves the ambiguity.
+ * Federico's decision of 2026-08-21: where a tenant uses tracking, `/action-plans` and
+ * `/tracking` are two different models of the same idea, and the client should see one
+ * place to manage plans rather than two that disagree. They are not being converged — the
+ * models stay separate — so the nav is what resolves the ambiguity.
  *
- * Returned in `/action-plans`' own position in both admin branches, deliberately:
- * `leafNavItems` feeds the mobile tab bar the first four leaves, and swapping a row
- * in place cannot move them, whereas appending the tracking rows at the end and
- * removing Action Plans from the middle would.
+ * Planes de acción first, then the Vista consolidada, as the Main and CompanyHome boards
+ * order them. The listing is what makes a plan reachable at all — every plan code on it links
+ * to `/tracking/planes/:id`, the only screen where avance is recorded.
  */
-function workspacePlanItems(role: string, options: NavOptions): NavItem[] {
-  if (!options.trackingEnabled) return [ACTION_PLANS_ITEM]
-  // Both admin roles get the consolidado and the plans listing; neither gets a
-  // board of their own. The listing is what makes a plan reachable at all — every
-  // plan code on it links to `/tracking/planes/:id`, which is the only screen where
-  // avance is recorded.
-  return role === 'super_admin' || role === 'company_admin'
-    ? [TRACKING_CONSOLIDADO_ITEM, TRACKING_PLANES_ITEM]
-    : []
+function adminPlanItems(options: NavOptions): NavItem[] {
+  return options.trackingEnabled ? [TRACKING_PLANES_ITEM, TRACKING_CONSOLIDADO_ITEM] : [ACTION_PLANS_ITEM]
+}
+
+/** The two sections both administrators share, word for word: what they make, and how they follow it up. */
+function adminSurveysAndFollowUp(options: NavOptions): NavSection[] {
+  return [
+    {
+      titleKey: 'navigation.sectionSurveys',
+      items: [SURVEYS_ITEM, SURVEY_TEMPLATES_ITEM, CLIMATE_TRENDS_ITEM, QUESTIONS_ITEM],
+    },
+    {
+      titleKey: 'navigation.sectionFollowUp',
+      items: [...adminPlanItems(options), MICROCLIMATES_ITEM],
+    },
+  ]
 }
 
 export function buildNavSections(
@@ -378,222 +342,83 @@ export function buildNavSections(
   options: NavOptions = {},
 ): NavSection[] {
   if (role === 'super_admin') {
-    // Three titled groups rather than one unheaded list, matching the ForMaps admin
-    // sidebar this shell is modelled on. `.nav-section-title` was ported for exactly
-    // this and had never been used, because every section shipped `titleKey: ''`.
-    //
-    // The item ORDER is byte-for-byte what it was. `leafNavItems` flattens sections
-    // in order, so splitting the list changes nothing it produces -- which matters,
-    // because the mobile tab bar takes the first four leaves and navSections.test.ts
-    // pins them. Grouping is presentational here and must stay that way.
+    // The Main board (TIMS, 11 Nov). Two rows it draws are not this role's: "Personas"
+    // (people are per company — a super_admin reaches `/admin/companies/:id/users` by opening
+    // the tenant, and this rail carries no company id to interpolate) and "Informes" (same
+    // reason: `/admin/companies/:id/reports`). Neither was in this role's rail before the
+    // regroup, and the regroup adds no destination.
     return [
+      { titleKey: '', items: [HOME_ITEM] },
+      ...adminSurveysAndFollowUp(options),
+      { titleKey: 'navigation.sectionAnalytics', items: [BENCHMARKS_ITEM, AI_INSIGHTS_ITEM] },
       {
-        titleKey: 'navigation.sectionAdministration',
+        titleKey: 'navigation.sectionOrganization',
         items: [
-          DASHBOARD_ITEM,
-          {
-            labelKey: 'navigation.systemAdministration',
-            href: '/admin/companies',
-            icon: RailShieldIcon,
-            flat: true,
-            sub: [
-              // Copy: the stacked squares the canvas draws for Empresas, not a building.
-              { labelKey: 'navigation.companies', href: '/admin/companies', icon: Copy },
-              { labelKey: 'navigation.systemSettings', href: '/admin/system-settings', icon: Settings },
-            ],
-          },
-          // Benchmarks was offered to a SuperAdmin even before #124, and stays
-          // exactly where it was. `GET /admin/benchmarks` returns every tenant's
-          // benchmarks plus the global ones for this role, so the page is a real
-          // cross-company view rather than a silent single-company one -- the
-          // picker was never load-bearing here (see BenchmarksPage.tsx), and
-          // #124 deliberately does NOT push the selected company onto it. Forcing
-          // one company onto the one genuinely cross-company page would be the
-          // selector breaking the case it was built to protect.
-          //
-          // Its position also matters: it is third, so the four-slot mobile tab
-          // bar still offers Companies / System settings / Benchmarks, unchanged
-          // by the three entries appended below.
+          DEPARTMENTS_ITEM,
+          { labelKey: 'navigation.companies', href: '/admin/companies', icon: RailCompaniesIcon },
         ],
       },
       {
-        titleKey: 'navigation.sectionWorkspace',
+        titleKey: 'navigation.sectionSystem',
         items: [
-          {
-            labelKey: 'navigation.benchmarks',
-            href: '/analytics/benchmarks',
-            icon: RailBenchmarksIcon,
-          },
-          // Restored by #124 -- see the block comment above. Since #125 this slot
-          // is Action Plans OR the tracking consolidado, never both; the swap is
-          // in place so the mobile tab bar's first four leaves cannot move.
-          ...workspacePlanItems('super_admin', options),
-          {
-            labelKey: 'navigation.microclimates',
-            href: '/microclimates',
-            icon: RailMicroclimatesIcon,
-          },
-          {
-            labelKey: 'navigation.aiInsights',
-            href: '/analytics/ai-insights',
-            icon: RailInsightsIcon,
-          },
-          // Appended after #124's three restored entries, not among them: that PR
-          // pins a super_admin's first four leaves to Companies / System settings /
-          // Benchmarks / Action Plans, and inserting the survey listing higher would
-          // take Action Plans' mobile tab slot away again.
-          //
-          // Needs no company context of its own, unlike the three above: `ListAsync`
-          // applies no company predicate at all for a super_admin, so this is the
-          // genuinely cross-company shape Benchmarks has, and #124's selector is not
-          // load-bearing here.
-          SURVEYS_ITEM,
-          SURVEY_TEMPLATES_ITEM,
-          CLIMATE_TRENDS_ITEM,
-          DEPARTMENTS_ITEM,
-          // System Health (#275) is appended here rather than filed under System
-          // Administration beside Companies and System settings, where it belongs by
-          // subject. The reason is the one #124 and #142 both hit: everything in the
-          // ADMINISTRATION section lands in the first four leaves, and those four ARE
-          // the mobile tab bar. Adding it there displaces Benchmarks, which
-          // `keeps Benchmarks on a super_admin mobile tab bar` exists to forbid.
-          //
-          // Losing the tab slot would be the wrong trade anyway: this is the page an
-          // operator opens when something is already wrong, not one of the four things
-          // they do most. Appended, it keeps a sidebar row and costs nobody a tab.
-          {
-            labelKey: 'navigation.systemHealth',
-            href: '/admin/system',
-            icon: CircleAlert,
-          },
-          QUESTION_BANK_ITEM,
-          QUESTION_LIBRARY_ITEM,
+          { labelKey: 'navigation.systemConfiguration', href: '/admin/system-settings', icon: RailSettingsIcon },
+          // System Health (#275): the page an operator opens when something is already wrong.
+          { labelKey: 'navigation.status', href: '/admin/system', icon: RailStatusIcon },
           AUDIT_LOG_ITEM,
         ],
-      },
-      {
-        titleKey: 'navigation.sectionCommunication',
-        // Last on purpose: `leafNavItems` feeds the first four leaves to the mobile
-        // tab bar, so Notifications sits behind "More" instead of displacing a
-        // primary page. navSections.test.ts pins this position.
-        items: [NOTIFICATIONS_ITEM],
       },
     ]
   }
 
   if (role === 'company_admin' && companyId) {
-    // Same three groups as the super_admin branch above, same rule: presentation
-    // only, item order untouched so `leafNavItems` keeps its pinned first four.
+    // The CompanyHome board. Rows it does not draw but this role already had keep a place in
+    // the section they belong to: the company's own Analítica summary (first in Analítica,
+    // as its overview), Campos demográficos (Organización, beside the people they describe)
+    // and Actividad (Sistema, as the super administrator's rail files it).
+    //
+    // Reports and Analytics take their company from the URL, not from a claim, so they carry
+    // no silent-scoping hazard. They are absent from the super_admin branch only because that
+    // branch carries no company id to interpolate.
+    const base = `/admin/companies/${companyId}`
     return [
+      { titleKey: '', items: [HOME_ITEM] },
+      ...adminSurveysAndFollowUp(options),
       {
-        titleKey: 'navigation.sectionAdministration',
+        titleKey: 'navigation.sectionAnalytics',
         items: [
-          DASHBOARD_ITEM,
-          {
-            labelKey: 'navigation.companyAdministration',
-            href: `/admin/companies/${companyId}`,
-            icon: RailShieldIcon,
-            sub: [
-              { labelKey: 'navigation.companySettings', href: `/admin/companies/${companyId}`, icon: Building2 },
-              { labelKey: 'navigation.users', href: `/admin/companies/${companyId}/users`, icon: Users },
-              { labelKey: 'navigation.demographicFields', href: `/admin/companies/${companyId}/demographic-fields`, icon: Tags },
-            ],
-          },
+          { labelKey: 'navigation.overview', href: `${base}/analytics`, icon: RailAnalyticsIcon },
+          BENCHMARKS_ITEM,
+          AI_INSIGHTS_ITEM,
+          { labelKey: 'navigation.reports', href: `${base}/reports`, icon: RailReportsIcon },
         ],
       },
       {
-        titleKey: 'navigation.sectionWorkspace',
+        titleKey: 'navigation.sectionOrganization',
         items: [
-          // Action Plans OR the tracking consolidado, in the same slot -- see
-          // `workspacePlanItems`.
-          ...workspacePlanItems('company_admin', options),
-          {
-            labelKey: 'navigation.microclimates',
-            href: '/microclimates',
-            icon: RailMicroclimatesIcon,
-          },
-          // Placed after Microclimates -- a peer work surface -- rather than before
-          // Action Plans, so the first four leaves are unchanged and Action Plans
-          // keeps the mobile tab slot navSections.test.ts pins for it.
-          SURVEYS_ITEM,
-          SURVEY_TEMPLATES_ITEM,
-          CLIMATE_TRENDS_ITEM,
-          {
-            labelKey: 'navigation.benchmarks',
-            href: '/analytics/benchmarks',
-            icon: RailBenchmarksIcon,
-          },
-          // AI Insights, for a CompanyAdmin, takes its company from their own
-          // claim. `GET /admin/ai-insights` requires a company id, and this is the
-          // role that always has one. A SuperAdmin now gets this entry too (see
-          // the branch above): #124's selector supplies the id their claim cannot,
-          // and until they choose one the page says so rather than guessing.
-          {
-            labelKey: 'navigation.aiInsights',
-            href: '/analytics/ai-insights',
-            icon: RailInsightsIcon,
-          },
-          // Reports and Analytics are top-level destinations rather than children of
-          // "Company Administration", for two reasons. They are work surfaces like
-          // Action Plans and Microclimates, not configuration like Users and
-          // Demographic fields -- and `leafNavItems` flattens a group's children ahead
-          // of the top-level rows that follow it, so putting them in the group would
-          // push Action Plans off the four-slot mobile tab bar (MobileNav.test.tsx
-          // records that ordering consequence, and it is not this issue's to change).
-          //
-          // Unlike Action Plans, they carry NO silent-scoping hazard: they take their
-          // company from the URL, not from a claim. They are absent from the
-          // super_admin branch only because a super_admin's sections deliberately
-          // contain no company id to interpolate; that role reaches them from the
-          // company it opened, via CompanyDetailPage.
-          {
-            labelKey: 'navigation.reports',
-            href: `/admin/companies/${companyId}/reports`,
-            icon: RailReportsIcon,
-          },
-          {
-            labelKey: 'navigation.analytics',
-            href: `/admin/companies/${companyId}/analytics`,
-            icon: RailAnalyticsIcon,
-          },
+          { labelKey: 'navigation.people', href: `${base}/users`, icon: RailPeopleIcon },
           DEPARTMENTS_ITEM,
-          QUESTION_BANK_ITEM,
-          QUESTION_LIBRARY_ITEM,
-          AUDIT_LOG_ITEM,
+          { labelKey: 'navigation.demographicFields', href: `${base}/demographic-fields`, icon: Tags },
+          { labelKey: 'navigation.companySettings', href: base, icon: RailCompaniesIcon },
         ],
       },
-      {
-        titleKey: 'navigation.sectionCommunication',
-        // Last on purpose -- see the super_admin branch. A company_admin's first
-        // four leaves are their own company's pages; Notifications must not push
-        // one of them off the mobile tab bar.
-        items: [NOTIFICATIONS_ITEM],
-      },
+      { titleKey: 'navigation.sectionSystem', items: [AUDIT_LOG_ITEM] },
     ]
   }
 
-  // Every other role -- and a company_admin whose token carries no companyId.
-  // Previously `[]`, then just Notifications; now the two pages they can all load.
-  // See NOTIFICATIONS_ITEM and MY_SURVEYS_ITEM -- both authorize per *user* rather
-  // than per role, which is what makes them safe for a branch that includes
-  // employee, supervisor and leader.
+  // Every other role -- and a company_admin whose token carries no companyId. The pages
+  // these roles can load authorize per *user* rather than per role, which is what makes them
+  // safe for a branch that includes employee, supervisor and leader.
   //
-  // My surveys first: it is a work destination, Notifications is an inbox. Same
-  // ordering principle as the admin branches above.
+  // The tracking rows (#125, #126) are the first entries this branch has that are NOT offered
+  // to every role in it. `leader` is the node leader -- the role `services/tracking-api`
+  // spells `Roles.PlanCreator` and the role the client's §7 gives the full board to. An
+  // `employee` or `supervisor` gets the task-only view (`/tracking/mis-tareas`) instead.
   //
-  // The tracking rows (#125, #126) are the first entries this branch has ever had
-  // that are NOT offered to every role in it. `leader` is the node leader -- the
-  // role `services/tracking-api` spells `Roles.PlanCreator` and the role the
-  // client's §7 gives the full board to -- and it is the only one of these roles
-  // with a jefatura to show. An `employee` or `supervisor` gets the task-only view
-  // (`/tracking/mis-tareas`) instead.
-  //
-  // A leader without a tracking service gets Planes de Acción instead, for the reason the
-  // admin branches swap the same two rows (`workspacePlanItems`): one place to see plans,
-  // not two that disagree. It is the list of the plans they OWN -- `ListAsync` scopes a
-  // non-admin to those -- and it is where the due-date nudge sends them. Declared `inNav`
-  // in `roleCapabilities.ts` since the nudge shipped and, until now, offered by no sidebar.
-  const trackingItems: NavItem[] = !options.trackingEnabled
+  // A leader without a tracking service gets Planes de acción instead, for the reason the
+  // admin branches swap the same rows (`adminPlanItems`): one place to see plans, not two
+  // that disagree. It is the list of the plans they OWN -- `ListAsync` scopes a non-admin to
+  // those -- and it is where the due-date nudge sends them.
+  const followUp: NavItem[] = !options.trackingEnabled
     ? role === 'leader'
       ? [ACTION_PLANS_ITEM]
       : []
@@ -608,32 +433,60 @@ export function buildNavSections(
         // `trackingAccess.ts` on why that is a rule and not protection.
         [TRACKING_MIS_TAREAS_ITEM]
 
-  return [
-    // Dashboard first: since #132 it is where this role lands after login, and it is
-    // their only page that is a summary rather than a list.
-    {
-      titleKey: 'navigation.sectionWorkspace',
-      items: [DASHBOARD_ITEM, MY_SURVEYS_ITEM, ...trackingItems],
-    },
-    { titleKey: 'navigation.sectionCommunication', items: [NOTIFICATIONS_ITEM] },
-  ]
+  // TeamHome.dc.html: the leader's home is their team. Its Analítica section ("Clima en el
+  // tiempo") and its Microclimas row are not drawn here: `roleCapabilities.ts` gives a leader
+  // neither destination, and the regroup adds none.
+  const home: NavSection = {
+    titleKey: '',
+    items: [role === 'leader' ? MY_TEAM_ITEM : HOME_ITEM, MY_SURVEYS_ITEM],
+  }
+  return followUp.length > 0 ? [home, { titleKey: 'navigation.sectionFollowUp', items: followUp }] : [home]
 }
 
 /**
- * The rows a bottom tab bar can offer, in order.
+ * Every destination the sections hold, in order: a grouped item (one with `sub`) is a
+ * *toggle* in the sidebar, not a destination, so it is replaced by its children.
  *
- * A grouped item (one with `sub`) is a *toggle* in the sidebar, not a
- * destination — clicking it expands children rather than navigating — so it must
- * not occupy one of the bar's few slots. Ported from the legacy `MobileNav`,
- * where the same flatten was written inline.
- *
- * Lives here rather than in the component so it can be asserted against the
- * role-aware sections directly, without rendering.
+ * Lives here rather than in a component so it can be asserted against the role-aware
+ * sections directly, without rendering.
  */
 export function leafNavItems(sections: NavSection[]): NavItem[] {
   return sections
     .flatMap((section) => section.items)
     .flatMap((item) => (item.sub?.length ? item.sub : [item]))
+}
+
+/** Tab slots before the bottom bar's "Más" button. */
+export const MOBILE_TAB_SLOTS = 4
+
+/** One tab of the phone's bottom bar. */
+export interface MobileTab {
+  href: string
+  /** The section's heading for a section tab; the row's own label for a home row. */
+  labelKey: string
+  icon: NavItem['icon']
+}
+
+/**
+ * The phone's bottom tab bar: one tab per section of the rail, so the bar is the rail's
+ * table of contents rather than its first four rows.
+ *
+ * The unheaded home section contributes every row it has (Inicio; a leader's Mi equipo and
+ * Mis encuestas). Each titled section contributes ONE tab, named for the section
+ * ("Encuestas", "Seguimiento", "Analítica") and leading to its first destination, drawn
+ * with that destination's glyph. Taking the first four LEAVES instead, as the bar did
+ * before the regroup, would spend three of four tabs on Encuestas (Todas, Plantillas,
+ * Clima en el tiempo) and put Seguimiento, the work an administrator does between surveys,
+ * behind "Más" — whose drawer draws the whole rail, so nothing is lost from the phone.
+ */
+export function mobileTabs(sections: NavSection[], slots = MOBILE_TAB_SLOTS): MobileTab[] {
+  const tabs = sections.flatMap((section): MobileTab[] => {
+    const leaves = leafNavItems([section])
+    if (!section.titleKey) return leaves.map(({ href, labelKey, icon }) => ({ href, labelKey, icon }))
+    const first = leaves[0]
+    return first ? [{ href: first.href, labelKey: section.titleKey, icon: first.icon }] : []
+  })
+  return tabs.slice(0, slots)
 }
 
 /**
@@ -678,43 +531,6 @@ export function isPerUserOnly(sections: NavSection[]): boolean {
 }
 
 /**
- * The Notifications row, carrying the caller's unread tally.
- *
- * ## Why this is the only badged row
- *
- * ForMaps' brand notes describe nav badges ("yellow pills for counts"), but **none
- * of their five live sidebars renders one** — Student, Counselor, SchoolAdmin,
- * Admin and Parent all pass counts nowhere. So there is no badge to port, and the
- * `badge` field here plus `.nav-badge` in `index.css` were built for a legacy nav
- * that had no counterpart either. Inventing counts to fill them would put a number
- * beside "Action Plans" that is either a second copy of one already on the page or
- * a fresh request per rail render.
- *
- * Notifications is different: the shell already polls that number for the bell, it
- * is not otherwise visible while the bell's dropdown is closed, and it is the one
- * count that means "there is something here you have not seen". So exactly one row
- * gets a badge, from data that already exists.
- *
- * Capped at "99+": the label box in a 220px rail is 151px, and a four-digit count
- * pushes the row's text into an ellipsis to make room for a number nobody reads
- * precisely.
- *
- * Returns the sections unchanged at zero — an empty pill reading "0" is noise, and
- * a badge's whole job is to be absent when there is nothing to say.
- */
-export function withUnreadBadge(sections: NavSection[], unreadCount: number): NavSection[] {
-  if (unreadCount <= 0) return sections
-
-  const badge = unreadCount > 99 ? '99+' : String(unreadCount)
-  return sections.map((section) => ({
-    ...section,
-    items: section.items.map((item) =>
-      item.href === NOTIFICATIONS_ITEM.href ? { ...item, badge } : item,
-    ),
-  }))
-}
-
-/**
  * Does `pathname` sit under `href` at all?
  *
  * Segment-aware: `/surveys` must not claim `/surveys-archive`, which a bare
@@ -737,22 +553,16 @@ export function isUnder(pathname: string, href: string): boolean {
  * Demographic fields filled both — invisible while "active" was a shade of text,
  * obvious once it became a filled pill.
  *
- * ForMaps hits the same thing and answers it by naming the offending parents in
- * `isActive` one at a time (`if (href === "/dashboard/assessments") return
- * pathname === href`). That works for their tree and needs a new line for every
- * parent that later gains a child. Deriving it instead means nothing to maintain:
- * the most specific matching row wins, which is the rule those exceptions were
- * approximating anyway.
- *
- * Lives here rather than in `RoleBasedNav`, where it was written, because the page
- * header needs the same answer to name the area it is in — see
- * `sectionTitleKeyForPath`. Pure, so it is asserted directly in
+ * Deriving it means nothing to maintain: the most specific matching row wins. Lives here
+ * rather than in `RoleBasedNav` because the page header needs the same answer to name the
+ * area it is in — see `sectionTitleKeyForPath`. Pure, so it is asserted directly in
  * `navSections.test.ts` without rendering a rail.
  */
 export function activeHref(pathname: string, sections: NavSection[]): string | null {
   const rows = sections.flatMap((section) => section.items.flatMap((item) => [item, ...(item.sub ?? [])]))
   let best: { href: string; weight: number } | null = null
   for (const row of rows) {
+    if (row.activeExcept?.some((except) => isUnder(pathname, except))) continue
     for (const path of [row.href, ...(row.activeUnder ?? [])]) {
       if (isUnder(pathname, path) && (best === null || path.length > best.weight)) best = { href: row.href, weight: path.length }
     }
@@ -763,14 +573,14 @@ export function activeHref(pathname: string, sections: NavSection[]): string | n
 /**
  * Which section of the app a path belongs to, as a catalogue key.
  *
- * This is what the page eyebrow says — ForMaps prints "STUDENT PORTAL" above the
- * page title, and the equivalent here is the nav group the open page sits in
- * ("ADMINISTRATION", "WORKSPACE", "COMMUNICATION"). Derived rather than passed per
- * page: there are 27 `PageTopBar` callers, and a hand-written eyebrow on each is 27
- * chances to name the wrong area and 27 more the day a nav entry moves group.
+ * This is what `PageTopBar` prints as the page eyebrow when a page passes none — the nav
+ * group the open page sits in ("ENCUESTAS", "SEGUIMIENTO", …). Derived rather than passed
+ * per page: a hand-written eyebrow on each caller is a chance to name the wrong area, and
+ * another the day a nav entry moves group.
  *
- * `null` for a path no nav row covers (a detail route reached from a list, say),
- * where the honest answer is to print no eyebrow rather than to guess one.
+ * `null` for a path no nav row covers (a detail route reached from a list, say), and for
+ * the unheaded home section, where the honest answer is to print no eyebrow rather than to
+ * guess one.
  */
 export function sectionTitleKeyForPath(pathname: string, sections: NavSection[]): string | null {
   const href = activeHref(pathname, sections)

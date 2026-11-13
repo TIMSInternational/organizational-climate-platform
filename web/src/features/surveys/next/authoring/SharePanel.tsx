@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import ShareLinkQr from '../../components/ShareLinkQr'
 import { Button, H3 } from '../../../../components/ui'
 import { useTranslation } from '../../../../i18n'
@@ -41,6 +41,7 @@ export default function SharePanel({
   stacked = false,
   actions = [],
   className,
+  children,
 }: {
   /** Site-relative `/s/<token>`, or null when the survey is invitation-only. */
   publicLink: string | null
@@ -62,6 +63,11 @@ export default function SharePanel({
    *  on the panel, so a menu item that opens it would be a second door to the same room. */
   actions?: ShareLinkAction[]
   className?: string
+  /**
+   * The link's own settings, set in the link's column beside the code. Under the QR there was
+   * a 200px column of nothing while the switches that change what the link does sat below it.
+   */
+  children?: ReactNode
 }) {
   const { t } = useTranslation()
   const share = (key: string) => t(`surveys.next.share.${key}`)
@@ -73,13 +79,16 @@ export default function SharePanel({
   // their initial state from props, so the key remounts them rather than adding a controlled
   // mode to each.
   const [shown, setShown] = useState(true)
+  // On its own card (Distribución) the title is a card title: the serif `h2` of the spec's `.h`.
+  // Stacked in the survey detail's side rail it stays the small sans heading that rail uses.
+  const heading = stacked ? <H3>{share('title')}</H3> : <h2 className="m-0 text-2xl">{share('title')}</h2>
 
   // Every survey has a link and a QR (ruled 2026-10-12), whatever it records: nobody who opens
   // one logs in, and the server answers an unauthenticated visitor anonymously on every survey.
   if (publicLink === null) {
     return (
       <div className={cn('flex flex-col gap-2', className)} data-slot="share-panel" data-testid="share-panel" data-state="no-link">
-        <H3>{share('title')}</H3>
+        {heading}
         <p className="m-0 text-sm text-fg-secondary">{dist('noLink')}</p>
         {onCreate && (
           <div>
@@ -88,13 +97,14 @@ export default function SharePanel({
             </Button>
           </div>
         )}
+        {children}
       </div>
     )
   }
 
   return (
     <div className={cn('flex flex-col gap-panel-gap', className)} data-slot="share-panel" data-testid="share-panel" data-state="link">
-      <H3>{share('title')}</H3>
+      {heading}
       <div className={cn('flex flex-col gap-4', !stacked && 'md:flex-row md:items-start')}>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -110,6 +120,7 @@ export default function SharePanel({
               banned by name across this feature (`respondContrast.test.ts`). Hierarchy is not
               worth an AA failure; the sentence carries its own weight. */}
           <p className="m-0 text-sm text-fg-secondary">{share('screenShare')}</p>
+          {children}
         </div>
         {shown && (
         <ShareLinkQr

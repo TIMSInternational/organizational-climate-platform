@@ -4,8 +4,17 @@ import { cn } from '../../lib/cn'
 /**
  * Ported from `climate-project/src/components/ui/alert.tsx`.
  *
- * Soft accent fill plus a matching hairline, the same treatment `Badge` uses, so
- * an inline alert and a status pill read as the same family.
+ * A panel hairline on a card or neutral fill; the glyph, not the box, says what kind
+ * of message it is.
+ *
+ * Apple design ruling (11 Nov): one colour = one meaning. Green, amber and red are the
+ * three result areas (Fortaleza, Oportunidad, Crítica) and nothing else, so a success,
+ * a warning or an error no longer paints its whole box in a result area's tint — a pink
+ * error panel read as «Crítica». A success is the plain card with its tick; a warning
+ * and an error sit on the neutral fill, as a Note does. The error keeps one red mark —
+ * its icon in the red ink, the ink destructive actions already use — so a failure is
+ * still told from a warning at a glance, with the words carrying the message (WCAG 1.4.1).
+ * `info` stays blue: it is the live/selection hue.
  */
 export const alertVariants = cva(
   cn(
@@ -18,12 +27,9 @@ export const alertVariants = cva(
       variant: {
         default: 'border-line-panel bg-surface-card text-fg-primary',
         info: 'border-accent-blue-ring bg-accent-blue-soft text-fg-primary [&>svg]:text-accent-blue',
-        success:
-          'border-accent-green-ring bg-accent-green-soft text-fg-primary [&>svg]:text-accent-green',
-        warning:
-          'border-accent-amber-ring bg-accent-amber-soft text-fg-primary [&>svg]:text-accent-amber',
-        destructive:
-          'border-accent-red-ring bg-accent-red-soft text-fg-primary [&>svg]:text-accent-red',
+        success: 'border-line-panel bg-surface-card text-fg-primary [&>svg]:text-fg-secondary',
+        warning: 'border-line-panel bg-surface-fill-subtle text-fg-primary [&>svg]:text-fg-secondary',
+        destructive: 'border-line-panel bg-surface-fill-subtle text-fg-primary [&>svg]:text-accent-red-ink',
       },
     },
     defaultVariants: {

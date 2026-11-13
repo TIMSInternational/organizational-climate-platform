@@ -130,8 +130,9 @@ const PAIRS: readonly Pair[] = [
   { what: 'the completion denominator', ink: '--admin-font-secondary', fill: '--admin-bg-icon-box', base: '--admin-bg-panel' },
   // The four step markers. All four take the primary ink; only the tint changes.
   { what: 'the current step ordinal', ink: '--admin-font-primary', fill: '--admin-accent-bg-blue', base: '--admin-bg-panel' },
-  { what: 'a complete step ordinal', ink: '--admin-font-primary', fill: '--admin-accent-bg-green', base: '--admin-bg-panel' },
-  { what: 'an outstanding step ordinal', ink: '--admin-font-primary', fill: '--admin-accent-bg-amber', base: '--admin-bg-panel' },
+  // Complete and outstanding are neutral fills: green and amber are result areas only.
+  { what: 'a complete step ordinal', ink: '--admin-font-primary', fill: '--admin-bg-fill-subtle', base: '--admin-bg-panel' },
+  { what: 'an outstanding step ordinal', ink: '--admin-font-primary', fill: '--admin-bg-fill', base: '--admin-bg-panel' },
   { what: 'a locked step ordinal', ink: '--admin-font-primary', fill: '--admin-bg-icon-box', base: '--admin-bg-panel' },
   // The step names: on the panel, or on the current row's 4% tint.
   { what: 'a step name', ink: '--admin-font-primary', fill: '--admin-bg-panel', base: '--admin-bg-panel' },

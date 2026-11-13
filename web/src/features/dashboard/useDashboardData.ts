@@ -13,6 +13,13 @@ export interface DashboardData<T> {
    * the i18n layer. The caller substitutes a catalogue string.
    */
   error: string | null
+  /**
+   * What the failed load threw, untouched, or `undefined` while nothing has failed. For a
+   * caller that says the failure in the reader's words (`describeApiError`) rather than
+   * printing `error`, which is the server's own text: English on a Spanish screen, and it
+   * can carry paths and ids.
+   */
+  thrown: unknown
   reload: () => void
 }
 
@@ -46,6 +53,7 @@ export function useDashboardData<T>(load: () => Promise<T>): DashboardData<T> {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [thrown, setThrown] = useState<unknown>(undefined)
 
   /**
    * Which request is allowed to publish. A counter rather than a flag in the effect's
@@ -60,6 +68,7 @@ export function useDashboardData<T>(load: () => Promise<T>): DashboardData<T> {
     setLoading(true)
     setFailed(false)
     setError(null)
+    setThrown(undefined)
     try {
       const result = await load()
       if (generation.current !== mine) return
@@ -68,6 +77,7 @@ export function useDashboardData<T>(load: () => Promise<T>): DashboardData<T> {
       if (generation.current !== mine) return
       setFailed(true)
       setError(err instanceof Error ? err.message : null)
+      setThrown(err)
     } finally {
       // Guarded too, and `finally` still runs after the early returns above. A superseded
       // request clearing `loading` would hide the spinner belonging to the request that
@@ -82,5 +92,5 @@ export function useDashboardData<T>(load: () => Promise<T>): DashboardData<T> {
     void run()
   }, [run])
 
-  return { data, loading, failed, error, reload: run }
+  return { data, loading, failed, error, thrown, reload: run }
 }

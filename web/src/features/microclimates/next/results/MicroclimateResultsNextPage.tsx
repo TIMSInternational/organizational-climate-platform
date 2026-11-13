@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router'
 import { ArrowRight, Download } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { CanvasCard, CanvasSectionHead, FactList, HatchField, HatchPill, NoteBand, PageMeta, PageMetaSentences } from '../../../../components/canvas'
 import { Alert, AlertDescription, Button, Chip, LoadingRegion, NetworkError, SkeletonText } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
@@ -120,8 +120,7 @@ function ResultsView({
 
   return (
     <div>
-      <PageTopBar
-        compact
+      <PageHeader
         title={title}
         eyebrow={t('microclimates.next.results.eyebrow')}
         description={t('microclimates.next.results.description', { floor: FLOOR })}
@@ -166,7 +165,7 @@ function ResultsView({
             }
           >
             <div className="flex items-end gap-5">
-              <span className="shrink-0 font-mono text-[2.75rem] leading-none tabular-nums text-fg-primary">{responses}</span>
+              <span className="shrink-0 text-[2.75rem] font-semibold leading-none tracking-display tabular-nums text-fg-primary">{responses}</span>
               <div className="flex min-w-0 flex-col gap-1 pb-1">
                 <span className="text-base text-fg-secondary">
                   {target > 0
@@ -234,12 +233,12 @@ function ResultsView({
                 {
                   id: 'opens',
                   term: t('microclimates.next.sheet.opens'),
-                  value: <span className="font-mono tabular-nums">{instant(t, detail.startTime, locale, zone)}</span>,
+                  value: <span className="tabular-nums">{instant(t, detail.startTime, locale, zone)}</span>,
                 },
                 {
                   id: 'closes',
                   term: t('microclimates.next.sheet.closes'),
-                  value: <span className="font-mono tabular-nums">{instant(t, detail.endTime, locale, zone)}</span>,
+                  value: <span className="tabular-nums">{instant(t, detail.endTime, locale, zone)}</span>,
                 },
                 {
                   id: 'answer',
@@ -252,7 +251,7 @@ function ResultsView({
                 {
                   id: 'questions',
                   term: t('microclimates.next.sheet.questions'),
-                  value: <span className="font-mono tabular-nums">{questions.length}</span>,
+                  value: <span className="tabular-nums">{questions.length}</span>,
                 },
               ]}
             />
@@ -284,9 +283,9 @@ function ResponsesBar({ responses, target }: { responses: number; target: number
         />
       </div>
       <div className="grid text-xs text-fg-tertiary" style={{ gridTemplateColumns: `${floorAt}% minmax(0, 1fr) auto` }}>
-        <span className="font-mono tabular-nums">0</span>
+        <span className="tabular-nums">0</span>
         <span>{t('microclimates.next.results.floorMark', { floor: FLOOR })}</span>
-        <span className="font-mono tabular-nums">{target}</span>
+        <span className="tabular-nums">{target}</span>
       </div>
     </div>
   )
@@ -298,13 +297,6 @@ const CAPTION_KEY: Record<string, string> = {
   yes_no: 'microclimates.next.results.captionYesNo',
   multiple_choice: 'microclimates.next.results.captionChoice',
   emoji_rating: 'microclimates.next.results.captionEmoji',
-}
-
-function columnsOf(t: TranslateFn, question: Question): string[] {
-  if (question.type === 'yes_no') return [t('common.yes'), t('common.no')]
-  if (question.type === 'multiple_choice') return (question.options ?? []).map((option) => option.label ?? option.value)
-  if (question.type === 'emoji_rating') return (question.emojiOptions ?? []).map((face) => face.label ?? face.emoji)
-  return ['1', '2', '3', '4', '5']
 }
 
 function QuestionCard({
@@ -325,10 +317,10 @@ function QuestionCard({
   return (
     <section
       aria-label={question.text ?? t('microclimates.untitled')}
-      className="flex min-w-0 flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 pt-4 pb-4.5 shadow-xs"
+      className="flex min-w-0 flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 pt-4 pb-4.5"
     >
       <div className="flex items-start gap-2.5">
-        <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-xs font-semibold tabular-nums text-fg-secondary">
+        <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-surface-fill text-xs font-semibold tabular-nums text-fg-secondary">
           {order}
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -339,7 +331,7 @@ function QuestionCard({
           </div>
         </div>
         {kind !== 'words' && (
-          <Chip label={t('microclimates.next.proposed')} tone="warning" title={t('microclimates.next.results.proposedHint')} />
+          <Chip label={t('microclimates.next.proposed')} tone="neutral" title={t('microclimates.next.results.proposedHint')} />
         )}
       </div>
 
@@ -364,29 +356,20 @@ function QuestionCard({
         </>
       ) : (
         <>
-          <div className="grid">
-            <div className="col-start-1 row-start-1 flex gap-3">
-              {columnsOf(t, question).map((label, index) => (
-                <div key={`${label}-${index}`} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-                  {protectedSession ? (
-                    <HatchField className="h-[110px] w-full" />
-                  ) : (
-                    <span className="block h-[110px] w-full rounded-lg border border-dashed border-line-default" />
-                  )}
-                  <span className="max-w-full truncate font-mono text-xs tabular-nums text-fg-tertiary">{label}</span>
-                </div>
-              ))}
-            </div>
-            <div className="col-start-1 row-start-1 flex items-start justify-center pt-10">
-              <HatchPill
-                label={
-                  protectedSession
-                    ? t('microclimates.next.results.figureProtected', { floor: FLOOR })
-                    : t('microclimates.next.results.figureNotKept')
-                }
-              />
-            </div>
-          </div>
+          {/* One band that says the figure is not kept (or is held back), not five empty
+              columns: a chart with nothing in it draws a shape the data model never supplies. */}
+          {protectedSession ? (
+            <HatchField className="flex min-h-16 items-center justify-center p-3">
+              <HatchPill label={t('microclimates.next.results.figureProtected', { floor: FLOOR })} />
+            </HatchField>
+          ) : (
+            <p
+              data-slot="figure-not-kept"
+              className="m-0 flex min-h-16 items-center justify-center rounded-lg bg-surface-fill-subtle px-4 py-3 text-center text-sm text-fg-secondary"
+            >
+              {t('microclimates.next.results.figureNotKept')}
+            </p>
+          )}
           <div className="flex flex-wrap justify-between gap-2 text-sm text-fg-tertiary">
             <span>
               {t('microclimates.next.results.average')}{' '}
@@ -413,7 +396,7 @@ function WordBarList({ words }: { words: ReturnType<typeof wordBars>['words'] })
           <span className="h-3 rounded-sm bg-line-light">
             <span className={cn('block h-full rounded-sm bg-accent-blue')} style={{ width: `${(word.value / max) * 100}%` }} />
           </span>
-          <span className="text-right font-mono text-sm tabular-nums text-fg-secondary">{word.value}</span>
+          <span className="text-right text-sm tabular-nums text-fg-secondary">{word.value}</span>
         </li>
       ))}
     </ol>

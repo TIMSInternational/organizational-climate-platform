@@ -275,13 +275,16 @@ describe('AdminUsersView (company administrator)', () => {
     expect(screen.queryByRole('button', { name: T.invite })).toBeNull()
   })
 
-  it('sets the breadcrumb 14px over the header, as the UsersList board does', async () => {
+  it('uses the shared PageHeader under the sidebar section’s eyebrow, with no breadcrumb over a top-level row', async () => {
     vi.stubGlobal('fetch', fetchWith())
     renderAt(ROUTE)
     await waitFor(() => expect(rows().length).toBeGreaterThan(0))
-    const bar = document.querySelector('[data-slot="page-top-bar"]') as HTMLElement
-    expect(bar.className).toContain('gap-3.5')
+    const bar = document.querySelector('[data-slot="page-header"]') as HTMLElement
+    expect(bar.className).toContain('gap-4')
     expect(bar.className).not.toContain('gap-9.5')
+    // «Personas» is a row of Organización in the rail: no crumb names a parent it does not have.
+    expect(bar.querySelector('nav')).toBeNull()
+    expect(bar.textContent).toContain(es.navigation.sectionOrganization)
   })
 
   it('gives the roster the board’s columns: ROL 132px and ÚLTIMA ACTIVIDAD 153px beside the 96px action', async () => {

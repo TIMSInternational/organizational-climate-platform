@@ -1,24 +1,24 @@
-import { useMemo, useState } from 'react'
-import { Download } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { CheckCircle2, ChevronDown, Clock, Download } from 'lucide-react'
 import {
   Button,
+  Card,
   Checkbox,
   Chip,
   ConfirmationDialog,
   Input,
-  LoadingRegion,
-  SkeletonText,
+  LoadingState,
+  Note,
+  SegmentedControl,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-  type ChipTone,
 } from '../../../../components/ui'
 import { useTranslation } from '../../../../i18n'
 import { readViewerClaims } from '../../../../auth/viewerCapabilities'
-import { TH_CLASS } from '../../../shared-next/parts'
 import {
   MAX_CREDENTIALS_BATCH,
   resendCredentialsBatch,
@@ -38,7 +38,6 @@ import {
 import { createSurveyInvitations } from '../../api/surveyDistribution'
 import { ApiError } from '../../../../api/authFetch'
 import type { ParticipationState } from './useSurveyParticipation'
-import { Card, CardHeading } from './parts'
 import { chaseActionFor } from './chaseAction'
 import { formatParticipationDay } from './participationDay'
 import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
@@ -59,11 +58,14 @@ type SendState =
  */
 const NO_ROWS: readonly SurveyRosterRow[] = []
 
-const STATUS_TONE: Record<SurveyParticipantStatus, ChipTone> = {
-  completed: 'good',
-  started: 'warning',
-  not_started: 'neutral',
-  not_completed: 'neutral',
+/**
+ * A participant's state is not a result, so every chip is the neutral grey (green, amber and red
+ * are the three result areas and nothing else). The glyph tells finished from started at a glance;
+ * the word is always there, so the state never rests on the glyph either.
+ */
+const STATUS_ICON: Partial<Record<SurveyParticipantStatus, ReactNode>> = {
+  completed: <CheckCircle2 />,
+  started: <Clock />,
 }
 
 const STATUS_KEY: Record<SurveyParticipantStatus, string> = {
@@ -542,16 +544,16 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
             },
           ]
 
+  const filterOptions = filters.map((option) => ({ value: option.value, label: `${copy(option.key)} · ${option.count}` }))
+
   return (
     <section aria-label={copy('title')} className="mt-6" data-testid="survey-roster-panel">
-      <Card className="flex flex-col gap-3 px-4 py-4">
-        <CardHeading title={copy('title')} />
+      <Card className="px-5">
+        <h2 className="m-0 text-2xl">{copy('title')}</h2>
         <p className="m-0 text-sm text-fg-secondary">{copy('intro')}</p>
 
         {state.status === 'idle' ? null : state.status === 'loading' ? (
-          <LoadingRegion loading label={t('common.loading')}>
-            <SkeletonText lines={3} />
-          </LoadingRegion>
+          <LoadingState rows={3} label={t('common.loading')} />
         ) : state.status === 'error' ? (
           <p role="alert" className="m-0 text-sm text-accent-red-ink">
             {copy('loadFailed')}
@@ -561,31 +563,52 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
         ) : (
           <>
             {!showState ? (
-              <p className="m-0 rounded-md border border-line-light bg-surface-icon-box px-3 py-2 text-sm text-fg-secondary">
-                {copy('notTracked')}
-              </p>
+              <Note className="text-sm">{copy('notTracked')}</Note>
             ) : completionOnly ? (
-              <p className="m-0 rounded-md border border-line-light bg-surface-icon-box px-3 py-2 text-sm text-fg-secondary">
-                {copy('completionOnlyNote')}
-              </p>
+              <Note className="text-sm">{copy('completionOnlyNote')}</Note>
             ) : null}
 
-            <div className="flex flex-wrap items-center gap-2">
-              {filters.map((option) => (
-                <Button
-                  key={option.value}
-                  type="button"
-                  variant={filter === option.value ? 'primary' : 'outline'}
-                  aria-pressed={filter === option.value}
-                  onClick={() => setFilter(option.value)}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* The spec's `.seg` from `sm` up: one row, the chosen filter raised on the track.
+                  Below `sm` four segments with their counts do not fit in one row, and a wrapped
+                  track stops reading as one-of-N (r390-seg.png). HIG `segmented-controls.md`
+                  § "Best practices": "keep segment size consistent"; HIG `pop-up-buttons.md`
+                  § "Best practices": "Consider using a pop-up button when space is limited". So
+                  under `sm` the same options and counts are a native pop-up. Neither is drawn
+                  when there is nothing to filter by (a survey that records no state). */}
+              {filterOptions.length > 0 && (
+              <>
+              <SegmentedControl
+                label={copy('filterLabel')}
+                className="hidden max-w-full sm:inline-flex"
+                data-testid="roster-filter-segmented"
+                value={filter}
+                options={filterOptions}
+                onChange={setFilter}
+              />
+              <span data-testid="roster-filter-popup" className="relative inline-flex w-full min-w-0 sm:hidden">
+                <select
+                  aria-label={copy('filterLabel')}
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value as Filter)}
+                  className="h-9 w-full min-w-0 appearance-none truncate rounded-md border border-line-control bg-surface-input py-0 pl-3 pr-8 text-base tabular-nums text-fg-primary pointer-coarse:min-h-11"
                 >
-                  {copy(option.key)}
-                  <span className="ml-1.5 font-mono text-xs tabular-nums">{option.count}</span>
-                </Button>
-              ))}
+                  {filterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-fg-secondary"
+                />
+              </span>
+              </>
+              )}
               <Input
                 type="search"
-                className="ml-auto max-w-72"
+                className="w-full sm:ml-auto sm:max-w-72"
                 placeholder={copy('search')}
                 aria-label={copy('search')}
                 value={search}
@@ -594,7 +617,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="m-0 text-xs text-fg-secondary">
+              <p className="m-0 text-sm tabular-nums text-fg-secondary">
                 {copy('shown', { shown: visible.length, total: state.view.roster.length })}
               </p>
               <Button type="button" variant="outline" size="sm" disabled={download === 'busy'} onClick={() => downloadRoster()}>
@@ -610,7 +633,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
             ) : null}
 
             {chosen.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-3 rounded-md border border-line-light bg-surface-icon-box px-3 py-2">
+              <div className="flex flex-wrap items-center gap-3 rounded-xl bg-surface-fill-subtle px-4 py-2.5">
                 <span className="text-sm font-medium">{copy('selected', { count: chosen.length })}</span>
                 <Button type="button" variant="primary" disabled={send.phase === 'sending'} onClick={() => setConfirmBatch(true)}>
                   {copy('send')}
@@ -638,7 +661,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                   .filter((outcome) => !outcome.delivered)
                   .map((outcome) => (
                     <p key={outcome.userId} className="m-0 text-xs text-fg-secondary">
-                      <span className="font-mono">{outcome.email ?? outcome.userId}</span>
+                      <span>{outcome.email ?? outcome.userId}</span>
                       {' — '}
                       {copy(OUTCOME_KEY[outcome.code ?? 'send_failed'] ?? 'outcomeSendFailed')}
                     </p>
@@ -650,7 +673,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               <div
                 role="status"
                 aria-label={copy('handoverDoneTitle', { name: handedOver.name })}
-                className="flex flex-col gap-2 rounded-md border border-line-light bg-surface-icon-box px-3 py-3"
+                className="flex flex-col gap-2 rounded-xl bg-surface-fill-subtle px-4 py-3"
               >
                 <p className="m-0 text-sm font-medium">{copy('handoverDoneTitle', { name: handedOver.name })}</p>
                 <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
@@ -743,12 +766,12 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
             {visible.length === 0 ? (
               <p className="m-0 text-sm text-fg-secondary">{copy('empty')}</p>
             ) : (
-              <div className="overflow-x-auto rounded-md border border-line-light">
+              <div className="overflow-hidden rounded-xl border border-line-panel">
                 <Table className="text-sm">
-                  <TableHeader className="bg-surface-icon-box">
+                  <TableHeader>
                     <TableRow>
                       {perSurvey ? null : (
-                        <TableHead scope="col" className={TH_CLASS}>
+                        <TableHead scope="col">
                           <Checkbox
                             checked={allShownChosen}
                             disabled={sendable.length === 0}
@@ -757,19 +780,19 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                           />
                         </TableHead>
                       )}
-                      <TableHead scope="col" className={TH_CLASS}>{copy('colPerson')}</TableHead>
-                      <TableHead scope="col" className={TH_CLASS}>{copy('colRole')}</TableHead>
-                      <TableHead scope="col" className={TH_CLASS}>{copy('colUsuario')}</TableHead>
+                      <TableHead scope="col">{copy('colPerson')}</TableHead>
+                      <TableHead scope="col">{copy('colRole')}</TableHead>
+                      <TableHead scope="col">{copy('colUsuario')}</TableHead>
                       {perSurvey ? (
-                        <TableHead scope="col" className={TH_CLASS}>{copy('colCode')}</TableHead>
+                        <TableHead scope="col">{copy('colCode')}</TableHead>
                       ) : null}
                       {showState ? (
                         <>
-                          <TableHead scope="col" className={TH_CLASS}>{copy('colStatus')}</TableHead>
-                          <TableHead scope="col" className={TH_CLASS}>{copy('colLast')}</TableHead>
+                          <TableHead scope="col">{copy('colStatus')}</TableHead>
+                          <TableHead scope="col">{copy('colLast')}</TableHead>
                         </>
                       ) : null}
-                      <TableHead scope="col" className={TH_CLASS} />
+                      <TableHead scope="col" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1045,7 +1068,7 @@ function RosterRows({
         <TableCell className="px-3 py-2">
           <span className="flex min-w-0 flex-col">
             <span className="truncate font-medium">{row.name}</span>
-            <span className="truncate font-mono text-xs text-fg-secondary">{row.email}</span>
+            <span className="truncate text-sm text-fg-secondary">{row.email}</span>
           </span>
         </TableCell>
         <TableCell className="px-3 py-2 text-fg-secondary">{roleLabel}</TableCell>
@@ -1187,7 +1210,7 @@ function RosterRows({
           <>
             <TableCell className="px-3 py-2">
               <span className="flex flex-col items-start gap-1">
-                <Chip tone={STATUS_TONE[row.status]} label={copy(STATUS_KEY[row.status])} />
+                <Chip tone="neutral" icon={STATUS_ICON[row.status]} label={copy(STATUS_KEY[row.status])} />
                 {excluded ? <Chip tone="neutral" label={copy('exclusion.excludedChip')} /> : null}
                 {/* Only somebody who FINISHED has a response in the results to take out, and
                     only TIMS may: the server refuses anyone else, and a client administrator
@@ -1217,7 +1240,8 @@ function RosterRows({
         <TableCell className="px-3 py-2 text-right">
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
+            size="icon"
             aria-expanded={expanded}
             aria-label={copy(expanded ? 'detailsHide' : 'details', { name: row.name })}
             onClick={onToggleDetails}
