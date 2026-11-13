@@ -147,7 +147,9 @@ describe('table overflow', () => {
     const computed = render(
       '<table><thead><tr><th id="th">H</th></tr></thead><tbody><tr><td id="td">v</td></tr></tbody></table>',
     )
-    expect(computed('th').fontSize).toBe('12px')
+    // 13px: the Apple design's secondary size (`--admin-text-sm`, user ruling 11 Nov),
+    // which a table head is. It was the legacy 12px.
+    expect(computed('th').fontSize).toBe('13px')
     expect(computed('th').padding).toBe('8px 12px')
     expect(computed('td').padding).toBe('10px 12px')
   })

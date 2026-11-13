@@ -193,7 +193,9 @@ describe('MicroclimateResultsPage KPI strip', () => {
 
     const tiles = [...container.querySelectorAll('[data-slot="kpi-tile"]')]
     expect(tiles.length).toBeGreaterThan(0)
-    expect(container.querySelector('[data-slot="kpi-tile"] .font-mono')).not.toBeNull()
+    // The reading is set in tabular figures in the sans face (Apple design, 11 Nov).
+    expect(container.querySelector('[data-slot="kpi-tile"] [data-slot="kpi-value"].tabular-nums')).not.toBeNull()
+    expect(container.querySelector('[data-slot="kpi-tile"] .font-mono')).toBeNull()
   })
 
   describe('the CSV export', () => {

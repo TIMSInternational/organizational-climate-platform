@@ -571,3 +571,49 @@ describe('base ink contrast', () => {
     }
   })
 })
+
+describe('the [role=alert] box', () => {
+  /*
+   * Every page reports failure as `role="alert"` and `index.css` styles the role. Apple
+   * design ruling (11 Nov): green, amber and red are the result areas only, so the box sits
+   * on a neutral fill and only the words wear the red ink. Read out of the rule, so the
+   * assertion follows the rule rather than a token named here.
+   */
+  it('sits on a neutral fill, never a result-area tint, and its red words clear AA on it in both themes', () => {
+    const { light, dark } = palettes()
+    const index = readFileSync(join(process.cwd(), 'src', 'index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const rule = /\[role='alert'\]\s*\{([^}]*)\}/.exec(index)
+    expect(rule, "index.css no longer has a [role='alert'] rule").not.toBeNull()
+    const body = rule![1]
+    expect(body).not.toMatch(/accent-(bg|border)-(red|green|amber)/)
+    const fill = /background:\s*var\((--admin-[\w-]+)\)/.exec(body)?.[1]
+    const ink = /(?:^|[;\s])color:\s*var\((--admin-[\w-]+)\)/.exec(body)?.[1]
+    expect(fill).toBe('--admin-bg-fill-subtle')
+    expect(ink, 'the alert words no longer name an ink token').toBeDefined()
+    for (const palette of [light, dark]) {
+      for (const base of ['--admin-bg-panel', '--admin-bg-card'] as const) {
+        const ground = composite(palette[fill!], palette[base])
+        expect(contrast(palette[ink!], ground), `${ink} on ${fill} over ${base}`).toBeGreaterThanOrEqual(AA_TEXT_CONTRAST)
+      }
+    }
+  })
+})
+
+describe('the red word on a neutral chip', () => {
+  /*
+   * The audit log's «Falló» and the system page's «Sin actividad» print the red TEXT ink on
+   * the neutral status chip, not on the box. The state-ink suite measures the red against the
+   * box and the recessed tile only, and at #ff7b7b the dark chip ground (#323b54) measured
+   * 4.43:1 — under AA for the chip's 12px label while every existing guard stayed green. The
+   * chip ground is opaque (`tokens.css`, status-chip block), so it is read as it is.
+   */
+  it('clears AA on --admin-chip-bg-neutral in both themes', () => {
+    const { light, dark } = palettes()
+    for (const [theme, palette] of [['light', light], ['dark', dark]] as const) {
+      const ink = palette['--admin-accent-red-ink']
+      const ground = palette['--admin-chip-bg-neutral']
+      const ratio = contrast(ink, ground)
+      expect(ratio, `${theme}: --admin-accent-red-ink (${ink}) on --admin-chip-bg-neutral (${ground}) is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA_TEXT_CONTRAST)
+    }
+  })
+})

@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Check, Link2, Mail, Plus, Search, Shield, Upload, UserPlus } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import {
   Alert,
@@ -53,7 +53,7 @@ import {
 import { useSuperUsersModel } from './useSuperUsersModel'
 
 const TH =
-  'border-b border-line-default bg-transparent px-3 pb-2 pt-1 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+  'border-b border-line-default bg-transparent px-3 pb-2 pt-2 text-xs font-semibold whitespace-nowrap text-fg-secondary'
 
 const FACET_KEY: Readonly<Record<string, string>> = {
   super_admin: 'superadmin.next.users.roleSuperAdmin',
@@ -151,8 +151,8 @@ export default function SuperUsersView() {
   return (
     <div className="flex flex-col gap-section">
       <div className="-mb-6">
-        <PageTopBar
-          eyebrow={companyName ?? t('navigation.systemAdministration')}
+        <PageHeader
+          eyebrow={t('navigation.sectionOrganization')}
           title={t('navigation.users')}
           description={t('superadmin.next.users.description')}
           breadcrumbs={breadcrumbs}
@@ -231,9 +231,9 @@ export default function SuperUsersView() {
                 aria-pressed={selected}
                 onClick={() => setRole(facet)}
                 className={cn(
-                  'h-5.5 rounded-lg px-2 text-xs font-medium',
+                  'h-7 rounded-full px-3 text-sm font-medium',
                   selected
-                    ? 'border-accent-red-ring bg-accent-red-soft text-accent-red hover:not-disabled:bg-accent-red-soft'
+                    ? 'border-transparent bg-chip-accent-fill text-chip-accent-ink hover:not-disabled:bg-chip-accent-fill'
                     : 'border-line-default bg-surface-icon-box text-fg-secondary',
                 )}
               >
@@ -246,7 +246,7 @@ export default function SuperUsersView() {
         </div>
         <label className="m-0 xl:ml-auto">
           <span className="sr-only">{t('superadmin.next.users.departmentFilterLabel')}</span>
-          <CanvasSelect className="w-52" value={department} onChange={(event) => setDepartment(event.target.value)}>
+          <CanvasSelect className="w-56" value={department} onChange={(event) => setDepartment(event.target.value)}>
             <option value="">{t('superadmin.next.users.allDepartments')}</option>
             {state.departments.map((unit) => (
               <option key={unit.id} value={unit.id}>
@@ -267,7 +267,7 @@ export default function SuperUsersView() {
             className="w-full pl-8"
           />
         </label>
-        <span className="whitespace-nowrap font-mono text-xs tabular-nums text-fg-tertiary">
+        <span className="whitespace-nowrap text-xs tabular-nums text-fg-tertiary">
           {t('superadmin.next.users.shown', { shown: visible.length, total: state.users.length })}
         </span>
       </div>
@@ -302,7 +302,7 @@ export default function SuperUsersView() {
           ) : visible.length === 0 ? (
             <EmptyState title={t('superadmin.next.users.empty')} />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-line-default bg-surface-card pt-2 shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-line-panel bg-surface-card pt-2">
               {/* The table's minimum sits on a div for the reason the Empresas list gives. */}
               <div className="overflow-x-auto">
               {/* The Table primitive wraps its table element in its own overflow-x-auto container; left as a scroller it
@@ -388,7 +388,7 @@ function Avatar({ name, strong = false }: { name: string; strong?: boolean }) {
     <span
       aria-hidden="true"
       className={cn(
-        'inline-flex size-7 shrink-0 items-center justify-center rounded-full text-2xs font-semibold',
+        'inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
         strong ? 'bg-surface-shell text-fg-on-accent' : 'border border-line-default bg-surface-icon-box text-fg-secondary',
       )}
     >
@@ -416,7 +416,7 @@ function PersonRow({
           <Avatar name={user.name} />
           <div className="flex min-w-0 flex-col">
             <span className="truncate font-semibold text-fg-primary">{user.name}</span>
-            <span className="truncate font-mono text-2xs text-fg-tertiary">{user.email}</span>
+            <span className="truncate text-xs text-fg-tertiary">{user.email}</span>
             {/* The same line as the company administrator's roster, for the same reason: on a
                 mass invite the person phoning in knows their email and not the `usuario` the
                 platform chose for them, and the password is unrecoverable by design. A super
@@ -426,7 +426,7 @@ function PersonRow({
 
                 Truthy, not `!== null`, for the reason spelled out in `AdminUsersView`. */}
             {user.username ? (
-              <span className="truncate text-2xs text-fg-tertiary">
+              <span className="truncate text-xs text-fg-tertiary">
                 {t('superadmin.next.users.username')}{' '}
                 <span className="font-mono text-fg-secondary">{user.username}</span>
               </span>
@@ -446,16 +446,16 @@ function PersonRow({
       </td>
       <td className="px-3 py-3">
         {user.isActive ? (
-          <CanvasChip tone="good" label={t('superadmin.next.users.statusActive')} />
+          <CanvasChip tone="neutral" label={t('superadmin.next.users.statusActive')} />
         ) : (
           <CanvasChip tone="neutral" label={t('superadmin.next.users.statusInactive')} />
         )}
       </td>
       <td className="px-3 py-3">
         {user.lastLoginAt ? (
-          <span className="font-mono text-xs tabular-nums text-fg-primary">{calendarDay(Date.parse(user.lastLoginAt), locale)}</span>
+          <span className="text-xs tabular-nums text-fg-primary">{calendarDay(Date.parse(user.lastLoginAt), locale)}</span>
         ) : (
-          <span className="text-xs text-accent-amber-ink">{t('superadmin.next.users.neverSignedIn')}</span>
+          <span className="text-xs text-fg-secondary">{t('superadmin.next.users.neverSignedIn')}</span>
         )}
       </td>
       <td className={cn('px-3 py-3 text-right', STICKY_ACTION)}>
@@ -686,7 +686,7 @@ function EditPerson({
       />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
         <label htmlFor={ids.active} className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
-          <Switch id={ids.active} checked={isActive} onCheckedChange={setIsActive} className="data-[state=checked]:bg-accent-green" />
+          <Switch id={ids.active} checked={isActive} onCheckedChange={setIsActive}  />
           <span>
             {t('superadmin.next.users.activeLabel')} · {t('superadmin.next.users.activeHelper')}
           </span>

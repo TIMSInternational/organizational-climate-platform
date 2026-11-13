@@ -8,9 +8,8 @@ import type { SVGProps } from 'react'
  * stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round }`). Lucide's nearest
  * neighbours read as different pictures at 16px (a four-panel dashboard where the canvas
  * has four equal tiles, a three-ring target where it has two, a kanban where it has a
- * split panel), so the rail carries the canvas's own paths, copied verbatim. Entries the
- * canvas never drew (the employee's inbox, the tracking task list, system health) keep
- * their lucide icon.
+ * split panel), so the rail carries the canvas's own paths, copied verbatim. The one row
+ * neither canvas drew (Campos demográficos) keeps its lucide icon.
  */
 function RailGlyph({ children, ...props }: SVGProps<SVGSVGElement>) {
   return (
@@ -30,19 +29,7 @@ function RailGlyph({ children, ...props }: SVGProps<SVGSVGElement>) {
   )
 }
 
-/** Panel de Control: four equal tiles. */
-export function RailDashboardIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <RailGlyph {...props}>
-      <rect x="2" y="2" width="5" height="5" rx="1" />
-      <rect x="9" y="2" width="5" height="5" rx="1" />
-      <rect x="2" y="9" width="5" height="5" rx="1" />
-      <rect x="9" y="9" width="5" height="5" rx="1" />
-    </RailGlyph>
-  )
-}
-
-/** Administración de Empresa / del sistema: the shield. */
+/** The shield. No rail row carries it since the 11 Nov regroup; pages outside the rail still do. */
 export function RailShieldIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <RailGlyph {...props}>
@@ -179,12 +166,99 @@ export function RailQuestionLibraryIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-/** Notificaciones: the bell. */
-export function RailNotificationsIcon(props: SVGProps<SVGSVGElement>) {
+// ---------------------------------------------------------------------------
+// The Apple-design rail (11 Nov). Rows the regroup introduced, drawn from the boards'
+// own glyphs (Main, CompanyHome, TeamHome: a 24px box at stroke 1.8) scaled onto this
+// rail's 16px box, so every row in the rail is stroked the same.
+// ---------------------------------------------------------------------------
+
+/** Inicio: the house. */
+export function RailHomeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <RailGlyph {...props}>
-      <path d="M4 11V7a4 4 0 0 1 8 0v4l1 1H3z" />
-      <path d="M6.5 14h3" />
+      <path d="M2 7 8 2l6 5v6.5a.5.5 0 0 1-.5.5H10v-4H6v4H2.5a.5.5 0 0 1-.5-.5z" />
+    </RailGlyph>
+  )
+}
+
+/** Mi equipo, Personas: two people. */
+export function RailPeopleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <RailGlyph {...props}>
+      <circle cx="6" cy="5.3" r="2.3" />
+      <path d="M1.7 13.3a4.3 4.3 0 0 1 8.6 0M10.7 3a2.3 2.3 0 0 1 0 4.7M12.3 13.3a4.3 4.3 0 0 0-2-3.7" />
+    </RailGlyph>
+  )
+}
+
+/** Mis encuestas: a sheet with a tick. */
+export function RailMySurveysIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <RailGlyph {...props}>
+      <rect x="3.3" y="2.7" width="9.4" height="11.3" rx="1.3" />
+      <path d="M6 8l1.3 1.3L10 6.7" />
+    </RailGlyph>
+  )
+}
+
+/** Preguntas: a question mark in a circle. */
+export function RailQuestionsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <RailGlyph {...props}>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M6.3 6a1.7 1.7 0 1 1 2.4 1.5c-.4.2-.7.6-.7 1v.8M8 11.7v.01" />
+    </RailGlyph>
+  )
+}
+
+/** Empresas, Configuración de empresa: the building. */
+export function RailCompaniesIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <RailGlyph {...props}>
+      <rect x="2.7" y="2" width="10.6" height="12" rx="1" />
+      <path d="M6 4.7h.7M9.3 4.7h.7M6 7.3h.7M9.3 7.3h.7M6 10h.7M9.3 10h.7M6.7 14v-2h2.6v2" />
+    </RailGlyph>
+  )
+}
+
+/** Configuración (Sistema): three sliders. */
+export function RailSettingsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <RailGlyph {...props}>
+      <path d="M2.7 4h6.6M12 4h1.3M2.7 8h2.6M8 8h5.3M2.7 12h8" />
+      <circle cx="10.7" cy="4" r="1.3" />
+      <circle cx="6.7" cy="8" r="1.3" />
+      <circle cx="12" cy="12" r="1.3" />
+    </RailGlyph>
+  )
+}
+
+/** Estado: two stacked servers. */
+export function RailStatusIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <RailGlyph {...props}>
+      <rect x="2" y="2.7" width="12" height="4.6" rx="1.3" />
+      <rect x="2" y="8.7" width="12" height="4.6" rx="1.3" />
+      <path d="M4.7 5h.01M4.7 11h.01" />
+    </RailGlyph>
+  )
+}
+
+/** Actividad: the clock. */
+export function RailActivityIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <RailGlyph {...props}>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 4.7V8l2 1.3" />
+    </RailGlyph>
+  )
+}
+
+/** Mis tareas: a checklist. */
+export function RailTasksIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <RailGlyph {...props}>
+      <path d="M6.7 4h6.6M6.7 8h6.6M6.7 12h6.6M2.7 4l.6.7 1.4-1.4M2.7 8l.6.7 1.4-1.4M2.7 12l.6.7 1.4-1.4" />
     </RailGlyph>
   )
 }

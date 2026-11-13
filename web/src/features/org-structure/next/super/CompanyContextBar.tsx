@@ -43,7 +43,7 @@ export default function CompanyContextBar({
       </IconBox>
       <label
         htmlFor={selectId}
-        className="m-0 whitespace-nowrap text-2xs font-bold uppercase tracking-label text-fg-tertiary"
+        className="m-0 whitespace-nowrap text-sm font-semibold text-fg-secondary"
       >
         {t('companyContext.label')}
       </label>
@@ -63,7 +63,7 @@ export default function CompanyContextBar({
       {mode === 'platform' ? (
         <CanvasChip tone="neutral" label={t('superadmin.next.context.unchosen')} />
       ) : isActive ? (
-        <CanvasChip tone="good" icon={<Check className="size-3" />} label={t('superadmin.next.context.active')} />
+        <CanvasChip tone="accent" icon={<Check className="size-3" />} label={t('superadmin.next.context.active')} />
       ) : (
         <CanvasChip tone="neutral" label={t('superadmin.next.context.notActive')} />
       )}

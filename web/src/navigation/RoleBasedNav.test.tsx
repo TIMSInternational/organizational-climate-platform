@@ -48,42 +48,35 @@ function selectedRows(): Element[] {
 }
 
 /**
- * The two groups that exist. `climate-project#22` listed five (Tracking,
- * Organization, Analytics, System Administration, Survey Management) and asked
- * for nesting coverage of the three that had none; the tree those names belong to
- * did not survive the stack migration, and `buildNavSections` now emits exactly
- * one group per admin role. These are they — the modern form of that item, which
- * is why the block below is parameterised rather than written twice.
+ * The one group each administrator's rail has since the 11 Nov regroup: "Preguntas", the
+ * disclosure over the question bank and the question library (two surfaces over two sets of
+ * tables, #58). Both admin roles carry the identical group, which is why the blocks below are
+ * parameterised rather than written twice — a per-role regression still shows up per role.
  */
 const GROUPS = [
   {
     role: 'super_admin',
-    group: 'System Administration',
-    children: ['Companies', 'System Settings'],
-    // A child that is NOT the group's own href — the one the collapsed rail
-    // could not reach before the flyout.
-    childLabel: 'System Settings',
-    childPath: '/admin/system-settings',
+    group: 'Questions',
+    children: ['Question bank', 'Question library'],
+    // A child that is NOT the group's own href — the one the collapsed rail could not reach
+    // before the flyout.
+    childLabel: 'Question library',
+    childPath: '/admin/question-library',
     // The group's own href, which is also its first child's — hence the flyout.
-    groupPath: '/admin/companies',
+    groupPath: '/admin/question-bank',
   },
   {
     role: 'company_admin',
-    group: 'Company Administration',
-    children: ['Company Settings', 'Users', 'Demographic fields'],
-    childLabel: 'Users',
-    childPath: `/admin/companies/${COMPANY}/users`,
-    groupPath: `/admin/companies/${COMPANY}`,
+    group: 'Questions',
+    children: ['Question bank', 'Question library'],
+    childLabel: 'Question library',
+    childPath: '/admin/question-library',
+    groupPath: '/admin/question-bank',
   },
 ] as const
 
-/**
- * The groups the expanded rail draws as a disclosure. The super administrator's
- * "System Administration" is `flat` (navSections.ts): the 10 Sep per-role canvas draws it
- * as four flat rows, so it has no button to expand — pinned in "RoleBasedNav flat group".
- * Collapsed, both groups keep the flyout, so the flyout tests still cover both.
- */
-const DISCLOSURE_GROUPS = GROUPS.filter((entry) => entry.role !== 'super_admin')
+/** Every group is a disclosure in the expanded rail; there is no flat group any more. */
+const DISCLOSURE_GROUPS = GROUPS
 
 describe('RoleBasedNav nesting', () => {
   it.each(DISCLOSURE_GROUPS)('renders $group as a collapsed disclosure, not a link', ({ role, group, children }) => {
@@ -124,33 +117,29 @@ describe('RoleBasedNav nesting', () => {
   })
 
   /**
-   * The 10 Sep per-role canvas draws "Administración de Empresa" as ONE filled row, its
-   * children absent, on each of its three pages — CompanySettings on the group's own href,
-   * UsersList and DemographicFields on two of its children. The rail used to open the group
-   * on a child's page and fill the child under it (the admin-gaps refuter, 11 Sep).
+   * A closed group stands in for its sub-tree: on the bank's page and on the library's alike,
+   * the "Preguntas" row itself wears the selection and its children are absent. Filled means
+   * the Apple rail's selected row (`occ.css` `.item.on`): the blue fill, white, semibold.
    */
   it.each([
-    ['CompanySettings', `/admin/companies/${COMPANY}`],
-    ['UsersList', `/admin/companies/${COMPANY}/users`],
-    ['DemographicFields', `/admin/companies/${COMPANY}/demographic-fields`],
-  ])('draws Company Administration as the %s board does: closed, the group row itself filled', (_board, path) => {
+    ['the bank', '/admin/question-bank'],
+    ['the library', '/admin/question-library'],
+  ])('draws Questions closed on %s’s page, the group row itself filled', (_page, path) => {
     renderNav(buildNavSections('company_admin', COMPANY), path)
 
-    const group = screen.getByRole('button', { name: 'Company Administration' })
+    const group = screen.getByRole('button', { name: 'Questions' })
     expect(group.getAttribute('aria-expanded')).toBe('false')
     expect(group.getAttribute('data-nav-state')).toBe('selected')
     expect(selectedRows()).toEqual([group])
-    // `.nav-row.active` on the boards changes the fill and the ink, not the weight: the
-    // filled group row keeps the weight every other row has.
-    expect(group.style.fontWeight).toBe('var(--admin-weight-medium)')
-    for (const child of ['Company Settings', 'Users', 'Demographic fields']) {
+    expect(group.style.fontWeight).toBe('var(--admin-weight-semibold)')
+    for (const child of ['Question bank', 'Question library']) {
       expect(screen.queryByRole('link', { name: child })).toBeNull()
     }
   })
 
   it.each(GROUPS)('lights exactly one row for a child page of $group, the child once it is a row', async ({ role, group, childPath }) => {
-    // The defect this counts: `/admin/companies/c1` is a string prefix of
-    // `/admin/companies/c1/users`, so a prefix test lit the parent AND the child.
+    // The defect this counts: a group's href is a prefix-or-equal of a child's, so a
+    // prefix test lit the parent AND the child.
     // Asserting the child is present would pass in both worlds; asserting there
     // is one selected row is what fails. A disclosure group starts closed on a
     // child's page (above), so the reader opens it here to make the child a row.
@@ -175,8 +164,8 @@ describe('RoleBasedNav nesting', () => {
  * did depended on the reader's locale.
  *
  * `navigation.actionPlans` and `actionPlans.title` are both "Action Plans" in
- * `en.json` and both "Planes de Acción" in `es.json`, which is what makes this
- * fixture a real collision rather than a contrived one.
+ * `en.json`, which is what makes this fixture (rendered in English) a real collision
+ * rather than a contrived one.
  */
 describe('RoleBasedNav expand state', () => {
   const COLLIDING: NavSection[] = [
@@ -217,9 +206,9 @@ describe('RoleBasedNav expand state', () => {
  * `climate-project#22`, item 5 — the last of the six, and the one deferred as
  * "new UI behavior, not a minor fix".
  *
- * Both groups' `href` is the same page as their FIRST child, so while the rail was
- * collapsed every other child was unreachable without expanding it: System
- * settings for a super_admin, Users and Demographic fields for a company_admin.
+ * A group's `href` is the same page as its FIRST child, so while the rail was
+ * collapsed every other child was unreachable without expanding it — today the
+ * question library, under Preguntas, for both administrators.
  */
 describe('RoleBasedNav collapsed flyout', () => {
   it.each(GROUPS)('keeps $group’s flyout closed until it is asked for', ({ role, group, children }) => {
@@ -468,19 +457,19 @@ describe('RoleBasedNav row states', () => {
    * collapsed group, and `SubItemRow`.
    */
   it.each([
-    ['button' as const, 'Company Administration', 'nav-row'],
-    ['link' as const, 'Notifications', 'nav-row'],
-    ['link' as const, 'Users', 'nav-sub-row'],
+    ['button' as const, 'Questions', 'nav-row'],
+    ['link' as const, 'Microclimates', 'nav-row'],
+    ['link' as const, 'Question library', 'nav-sub-row'],
   ])('gives the %s named %s the .%s its colours are keyed to', async (role, name, className) => {
-    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`)
+    renderNav(buildNavSections('company_admin', COMPANY), '/admin/question-library')
     // The group starts closed on a child's page; opened, all three branches are on screen.
-    await userEvent.click(screen.getByRole('button', { name: 'Company Administration' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Questions' }))
 
     expect(screen.getByRole(role, { name }).classList.contains(className)).toBe(true)
   })
 
   it('gives the row that wears the selection the class the fill hangs off, closed and open', async () => {
-    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`)
+    renderNav(buildNavSections('company_admin', COMPANY), '/admin/question-library')
 
     // Both halves on one element: the attribute the component sets and the class
     // the stylesheet selects. Either alone paints nothing. Closed, the group row
@@ -489,7 +478,7 @@ describe('RoleBasedNav row states', () => {
     expect(selected).toHaveLength(1)
     expect(selected[0].classList.contains('nav-row')).toBe(true)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Company Administration' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Questions' }))
     selected = selectedRows()
     expect(selected).toHaveLength(1)
     expect(selected[0].classList.contains('nav-sub-row')).toBe(true)
@@ -499,7 +488,7 @@ describe('RoleBasedNav row states', () => {
     // Collapsed, this is the `<Link>` branch standing in for its whole sub-tree,
     // and it is the only selected row in the rail — so an orphaned class here is
     // a rail with no visible selection at all.
-    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`, true)
+    renderNav(buildNavSections('company_admin', COMPANY), '/admin/question-library', true)
 
     const selected = selectedRows()
     expect(selected).toHaveLength(1)
@@ -520,32 +509,25 @@ describe('RoleBasedNav row states', () => {
 })
 
 /**
- * The CompanySettings artboard (10 Sep) draws the rail on `/admin/companies/:id` with
- * "Administración de Empresa" as ONE filled row: the group closed, its children absent. That
- * href is also the group's first child's, so the rail used to open the group on it and fill the
- * child — "Configuración de Empr…", cut by the ellipsis — under a bold, equally cut parent.
+ * A group's href is also its first child's, so the rail used to open the group on that page
+ * and fill the child under a bold parent. A closed group carries the selection instead, and
+ * the reader opening it hands the selection to the child: exactly one selected row, in either
+ * state.
  */
 describe('RoleBasedNav on a group’s own page', () => {
-  it('draws Company Administration as the CompanySettings artboard does: closed, the group row itself filled', () => {
-    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}`)
+  it('draws Questions closed on the bank’s page, the group row itself filled', () => {
+    renderNav(buildNavSections('company_admin', COMPANY), '/admin/question-bank')
 
-    const group = screen.getByRole('button', { name: 'Company Administration' })
+    const group = screen.getByRole('button', { name: 'Questions' })
     expect(group.getAttribute('aria-expanded')).toBe('false')
     expect(group.getAttribute('data-nav-state')).toBe('selected')
     expect(selectedRows()).toEqual([group])
-    expect(screen.queryByRole('link', { name: 'Company Settings' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Question bank' })).toBeNull()
   })
 
-  /**
-   * Inverted on the merge with `roles/admin-gaps-org` (#479), which made every group start
-   * closed on a child's page too — the UsersList and DemographicFields artboards draw one
-   * filled row and no sub-items, exactly as the CompanySettings one does. The guarantee this
-   * test was written for survives unchanged: **exactly one selected row, in either state**.
-   * What moved is which row it is once the reader opens the group.
-   */
   it('keeps exactly one selected row over a child’s page, the group closed and then open', async () => {
-    renderNav(buildNavSections('company_admin', COMPANY), `/admin/companies/${COMPANY}/users`)
-    const group = screen.getByRole('button', { name: 'Company Administration' })
+    renderNav(buildNavSections('company_admin', COMPANY), '/admin/question-library')
+    const group = screen.getByRole('button', { name: 'Questions' })
 
     expect(group.getAttribute('aria-expanded')).toBe('false')
     expect(selectedRows()).toEqual([group])
@@ -553,39 +535,61 @@ describe('RoleBasedNav on a group’s own page', () => {
     await userEvent.click(group)
 
     expect(group.getAttribute('aria-expanded')).toBe('true')
-    const child = screen.getByRole('link', { name: 'Users' })
+    const child = screen.getByRole('link', { name: 'Question library' })
     expect(selectedRows()).toEqual([child])
   })
 })
 
-describe('RoleBasedNav flat group', () => {
-  it('draws System Administration as the canvas does: its row a link, its children plain rows, nothing to expand', () => {
-    renderNav(buildNavSections('super_admin', COMPANY), '/admin/companies')
+/**
+ * The Apple-design rail (`occ.css`, 11 Nov): an unheaded home row, 11px uppercase section
+ * headings, 14px rows, the selected row semibold on the blue fill, counts as small pills.
+ */
+describe('RoleBasedNav on the Apple-design rail', () => {
+  it('opens on the home row with no heading over it, then heads every other section', () => {
+    const sections = buildNavSections('super_admin', COMPANY)
+    renderNav(sections, '/dashboard')
 
-    const group = screen.getByRole('link', { name: 'System Administration' })
-    expect(group.getAttribute('href')).toBe('/admin/companies')
-    expect(group.hasAttribute('aria-expanded')).toBe(false)
-    expect(screen.queryByRole('button', { name: 'System Administration' })).toBeNull()
-    expect(screen.getByRole('link', { name: 'Companies' }).getAttribute('href')).toBe('/admin/companies')
-    expect(screen.getByRole('link', { name: 'System Settings' }).getAttribute('href')).toBe('/admin/system-settings')
+    const headings = Array.from(document.querySelectorAll('[data-slot="nav-section-title"]')).map((node) => node.textContent)
+    expect(headings).toEqual(['Surveys', 'Follow-up', 'Analytics', 'Organization', 'System'])
+    // The first row in the rail is Inicio, and nothing is drawn above it.
+    const nav = screen.getByRole('navigation')
+    const firstRow = nav.querySelector('.nav-row')
+    expect(firstRow?.textContent).toBe('Home')
+    expect(nav.querySelector('[data-slot="nav-section-title"]')!.compareDocumentPosition(firstRow!) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
   })
 
-  it('lights the child that owns the page, never the group row that shares its href', () => {
-    renderNav(buildNavSections('super_admin', COMPANY), '/admin/companies')
+  it('sets every row in 14px type, the selected one semibold and the rest regular', () => {
+    renderNav(buildNavSections('company_admin', COMPANY), '/microclimates')
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('.nav-row'))
+    expect(rows.length).toBeGreaterThan(5)
+    for (const row of rows) {
+      expect(row.style.fontSize, row.textContent ?? '').toBe('var(--admin-text-ui)')
+      const selected = row.getAttribute('data-nav-state') === 'selected'
+      expect(row.style.fontWeight, row.textContent ?? '').toBe(selected ? 'var(--admin-weight-semibold)' : 'var(--admin-weight-regular)')
+    }
+    expect(selectedRows().map((row) => row.textContent)).toEqual(['Microclimates'])
+  })
 
-    expect(screen.getByRole('link', { name: 'Companies' }).getAttribute('data-nav-state')).toBe('selected')
-    expect(screen.getByRole('link', { name: 'System Administration' }).getAttribute('data-nav-state')).toBeNull()
-    expect(document.querySelectorAll("[data-nav-state='selected']")).toHaveLength(1)
+  it('draws a row’s count as a small pill on the rail’s neutral tint, never blue', () => {
+    const sections: NavSection[] = [
+      { titleKey: '', items: [{ labelKey: 'navigation.home', href: '/dashboard', icon: Target, badge: '12' }] },
+      { titleKey: 'navigation.sectionSurveys', items: [{ labelKey: 'navigation.surveys', href: '/surveys', icon: Target, badge: '3' }] },
+    ]
+    renderNav(sections, '/dashboard')
+    const pills = Array.from(document.querySelectorAll<HTMLElement>('.nav-badge'))
+    expect(pills.map((pill) => pill.textContent)).toEqual(['12', '3'])
+    for (const pill of pills) expect(pill.style.background).toBe('var(--admin-bg-active)')
+    // On the filled row the figure takes the on-accent white (`index.css`), so it says so.
+    expect(pills.map((pill) => pill.getAttribute('data-active'))).toEqual(['true', 'false'])
   })
 })
 
 describe('RoleBasedNav on the canvas rail', () => {
   const source = readFileSync(join(process.cwd(), 'src', 'navigation', 'RoleBasedNav.tsx'), 'utf8')
-  it('heads each section as the canvas does: 8px above and below, 10px in', () => {
-    // `.nav-section { padding: 14px 10px 6px }` plus the nav's 2px gap; at 6px under the head
-    // every row under it sat 2px high on the shot, 6px by the rail's foot.
+  it('heads each section as the Apple rail does: 12px above, 4px below, 10px in', () => {
+    // `occ.css` `.sec-t { padding: 12px 10px 4px }`.
     expect(source).toMatch(
-      /<div className="nav-section-title" data-slot="nav-section-title" style=\{\{ padding: 'var\(--admin-space-8\) var\(--admin-space-10\)' \}\}>/,
+      /<div className="nav-section-title" data-slot="nav-section-title" style=\{\{ padding: 'var\(--admin-space-12\) var\(--admin-space-10\) var\(--admin-space-4\)' \}\}>/,
     )
   })
   it('insets each row 10px, as `.nav-row { padding: 0 10px }` does', () => {

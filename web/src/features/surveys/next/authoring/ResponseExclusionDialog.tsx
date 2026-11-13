@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from '../../../../i18n'
 import { describeKnownRefusal } from '../../../../api/describeApiError'
@@ -12,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   Label,
+  Note,
   Textarea,
 } from '../../../../components/ui'
 import { excludeSurveyResponse, restoreSurveyResponse, type SurveyRosterRow } from '../../api/surveys'
@@ -93,9 +95,9 @@ export function ResponseExclusionDialog({
         </DialogHeader>
         {exclude ? (
           <>
-            <p role="note" className="m-0 text-sm text-accent-amber-ink" data-testid="exclusion-subtraction">
+            <Note role="note" icon={<Info />} className="px-3 py-2.5 text-sm" data-testid="exclusion-subtraction">
               {copy('subtraction')}
-            </p>
+            </Note>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="exclusion-reason">{copy('reasonLabel')}</Label>
               <Textarea

@@ -114,7 +114,7 @@ describe('the originating finding', () => {
 
   it('yields no number for a row the server withheld — never the lowest of an empty row', () => {
     const finding = planFinding(trends({ respondentCount: 0, isSuppressed: true, scores: [null, null] }), 'q3', OPS)
-    expect(finding).toEqual({ status: 'protected', surveyId: 'q3', surveyTitle: 'Encuesta de Clima Q3', code: 'Q3', proposed: true })
+    expect(finding).toEqual({ status: 'protected', surveyId: 'q3', surveyTitle: 'Encuesta de Clima Q3', code: 'Q3', proposed: true, floor: ANONYMITY_FLOOR })
   })
 
   it('protects a row under the floor even when the server sent its scores', () => {
@@ -169,7 +169,7 @@ describe('did the plan move the number', () => {
   it('refuses a number when the later wave withholds the group', () => {
     const map = trends({ respondentCount: 0, isSuppressed: true, scores: [null, null] })
     const finding = planFinding(map, 'q3', OPS, raisedInQ2)
-    expect(planMove(map, finding, OPS)).toEqual({ status: 'protected', code: 'Q2' })
+    expect(planMove(map, finding, OPS)).toEqual({ status: 'protected', code: 'Q2', floor: ANONYMITY_FLOOR })
   })
 
   /**
@@ -185,13 +185,13 @@ describe('did the plan move the number', () => {
     const ops = map.groups.find((group) => group.key === OPS)!
     ops.points[1] = { surveyId: 'q3', respondentCount: ANONYMITY_FLOOR - 1, isSuppressed: false, scores: [3.2, 2.4] }
     const finding = planFinding(map, 'q3', OPS, raisedInQ2)
-    expect(planMove(map, finding, OPS)).toEqual({ status: 'protected', code: 'Q2' })
+    expect(planMove(map, finding, OPS)).toEqual({ status: 'protected', code: 'Q2', floor: ANONYMITY_FLOOR })
   })
 
   it('refuses a number when the later wave is over the floor but the server sent no score for the cell', () => {
     const map = trends({ respondentCount: 6, isSuppressed: false, scores: [null, 2.4] })
     const finding = planFinding(map, 'q3', OPS, raisedInQ2)
-    expect(planMove(map, finding, OPS)).toEqual({ status: 'protected', code: 'Q2' })
+    expect(planMove(map, finding, OPS)).toEqual({ status: 'protected', code: 'Q2', floor: ANONYMITY_FLOOR })
   })
 
   it('has nothing to say about a finding the screen proposed: that would difference today against itself', () => {

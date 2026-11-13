@@ -139,7 +139,7 @@ export function DateTimeField({
             )}
           >
             <CalendarIcon aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
-            <span id={valueId} className={cn('truncate', clock ? 'font-mono tabular-nums' : 'text-fg-tertiary')}>
+            <span id={valueId} className={cn('truncate', clock ? 'tabular-nums' : 'text-fg-tertiary')}>
               {clock ? numericWallClock(clock, locale) : t('microclimates.next.create.pickDateTime')}
             </span>
           </button>
@@ -161,12 +161,12 @@ export function DateTimeField({
                 maxLength={5}
                 aria-invalid={timeInvalid || undefined}
                 aria-describedby={timeInvalid ? timeHintId : undefined}
-                className="h-8 w-20 px-2 text-center font-mono tabular-nums"
+                className="h-8 w-20 px-2 text-center tabular-nums"
                 onChange={(event) => typeTime(event.target.value)}
               />
             </div>
             {timeInvalid && (
-              <span id={timeHintId} className="text-xs text-accent-red">
+              <span id={timeHintId} className="text-xs text-accent-red-ink">
                 {t('microclimates.next.create.timeInvalid')}
               </span>
             )}

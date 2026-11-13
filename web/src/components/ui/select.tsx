@@ -40,7 +40,9 @@ export function SelectTrigger({
         'flex w-full items-center justify-between gap-inline whitespace-nowrap',
         'rounded-md border border-line-control bg-surface-input px-3 text-base text-fg-primary',
         'transition-[border-color] ease-out',
-        'data-[size=default]:h-control-lg data-[size=sm]:h-control-md',
+        // `default` is the Apple design's `.in` (36px), `sm` the 28px desktop floor; both 44px
+        // under a finger.
+        'data-[size=default]:h-9 data-[size=sm]:h-control-md pointer-coarse:min-h-11',
         'data-[placeholder]:text-fg-tertiary',
         'hover:not-disabled:border-line-hover',
         'disabled:cursor-not-allowed disabled:opacity-50',

@@ -357,7 +357,7 @@ describe('NotificationsInboxPage', () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Notificaciones' })).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: 'Solo no leídas' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Marcar como Leído' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Marcar como leído' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Preferencias' })).toBeTruthy()
     expect(within(rowFor('Survey ready')).getByText('Invitación a encuesta')).toBeTruthy()
     expect(within(rowFor('Survey ready')).getByText('No leída')).toBeTruthy()

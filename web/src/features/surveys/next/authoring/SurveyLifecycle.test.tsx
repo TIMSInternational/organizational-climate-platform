@@ -132,11 +132,11 @@ describe('Detalle de encuesta — the window and delete (audit G16)', () => {
     const status = await screen.findByTestId('tile-status')
     expect((within(status).getByRole('button', { name: 'Activar' }) as HTMLButtonElement).disabled).toBe(true)
 
-    // The warning that always said "cambia primero las fechas" now has the way to do it.
+    // The warning that always said "cambie primero las fechas" now has the way to do it.
     await user.click(within(screen.getByTestId('status-end-passed-block')).getByRole('button', { name: window_.edit }))
     const dialog = await screen.findByRole('dialog')
     // Read on the company's clock, and says so.
-    expect(dialog.textContent).toContain('America/Costa_Rica (GMT-6)')
+    expect(dialog.textContent).toContain('Costa Rica (GMT-6)')
     const startField = within(dialog).getByRole('button', { name: new RegExp(`^${window_.start} `) })
     const endField = within(dialog).getByRole('button', { name: new RegExp(`^${window_.end} `) })
     expect(startField.textContent).toBe('01/09/2026 · 08:00')
@@ -240,7 +240,7 @@ describe('Detalle de encuesta — the window and delete (audit G16)', () => {
     renderView(survey({ startDate: '2026-09-01T03:00:00Z' }))
     // 03:00 UTC on the 1st is 21:00 on 31 August in Costa Rica.
     expect(screen.getByTestId('sheet-start').textContent).toBe('31 ago 2026 · 21:00')
-    expect(screen.getByTestId('detail-sheet').textContent).toContain('America/Costa_Rica (GMT-6)')
+    expect(screen.getByTestId('detail-sheet').textContent).toContain('Costa Rica (GMT-6)')
   })
 
   it('dates the close tile on the same clock as the sheet, so the two cannot disagree', () => {

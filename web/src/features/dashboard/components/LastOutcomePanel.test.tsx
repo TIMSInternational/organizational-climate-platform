@@ -84,10 +84,12 @@ describe('LastOutcomePanel', () => {
 
     await screen.findByText('Q3 Climate Survey closed')
     expect(container.textContent).toContain('24 answers across 5 departments.')
-    // The typographic thesis: every reading is mono with tabular figures, the prose is not.
-    // A flat `t()` would render both figures in the sans face and still read correctly.
+    // Every reading is a tabular-figure span, the prose is not; since the Apple design
+    // (11 Nov) a reading is in the sans face, never a monospaced third face.
+    // A flat `t()` would render the figures as bare prose and still read correctly.
+    expect(container.querySelector('.font-mono')).toBeNull()
     expect(
-      [...container.querySelectorAll('.font-mono.tabular-nums')].map((node) => node.textContent),
+      [...container.querySelectorAll('[data-slot="reading"].tabular-nums')].map((node) => node.textContent),
     ).toEqual(['24', '5', '2', '2'])
   })
 

@@ -18,7 +18,7 @@ interface SurveyStatusChipsProps {
  *
  * ## Why the count is set in mono and the word is not
  *
- * The redesign's one typographic rule: every *reading* is `font-mono tabular-nums`
+ * The redesign's one typographic rule: every *reading* is `tabular-nums`
  * and prose stays in the sans face. A chip is both — a word and a measurement — so
  * the two faces sit side by side inside it. Tabular figures also stop the chips
  * reflowing as counts change width between loads.
@@ -74,7 +74,7 @@ export default function SurveyStatusChips({
             )}
           >
             {chip.label}
-            <span className="font-mono tabular-nums">{chip.count.toLocaleString(locale)}</span>
+            <span className="tabular-nums">{chip.count.toLocaleString(locale)}</span>
           </button>
         )
       })}

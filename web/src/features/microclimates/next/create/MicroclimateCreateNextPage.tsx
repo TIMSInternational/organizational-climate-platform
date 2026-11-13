@@ -4,7 +4,7 @@ import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
 import { Clock, Ellipsis, GripVertical, Plus, Send, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { RailReportsIcon, RailShieldIcon } from '../../../../navigation/railIcons'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { CanvasCard, FactList, NoteBand } from '../../../../components/canvas'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
 import {
@@ -152,8 +152,7 @@ function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?
 
   return (
     <div>
-      <PageTopBar
-        compact
+      <PageHeader
         title={pageTitle}
         eyebrow={t('microclimates.next.create.eyebrow')}
         description={editing ? t('microclimates.next.edit.description') : t('microclimates.next.create.description')}
@@ -365,7 +364,7 @@ function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?
                   type="number"
                   min={1}
                   inputMode="numeric"
-                  className="w-30 font-mono tabular-nums"
+                  className="w-30 tabular-nums"
                   value={values.targetParticipantCount}
                   disabled={busy}
                   onChange={(event) => state.patch({ targetParticipantCount: event.target.value })}
@@ -441,7 +440,7 @@ function CreateForm({ state, editId }: { state: MicroclimateCreateState; editId?
                   {
                     id: 'expected',
                     term: t('microclimates.next.create.summaryExpected'),
-                    value: <span className="font-mono tabular-nums">{values.targetParticipantCount.trim() || '0'}</span>,
+                    value: <span className="tabular-nums">{values.targetParticipantCount.trim() || '0'}</span>,
                   },
                   {
                     id: 'answer',
@@ -590,7 +589,7 @@ function QuestionRow({
     <div className="flex flex-col gap-2 rounded-xl border border-line-default px-3 pt-2.5 pb-3">
       <div className="flex flex-wrap items-center gap-2.5">
         <GripVertical aria-hidden="true" className="size-4 shrink-0 text-fg-tertiary" />
-        <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-surface-icon-box font-mono text-xs font-semibold tabular-nums text-fg-secondary">
+        <span className="inline-flex size-5.5 shrink-0 items-center justify-center rounded-full bg-surface-fill text-xs font-semibold tabular-nums text-fg-secondary">
           {order}
         </span>
         <Chip label={canvasTypeLabel(t, question.type)} />
@@ -601,7 +600,6 @@ function QuestionRow({
             checked={question.required}
             disabled={disabled}
             onCheckedChange={(required) => update({ required })}
-            className="data-[state=checked]:bg-accent-green"
           />
           <label htmlFor={switchId} className="m-0 text-sm font-normal leading-normal text-fg-secondary">
             {question.required ? t('microclimates.next.create.required') : t('microclimates.next.create.optional')}
@@ -703,10 +701,10 @@ function RespondentPreview({ values }: { values: MicroclimateWizardValues }) {
   const total = values.questions.length
   return (
     <div className="flex flex-col gap-3.5 rounded-[0.75rem] border border-line-default bg-surface-outer p-4">
-      <span className="font-store-serif text-xl leading-tight text-fg-primary">{title}</span>
+      <span className="font-display text-xl font-semibold leading-tight tracking-title text-fg-primary">{title}</span>
       <span className="self-start">
         {values.anonymousResponses ? (
-          <Chip tone="good" icon={<RailShieldIcon strokeWidth={2} className="size-3.25" />} label={t('microclimates.respondAnonymityChip')} />
+          <Chip tone="neutral" icon={<RailShieldIcon strokeWidth={2} className="size-3.25" />} label={t('microclimates.respondAnonymityChip')} />
         ) : (
           <Chip label={t('microclimates.identifiedShort')} />
         )}
@@ -715,8 +713,9 @@ function RespondentPreview({ values }: { values: MicroclimateWizardValues }) {
         const text = textIn(values.language, question.textEn, question.textEs).trim() || t('microclimates.next.create.previewEmpty')
         return (
           <div key={question.key} className="flex flex-col gap-2.5 rounded-xl border border-line-default bg-surface-card p-3">
-            <span className="text-base font-semibold text-fg-primary">
-              <span className="mr-1 rounded-md bg-surface-icon-box px-1.5 py-px font-mono text-xs font-medium text-fg-secondary">
+            {/* The respondent's question is set in the display serif, as the Respond board draws it. */}
+            <span className="font-display text-lg font-semibold leading-snug text-fg-primary">
+              <span className="mr-1 rounded-md bg-surface-fill px-1.5 py-px align-middle font-sans text-xs font-medium tabular-nums text-fg-secondary">
                 {t('microclimates.next.create.previewPosition', { position: index + 1, total })}
               </span>{' '}
               {text}
@@ -756,7 +755,7 @@ function PreviewAnswer({ question, language }: { question: WizardQuestionValues;
   return (
     <span className="flex flex-wrap gap-1.5">
       {labels.map((label, index) => (
-        <span key={`${label}-${index}`} className={cn(box, 'font-mono tabular-nums')}>
+        <span key={`${label}-${index}`} className={cn(box, 'tabular-nums')}>
           {label}
         </span>
       ))}

@@ -24,7 +24,7 @@ public class JwtTokenService : IJwtTokenService
 
     public string IssueToken(TokenClaims claims, SessionWindow window)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = window.IssuedAt;
 
         var jwtClaims = new List<Claim>
         {

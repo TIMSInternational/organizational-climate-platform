@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { ApiError } from '../../../../api/authFetch'
 import { describeKnownRefusal } from '../../../../api/describeApiError'
@@ -12,6 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Note,
 } from '../../../../components/ui'
 import { DateTimeField } from '../../../microclimates/next/create/DateTimeField'
 import type { SurveyDetail } from '../../api/surveys'
@@ -116,9 +118,9 @@ export function SurveyWindowDialog({
           </p>
         )}
         {survey.status === 'active' && (
-          <p role="note" className="m-0 text-sm text-accent-amber-ink" data-testid="window-live">
+          <Note role="note" icon={<Info />} className="px-3 py-2.5 text-sm" data-testid="window-live">
             {copy('liveNote')}
-          </p>
+          </Note>
         )}
         {problem && (
           <Alert variant="destructive" role="alert">

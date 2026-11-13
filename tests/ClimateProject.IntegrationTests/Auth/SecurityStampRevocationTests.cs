@@ -270,7 +270,7 @@ public class SecurityStampRevocationTests : IAsyncLifetime
             CompanyId: _employee.CompanyId?.ToString() ?? string.Empty,
             IsActive: true,
             SecurityStamp: _admin.SecurityStamp),
-            new SessionWindow(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1)));
+            new SessionWindow(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), DateTimeOffset.UtcNow));
 
         Assert.Equal(
             HttpStatusCode.Unauthorized,

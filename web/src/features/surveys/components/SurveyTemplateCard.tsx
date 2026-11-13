@@ -72,7 +72,7 @@ export default function SurveyTemplateCard({ template }: SurveyTemplateCardProps
           <span className="text-2xs font-semibold uppercase tracking-label text-fg-secondary">
             {t('surveys.timesUsed')}
           </span>
-          <span className="font-mono text-base tabular-nums text-fg-primary">
+          <span className="text-base font-semibold tabular-nums text-fg-primary">
             {template.usageCount.toLocaleString(locale)}
           </span>
         </span>

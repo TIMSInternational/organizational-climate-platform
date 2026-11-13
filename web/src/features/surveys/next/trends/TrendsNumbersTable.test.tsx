@@ -45,7 +45,7 @@ describe('TrendsNumbersTable', () => {
       { key: 'c', name: 'C', values: [4.04, 1.0] },
     ])
     const cells = [...document.querySelectorAll('[data-slot="trends-cell"]')].map((cell) => ({
-      text: cell.querySelector('.font-mono')?.textContent,
+      text: cell.querySelector('[data-slot="trends-cell-value"]')?.textContent,
       band: cell.getAttribute('data-band'),
     }))
     // Row by row: Q1's three cells, then Q2's. Judged RAW, 3,96 would be opportunity and 2,96
@@ -59,9 +59,9 @@ describe('TrendsNumbersTable', () => {
       { text: '2.9', band: 'critical' },
       { text: '1.0', band: 'critical' },
     ])
-    // Colour is never alone: every cell prints its band's word.
+    // Colour is never alone: every cell says its band's name (to AT and in its title).
     const first = document.querySelector('[data-slot="trends-cell"]') as HTMLElement
-    expect(first.textContent).toContain(en.resultBands.short.strength)
+    expect(first.textContent).toContain(en.resultBands.name.strength)
   })
 
   it('gives the dimension columns equal widths beside a fixed survey column', () => {
@@ -117,5 +117,37 @@ describe('TrendsNumbersTable on the artboard grid', () => {
     // index.css pads every bare th 8px; above the heads it put the table 9px under the artboard's.
     expect(/const HEAD = '[^']*\bpt-0\b/.test(source)).toBe(true)
     expect(source.match(/border-line-light pt-2 pb-0/g)).toHaveLength(2)
+  })
+
+  it('marks each reading with its band glyph, as the dashboard map does, and prints no visible band name', () => {
+    renderTable([
+      { key: 'a', name: 'A', values: [3.5, 4.5] },
+      { key: 'b', name: 'B', values: [2.0, 3.5] },
+      { key: 'c', name: 'C', values: [3.5, 3.5] },
+      { key: 'd', name: 'D', values: [3.5, 3.5] },
+      { key: 'e', name: 'E', values: [3.5, 3.5] },
+      { key: 'f', name: 'F', values: [3.5, 3.5] },
+    ])
+    const names = Object.values(en.resultBands.short).map((name) => name.toLowerCase())
+    for (const cell of document.querySelectorAll('[data-slot="trends-cell"]')) {
+      // The glyph sits before the figure, hidden from AT (the sr-only name speaks for it).
+      const glyph = cell.querySelector('[data-slot="trends-cell-glyph"]') as HTMLElement
+      expect(glyph).toBeTruthy()
+      expect(glyph.getAttribute('aria-hidden')).toBe('true')
+      expect(glyph.compareDocumentPosition(cell.querySelector('[data-slot="trends-cell-value"]') as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // Everything a sighted reader sees: the glyph and the reading — no «OPORTUNIDAD» beside it.
+      const visible = [...cell.querySelectorAll('*')]
+        .filter((node) => !node.closest('.sr-only') && node.children.length === 0)
+        .map((node) => (node.textContent ?? '').trim().toLowerCase())
+        .filter(Boolean)
+      expect(visible.some((text) => names.includes(text))).toBe(false)
+      expect(cell.className.split(/\s+/)).not.toContain('uppercase')
+      // Colour is never alone: the band's name is still said, to AT and in the title.
+      expect(cell.querySelector('.sr-only')?.textContent).toMatch(/\S/)
+      expect(cell.getAttribute('title')).toMatch(/\S/)
+    }
+    // 180px survey column + six columns of at least 128px: at 390 the table scrolls in its card.
+    const table = document.querySelector('[data-slot="trends-table"]') as HTMLElement
+    expect(Number.parseFloat(table.style.minWidth)).toBeGreaterThanOrEqual(180 + 6 * 128)
   })
 })

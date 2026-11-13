@@ -40,7 +40,7 @@ export function CanvasCard({ title, count, adornment, aside, inset = 'main', cla
     <section
       aria-labelledby={headingId}
       className={cn(
-        'flex min-w-0 flex-col gap-3 rounded-xl border border-line-default bg-surface-card pt-4 pb-4.5 shadow-xs',
+        'flex min-w-0 flex-col gap-3 rounded-xl border border-line-panel bg-surface-card pt-4 pb-4.5',
         inset === 'side' ? 'px-4.5' : 'px-5',
         className,
       )}
@@ -52,7 +52,7 @@ export function CanvasCard({ title, count, adornment, aside, inset = 'main', cla
             {title}
           </h2>
           {count !== undefined && (
-            <span className="font-mono text-sm tabular-nums text-fg-tertiary">{count}</span>
+            <span className="text-sm tabular-nums text-fg-tertiary">{count}</span>
           )}
           {adornment}
         </div>
@@ -86,7 +86,7 @@ export function CanvasSectionHead({
         <h2 id={id} className="m-0 text-2xl">
           {title}
         </h2>
-        {count !== undefined && <span className="font-mono text-sm tabular-nums text-fg-tertiary">{count}</span>}
+        {count !== undefined && <span className="text-sm tabular-nums text-fg-tertiary">{count}</span>}
       </div>
       {aside !== undefined && aside !== null && <span className="text-right text-sm text-fg-tertiary">{aside}</span>}
     </div>

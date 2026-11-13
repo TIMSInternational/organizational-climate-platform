@@ -4,7 +4,7 @@ export { buttonVariants, type ButtonVariantProps } from './buttonVariants'
 export { Badge, type BadgeProps } from './badge'
 export { badgeVariants, type BadgeVariantProps } from './badgeVariants'
 // The status chip (UI-0). Beside `Badge`, not instead of it — `chip.tsx` says why.
-export { Chip, type ChipProps } from './chip'
+export { Chip, type ChipProps, type ChipStatusTone } from './chip'
 export { chipVariants, type ChipTone, type ChipVariantProps } from './chipVariants'
 export { Input, type InputProps } from './input'
 export { Textarea, type TextareaProps } from './textarea'
@@ -56,6 +56,8 @@ export {
   CardFooter,
   CardHeader,
   CardTitle,
+  KpiCard,
+  type KpiCardProps,
 } from './card'
 export { Separator, type SeparatorProps } from './separator'
 export {
@@ -151,6 +153,11 @@ export {
   type ErrorStateProps,
   type NetworkErrorProps,
 } from './error-state'
+// The Apple design's states and notes (11 Nov): a loading placeholder that announces once, a
+// withheld group drawn without a number, and a standing note.
+export { LoadingState, type LoadingStateProps } from './loading-state'
+export { ProtectedState, type ProtectedStateProps } from './protected-state'
+export { Note, type NoteProps } from './note'
 
 // Batch 3 of the ui/ primitive port (#77): data display and navigation.
 export {
@@ -165,6 +172,7 @@ export {
   TableRow,
   TableSortHeader,
   type SortDirection,
+  type TableProps,
 } from './table'
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs'
 export { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './accordion'
@@ -207,6 +215,13 @@ export { DatePicker, type DatePickerProps } from './date-picker'
 // respond form and the microclimate page both reached for it before it was in the
 // barrel, which is the moment a primitive has earned its place in one.
 export { SegmentedScale, type SegmentedScaleProps } from './SegmentedScale'
+// The Apple design's segmented control (`.seg`): a view control, a group of toggle buttons.
+// Not the respondent's scale above — that one is a radiogroup whose value is submitted.
+export {
+  SegmentedControl,
+  type SegmentedControlProps,
+  type SegmentedOption,
+} from './segmented-control'
 // The canvas's own button and chip glyphs (10 Sep artboards), for the screens drawn
 // from them; lucide stays for any glyph the canvas never drew.
 export {

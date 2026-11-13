@@ -193,3 +193,13 @@ export function questionFromLibraryItem(item: QuestionLibraryItemDetail, order: 
         : null,
   }
 }
+
+/**
+ * The disabled look for an authoring button whose label the user still has to read: Guardar
+ * borrador and Atrás on the builder, and a status verb («Programar», «Activar») or «Editar
+ * audiencia» that the detail page holds disabled for a reason it states beside it. The Button's
+ * `disabled:opacity-45` faded such a label to #989899 on white, 2.88:1. They keep full opacity
+ * and drop to the label ink instead (#6c6c71, 5.22:1 on white), so disabled still reads quieter
+ * than the primary ink.
+ */
+export const QUIET_DISABLED = 'disabled:opacity-100 disabled:text-fg-label'

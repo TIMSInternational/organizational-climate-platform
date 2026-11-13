@@ -63,6 +63,26 @@ describe('TrendSparkline', () => {
   })
 })
 
+describe('TrendSparkline colour', () => {
+  it('draws the line and its points in the neutral ink the trends page uses, and only the endpoint in a colour', () => {
+    const { container } = render(
+      <TrendSparkline values={[3.0, 3.3, 3.7]} bands={DEFAULT_RESULT_BANDS} labels={['Q1', 'Q2', 'Q3']} label="x" />,
+    )
+    expect(container.querySelector('path[data-slot="trend-line"]')?.getAttribute('stroke')).toBe('var(--admin-font-secondary)')
+    const points = [...container.querySelectorAll('circle:not([data-slot="trend-end"])')]
+    expect(points).toHaveLength(2)
+    expect(points.every((point) => point.getAttribute('fill') === 'var(--admin-font-secondary)')).toBe(true)
+  })
+
+  it('judges the endpoint at the decimals it is handed: 3.96 prints "3,96", still an opportunity, at two', () => {
+    // At one decimal it prints "4,0" and would be a strength; the card prints two.
+    const { container } = render(
+      <TrendSparkline values={[3.5, 3.8, 3.96]} bands={DEFAULT_RESULT_BANDS} labels={[]} label="x" decimals={2} />,
+    )
+    expect(container.querySelector('circle[data-slot="trend-end"]')?.getAttribute('data-band')).toBe('opportunity')
+  })
+})
+
 describe('TrendSparkline in the canvas card', () => {
   it('keeps 6px above its codes and sets them in the 15px line box the artboard draws', () => {
     const { container } = render(<TrendSparkline values={[3.3, 3.7, 4.0]} bands={DEFAULT_RESULT_BANDS} labels={['Q1', 'Q2', 'Q3']} label="x" />)

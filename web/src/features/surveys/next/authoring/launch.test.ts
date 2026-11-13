@@ -19,7 +19,11 @@ const summary = (over: Partial<Record<string, number>> = {}) => ({
 
 describe('responseRate', () => {
   it('is the whole percent of the stated audience, and null — never 0 — with no audience stated', () => {
-    expect(responseRate(3, 24)).toBe(13)
+    // 12.5 % floors to 12: a share is never rounded up past what happened.
+    expect(responseRate(3, 24)).toBe(12)
+    // 224 of 225 must not print 100 % beside a person who has not started.
+    expect(responseRate(224, 225)).toBe(99)
+    expect(responseRate(225, 225)).toBe(100)
     expect(responseRate(3, null)).toBeNull()
     expect(responseRate(3, 0)).toBeNull()
   })

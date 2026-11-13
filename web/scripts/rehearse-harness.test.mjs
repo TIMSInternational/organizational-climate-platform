@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { NAMES, RESPOND_LINK, READ_METHODS, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode } from './rehearse-harness.mjs'
+import { NAMES, RESPOND_LINK, READ_METHODS, BLOCKED_ERROR_CODE, allowRequest, isConsoleNoise, matchesOnly, exitCode, pickResultsSurvey, MIN_RESULTS_RESPONSES, microclimateDraft, REHEARSAL_MICROCLIMATE_TITLE } from './rehearse-harness.mjs'
+import { teardownRequests } from './flows-harness.mjs'
 
 describe('a read-only rehearsal lets the browser read and nothing else', () => {
   it('passes GET, HEAD and OPTIONS whatever the case', () => {
@@ -102,6 +103,67 @@ describe('the exit code is non-zero on any failure and when nothing ran', () => 
   it('is 2 when --only matched nothing, so a typo cannot read as a green rehearsal', () => {
     expect(exitCode([])).toBe(2)
     expect(exitCode(undefined)).toBe(2)
+  })
+
+  it('is 1 when every step passed but a teardown request was refused, so residue cannot read as green', () => {
+    expect(exitCode([{ status: 'PASS' }], [{ kind: 'microclimate', status: 409 }])).toBe(1)
+    expect(exitCode([{ status: 'PASS' }], [])).toBe(0)
+    expect(exitCode([{ status: 'PASS' }], undefined)).toBe(0)
+    expect(exitCode([{ status: 'PASS' }], null)).toBe(0)
+  })
+})
+
+describe('step 04 reads any closed survey with enough responses, the Q3 wave first', () => {
+  const s = (title, status, responseCount) => ({ id: title, title, status, responseCount })
+
+  it('takes a closed Q3 over an earlier closed survey that also qualifies', () => {
+    const picked = pickResultsSurvey([s('Clima Q2 2026', 'closed', 40), s('Clima Q3 2026', 'closed', 25)])
+    expect(picked?.title).toBe('Clima Q3 2026')
+  })
+
+  it('takes the first closed survey that qualifies when no title says Q3 — the tenant the step failed on', () => {
+    const picked = pickResultsSurvey([s('Pulso abierto', 'active', 90), s('Clima anual', 'closed', 30), s('Clima semestral', 'closed', 50)])
+    expect(picked?.title).toBe('Clima anual')
+  })
+
+  it(`ignores a Q3 that is not closed or has fewer than ${MIN_RESULTS_RESPONSES} responses`, () => {
+    expect(MIN_RESULTS_RESPONSES).toBe(20)
+    expect(pickResultsSurvey([s('Clima Q3', 'active', 90), s('Clima Q3 bis', 'closed', 19), s('Clima anual', 'closed', 20)])?.title).toBe('Clima anual')
+    expect(pickResultsSurvey([s('Clima Q3', 'closed', undefined)])).toBeNull()
+  })
+
+  it('is null when nothing qualifies, and for a missing list', () => {
+    expect(pickResultsSurvey([s('Clima Q3', 'draft', 0)])).toBeNull()
+    expect(pickResultsSurvey(undefined)).toBeNull()
+    expect(pickResultsSurvey([])).toBeNull()
+  })
+})
+
+describe('--open-microclimate opens one session for step 14, and the teardown closes it', () => {
+  const now = Date.parse('2026-11-12T15:00:00.000Z')
+
+  it('opens a session already started, so the activation that follows is inside its window', () => {
+    const body = microclimateDraft('company-1', now)
+    expect(body.title).toBe(REHEARSAL_MICROCLIMATE_TITLE)
+    expect(body.title).toBe('Ensayo automatizado')
+    expect(body.companyId).toBe('company-1')
+    expect(body.startTime).toBe('2026-11-12T14:59:00.000Z')
+    expect(body.endTime).toBe('2026-11-12T17:00:00.000Z')
+    expect(Date.parse(body.startTime)).toBeLessThan(now)
+    expect(Date.parse(body.endTime)).toBeGreaterThan(now)
+  })
+
+  it('carries exactly the one likert question and the settings the create page sends', () => {
+    const body = microclimateDraft('company-1', now)
+    expect(body).toMatchObject({ targetParticipantCount: 10, anonymousResponses: true, timezone: 'America/Costa_Rica' })
+    expect(body.questions).toEqual([{ text: '¿Cómo va la semana?', type: 'likert', required: true, order: 0 }])
+  })
+
+  it('is closed, not discarded, by the shared teardown — and nothing else is on the list', () => {
+    expect(teardownRequests({ microclimates: ['m-1'] })).toEqual([
+      expect.objectContaining({ kind: 'microclimate', id: 'm-1', method: 'PUT', path: '/microclimates/m-1/status', body: { status: 'closed' } }),
+    ])
+    expect(teardownRequests({ microclimates: [] })).toEqual([])
   })
 })
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
+import { act, render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { TranslationProvider } from '../i18n'
@@ -113,14 +113,33 @@ describe('AdminLayout', () => {
     expect(skip.getAttribute('href')).toBe('#main')
   })
 
-  it('sets the content card flush on the rail and under the bar from md, as the canvas draws it', () => {
-    // Every artboard of the 10 Sep canvas draws the card at x=236 (the rail's edge) and
-    // y=52 (the bar's foot), with the 12px gutter on the right and the bottom only. The
-    // suite has no layout engine, so this pins the classes that place it; the shots
-    // measure the pixels (`npm run shot`).
+  it('sets the content box flush on the rail and under the bar from md, as the boards draw it', () => {
+    // The Apple-design frame (`occ.css` `.page`): the box at the rail's edge and the bar's
+    // foot, 12px of navy on the right and the bottom only, radius 14px, on the panel
+    // surface. The suite has no layout engine, so this pins the classes that place it; the
+    // shots measure the pixels (`npm run shot`).
     renderShell()
     const classes = document.getElementById('main')!.className.split(/\s+/)
-    expect(classes).toEqual(expect.arrayContaining(['p-gutter', 'md:pt-0', 'md:pl-0']))
+    expect(classes).toEqual(expect.arrayContaining(['m-gutter', 'md:mt-0', 'md:ml-0', 'rounded-box', 'bg-surface-panel']))
+  })
+
+  it('scrolls inside the box, so its rounded edge and the navy around it stay put', () => {
+    // The box IS the scroller. Until the regroup the navy column scrolled and the card rode
+    // up under the bar with it; now `<main>` is the rounded box, and the page moves inside it.
+    renderShell()
+    const main = document.getElementById('main')!
+    expect(main.className.split(/\s+/)).toEqual(expect.arrayContaining(['rounded-box', 'overflow-y-auto', 'min-h-0']))
+    // Nothing between the box and the page that would scroll on its own or paint a second card.
+    const inner = main.firstElementChild!.className.split(/\s+/)
+    expect(inner).not.toContain('overflow-y-auto')
+    expect(inner).not.toContain('rounded-xl')
+    expect(inner).not.toContain('bg-surface-panel')
+  })
+
+  it('pads the box as the boards do: 22px over the page, 28px at the sides, 56px under it', () => {
+    renderShell()
+    const inner = document.getElementById('main')!.firstElementChild!.className.split(/\s+/)
+    expect(inner).toEqual(expect.arrayContaining(['md:pt-box-top', 'md:px-box-x', 'md:pb-box-bottom']))
   })
 
   it('puts the skip link before the navigation in DOM order', () => {
@@ -133,8 +152,8 @@ describe('AdminLayout', () => {
 
   it('builds the sidebar from the JWT claims, not from an env var', () => {
     renderShell()
-    // company_admin's group is keyed off the companyId claim.
-    expect(screen.getByRole('button', { name: /Company Administration/ })).toBeTruthy()
+    // company_admin's company-scoped rows interpolate the companyId claim.
+    expect(screen.getByRole('link', { name: 'People' }).getAttribute('href')).toBe('/admin/companies/c1/users')
   })
 
   it('gives a role with no admin pages no navigation chrome at all', () => {
@@ -182,9 +201,9 @@ describe('AdminLayout', () => {
 
     // The group row becomes a plain link while collapsed (there is nowhere to
     // draw the sub-tree), so its label has to come from aria-label.
-    const row = screen.getByRole('link', { name: 'Company Administration' })
+    const row = screen.getByRole('link', { name: 'Questions' })
     expect(row.textContent).toBe('')
-    expect(row.getAttribute('title')).toBe('Company Administration')
+    expect(row.getAttribute('title')).toBe('Questions')
   })
 
   it('signs out to the login page and drops the token', async () => {
@@ -223,16 +242,16 @@ describe('AdminLayout', () => {
     // border. happy-dom computes no layout, so this can only be asserted as the
     // class that fixes it.
     renderShell()
-    expect(document.getElementById('main')!.firstElementChild!.className).toContain('overflow-x-auto')
+    // `<main>` is the box: anything wider than it scrolls inside its rounded edge.
+    expect(document.getElementById('main')!.className).toContain('overflow-x-auto')
   })
 
   it('clears the fixed mobile tab bar below md, and reclaims the space above it', () => {
     renderShell()
-    const panel = document.getElementById('main')!.firstElementChild!.className
+    const panel = document.getElementById('main')!.firstElementChild!.className.split(/\s+/)
     expect(panel).toContain('pb-20')
-    // From md up, the canvas's 32px under the content (`padding: 20px 24px 32px` on
-    // every artboard's content card).
-    expect(panel).toContain('md:pb-8')
+    // From md up, the boards' 56px under the content (`occ.css` `.page` padding-bottom).
+    expect(panel).toContain('md:pb-box-bottom')
   })
 
   it('scrolls the content column rather than the page, so the sidebar stays put', () => {
@@ -616,5 +635,114 @@ describe('the tenant logo in the header strip', () => {
 
     await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
     expect(logo()).toBeNull()
+  })
+})
+
+/**
+ * The top bar's scope for the rail roles whose scope is their own claim (CompanyHome.dc.html:
+ * "Meridiano"; TeamHome.dc.html: "Meridiano · Operaciones"), and the bell as the only way to
+ * the inbox now that Notificaciones is not a rail row (11 Nov regroup).
+ */
+describe('the top bar after the regroup', () => {
+  function serveProfile(departmentName: string | null, companyLogoUrl: string | null = null) {
+    // Cleared BEFORE rendering: the profile cache is module-level and keyed by the token.
+    clearCompanyNameCache()
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        String(input).endsWith('/profile')
+          ? Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  id: 'u1', companyId: 'c1', companyName: 'Meridiano', email: 'a@meridiano.test',
+                  name: 'Ana', role: 'leader', departmentId: departmentName ? 'd1' : null, departmentName,
+                  managerId: null, isActive: true, hasPassword: true, lastLoginAt: null,
+                  createdAt: '2026-01-01T00:00:00Z', demographics: {}, companyLogoUrl,
+                }),
+                { status: 200 },
+              ),
+            )
+          : // The super administrator's selector lists companies; anything else is the bell's poll.
+            String(input).includes('/admin/companies')
+            ? Promise.resolve(new Response(JSON.stringify({ companies: [] }), { status: 200 }))
+            : Promise.resolve(new Response(JSON.stringify({ notifications: [] }), { status: 200 })),
+      ),
+    )
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    clearCompanyNameCache()
+  })
+
+  const scope = () => document.querySelector('[data-slot="company-scope"]')
+
+  it('names a company administrator’s company where the super administrator’s selector sits', async () => {
+    serveProfile(null)
+    setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
+    renderShell()
+
+    await waitFor(() => expect(scope()).not.toBeNull())
+    expect(scope()!.textContent).toBe('Company: Meridiano')
+    // In the bar, outside `<main>`, and not a control: nothing to choose.
+    expect(document.querySelector('header')!.contains(scope())).toBe(true)
+    expect(scope()!.querySelector('select, button, a')).toBeNull()
+  })
+
+  it('shows at every width with no logo, and steps aside below md where the logo already names the company', async () => {
+    serveProfile(null)
+    setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
+    renderShell()
+    await waitFor(() => expect(scope()).not.toBeNull())
+    expect(scope()!.className.split(/\s+/)).toContain('flex')
+    expect(scope()!.className.split(/\s+/)).not.toContain('hidden')
+    cleanup()
+
+    serveProfile(null, '/brand/meridiano.png')
+    setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
+    renderShell()
+    await waitFor(() => expect(scope()).not.toBeNull())
+    expect(scope()!.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'md:flex']))
+  })
+
+  it('names a leader’s company and department, as the TeamHome board does', async () => {
+    serveProfile('Operaciones')
+    setToken(tokenFor({ role: 'leader', companyId: 'c1' }))
+    renderShell()
+
+    await waitFor(() => expect(scope()?.textContent).toBe('Company: Meridiano · Operaciones'))
+  })
+
+  it('names nothing for a super administrator, whose selector says it, or a respondent, who has no bar to put it in', async () => {
+    for (const role of ['super_admin', 'employee']) {
+      serveProfile('Operaciones')
+      setToken(tokenFor({ role, companyId: 'c1' }))
+      renderShell()
+      // The profile has to have ANSWERED before absence means anything: until then the label
+      // is absent for every role. The tenant mark reads the same promise, so wait for the
+      // request and then let its resolution land.
+      await waitFor(() =>
+        expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith('/profile'))).toBe(true),
+      )
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      // The bar itself rendered — absence in a shell that failed to draw proves nothing.
+      expect(document.querySelector('header'), role).not.toBeNull()
+      expect(scope(), role).toBeNull()
+      cleanup()
+    }
+  })
+
+  it('leaves the inbox to the bell: no rail row leads there, and the bell is in the bar', async () => {
+    serveProfile(null)
+    setToken(tokenFor({ role: 'company_admin', companyId: 'c1' }))
+    renderShell()
+
+    const rail = document.querySelector('aside')!
+    expect(rail.querySelector('a[href="/notifications"]')).toBeNull()
+    expect(within(document.querySelector('header')!).getByRole('button', { name: /Notifications/ })).toBeTruthy()
   })
 })

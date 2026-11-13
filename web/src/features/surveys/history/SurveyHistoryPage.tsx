@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useFollowCompany } from '../../../company-context'
 import { ChevronDown, ChevronUp, FileClock, History, Lock } from 'lucide-react'
-import { PageTopBar } from '../../../components/layout'
-import { Button, Chip, ErrorState, LoadingRegion, SkeletonText, Table } from '../../../components/ui'
+import { PageHeader } from '../../../components/layout'
+import { Button, Chip, ErrorState, LoadingState, SkeletonText, Table, TableHead } from '../../../components/ui'
 import { isApiStatus } from '../../../api/authFetch'
 import { useTranslation } from '../../../i18n'
 import { getCompanySettings } from '../../org-structure/api/companySettings'
@@ -104,9 +104,7 @@ export default function SurveyHistoryPage() {
 
   if (state.status === 'loading') {
     return (
-      <LoadingRegion loading label={t('common.loading')}>
-        <SkeletonText lines={8} />
-      </LoadingRegion>
+      <LoadingState rows={6} label={t('common.loading')} />
     )
   }
   if (state.status === 'forbidden' || state.status === 'missing') {
@@ -141,7 +139,7 @@ export default function SurveyHistoryPage() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={title}
         title={t(`${K}.title`)}
         description={t(zoneIsCompany ? `${K}.descriptionCompanyZone` : `${K}.descriptionBrowserZone`, { zone: timeZone })}
@@ -150,7 +148,6 @@ export default function SurveyHistoryPage() {
           { label: title, href: `/surveys/${survey.id}` },
           { label: t(`${K}.crumb`) },
         ]}
-        tightBreadcrumb
       />
 
       <div className="flex flex-col gap-4">
@@ -166,7 +163,7 @@ export default function SurveyHistoryPage() {
             </ol>
           )}
           {entries.length >= HISTORY_LIMIT && (
-            <p className="m-0 mt-3 text-xs text-fg-secondary">{t(`${K}.limitReached`, { count: HISTORY_LIMIT })}</p>
+            <p className="m-0 mt-3 text-sm text-fg-secondary">{t(`${K}.limitReached`, { count: HISTORY_LIMIT })}</p>
           )}
         </Panel>
 
@@ -202,12 +199,12 @@ function EntryRow({ entry, ctx }: { entry: SurveyAuditEntry; ctx: ValueContext }
   const fields = entry.action === 'updated' ? (entry.changes?.fields ?? []) : []
   return (
     <li data-slot="history-entry" className="flex flex-col gap-1.5 border-b border-line-light py-3 first:pt-0 last:border-b-0 last:pb-0 sm:flex-row sm:gap-4">
-      <time dateTime={entry.timestamp} className="shrink-0 font-mono text-xs leading-6 text-fg-secondary tabular-nums sm:w-44">
+      <time dateTime={entry.timestamp} className="shrink-0 text-sm leading-6 text-fg-secondary tabular-nums sm:w-48">
         {formatInstant(entry.timestamp, ctx.timeZone, ctx.locale)}
       </time>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <span className="text-sm font-semibold text-fg-primary">{entryHeadline(t, entry)}</span>
-        <span className="text-xs text-fg-secondary">
+        <span className="text-base font-semibold text-fg-primary">{entryHeadline(t, entry)}</span>
+        <span className="text-sm text-fg-secondary">
           {t(`${K}.by`, { name: entry.userName, role: roleName(t, entry.userRole) })}
         </span>
         {fields.length > 0 && (
@@ -220,7 +217,7 @@ function EntryRow({ entry, ctx }: { entry: SurveyAuditEntry; ctx: ValueContext }
           </ul>
         )}
         {entry.action === 'duplicated' && entry.entityId && (
-          <Link to={`/surveys/${entry.entityId}`} className="text-xs text-accent-blue underline underline-offset-2">
+          <Link to={`/surveys/${entry.entityId}`} className="text-sm text-accent-blue-ink underline underline-offset-2">
             {t(`${K}.openCopy`)}
           </Link>
         )}
@@ -277,15 +274,16 @@ function VersionRow({
   const author = version.createdByName ?? t(`${K}.unknownAuthor`)
 
   return (
-    <li data-slot="history-version" className="rounded-md border border-line-light px-4 py-3">
+    <li data-slot="history-version" className="rounded-lg border border-line-default px-4 py-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="text-base font-semibold">{t(`${K}.versionNumber`, { number: version.versionNumber })}</span>
-            {version.isCurrent && <Chip tone="accent" label={t(`${K}.current`)} />}
+            <span className="text-base font-semibold tabular-nums">{t(`${K}.versionNumber`, { number: version.versionNumber })}</span>
+            {/* Status chips are gray (the user's ruling of 11 Nov); only Activa wears the blue. */}
+            {version.isCurrent && <Chip label={t(`${K}.current`)} />}
             <Chip label={reasonLabel(t, version.reason)} />
           </span>
-          <span className="text-xs text-fg-secondary">
+          <span className="text-sm tabular-nums text-fg-secondary">
             {t(`${K}.versionMeta`, {
               name: author,
               when: formatInstant(version.createdAt, ctx.timeZone, ctx.locale),
@@ -293,9 +291,9 @@ function VersionRow({
             })}
           </span>
           {previous === null ? (
-            <span className="text-xs text-fg-secondary">{t(`${K}.firstVersion`)}</span>
+            <span className="text-sm tabular-nums text-fg-secondary">{t(`${K}.firstVersion`)}</span>
           ) : (
-            <span className="text-xs text-fg-secondary">
+            <span className="text-sm tabular-nums text-fg-secondary">
               {version.changes.length === 0
                 ? t(`${K}.sameAsPrevious`, { number: previous.versionNumber })
                 : t(version.changes.length === 1 ? `${K}.changesSinceOne` : `${K}.changesSince`, {
@@ -333,36 +331,37 @@ function DiffTable({ ctx, comparison }: { ctx: ValueContext; comparison: SurveyV
   const { t } = ctx
   const rows = changeRows(ctx, comparison.from, comparison.to, comparison.changes)
   return (
-    <div className="overflow-hidden rounded-md border border-line-light">
+    <div className="overflow-hidden rounded-lg border border-line-default">
       <Table className="table-fixed text-sm">
         <caption className="sr-only">
           {t(`${K}.diffCaption`, { from: comparison.from.versionNumber, to: comparison.to.versionNumber })}
         </caption>
+        {/* The board's `.tbl th`: 13px semibold in sentence case, never the eyebrow's uppercase. */}
         <thead className="hidden bg-surface-icon-box sm:table-header-group">
           <tr>
-            <th scope="col" className="w-1/4 px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-fg-label">
+            <TableHead scope="col" className="w-1/4">
               {t(`${K}.diffField`)}
-            </th>
-            <th scope="col" className="px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-fg-label">
+            </TableHead>
+            <TableHead scope="col">
               {t(`${K}.diffBefore`, { number: comparison.from.versionNumber })}
-            </th>
-            <th scope="col" className="px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-fg-label">
+            </TableHead>
+            <TableHead scope="col">
               {t(`${K}.diffAfter`, { number: comparison.to.versionNumber })}
-            </th>
+            </TableHead>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.path} data-slot="diff-row" className="flex flex-col border-t border-line-light first:border-t-0 sm:table-row">
-              <th scope="row" className="px-3 pt-2 text-left align-top text-xs font-semibold text-fg-primary sm:py-2">
+              <th scope="row" className="px-3 pt-2 text-left align-top text-sm font-semibold text-fg-primary sm:py-2">
                 {row.label}
               </th>
               <td className="break-words px-3 align-top text-fg-secondary sm:py-2">
-                <span className="mr-1 text-2xs font-bold uppercase tracking-wider text-fg-label sm:hidden">{t(`${K}.diffBeforeShort`)}</span>
+                <span className="mr-1 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label sm:hidden">{t(`${K}.diffBeforeShort`)}</span>
                 {row.before === null ? <em className="text-fg-secondary">{t(`${K}.absent`)}</em> : <span className="line-through decoration-fg-tertiary">{row.before}</span>}
               </td>
               <td className="break-words px-3 pb-2 align-top text-fg-primary sm:py-2">
-                <span className="mr-1 text-2xs font-bold uppercase tracking-wider text-fg-label sm:hidden">{t(`${K}.diffAfterShort`)}</span>
+                <span className="mr-1 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label sm:hidden">{t(`${K}.diffAfterShort`)}</span>
                 {row.after === null ? <em className="text-fg-secondary">{t(`${K}.absent`)}</em> : row.after}
               </td>
             </tr>

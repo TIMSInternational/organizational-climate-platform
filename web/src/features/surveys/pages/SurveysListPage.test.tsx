@@ -312,7 +312,7 @@ describe('SurveysListPage', () => {
     await screen.findByText('Q3 climate survey')
 
     const figure = screen.getByText('84%')
-    expect(figure.className).toContain('font-mono')
+    expect(figure.className).not.toContain('font-mono')
     expect(figure.className).toContain('tabular-nums')
 
     const bar = container.querySelector('td [aria-hidden="true"] > span[style]')

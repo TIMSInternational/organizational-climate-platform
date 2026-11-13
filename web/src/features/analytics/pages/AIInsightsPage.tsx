@@ -200,7 +200,7 @@ export default function AIInsightsPage() {
               disagrees with the cards under it is worse than no headline. */}
           <div className="grid grid-cols-1 gap-inline sm:grid-cols-3">
             <KpiTile label={t('insights.open')} value={openCount} />
-            <KpiTile label={t('actionPlans.critical')} value={criticalCount} />
+            <KpiTile label={t('insights.priorityUrgent')} value={criticalCount} />
             <KpiTile
               label={t('insights.acknowledged')}
               value={insights.length - openCount}

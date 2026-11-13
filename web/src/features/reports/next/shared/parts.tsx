@@ -10,7 +10,6 @@ import {
   bandCellStyle,
   bandName,
   bandOf,
-  bandShortName,
   formatMetric,
   scoreText,
   type ResultBandKey,
@@ -45,7 +44,7 @@ export function ReportCard({
   return (
     <section
       aria-labelledby={id}
-      className="flex min-w-0 flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 py-4 shadow-sm"
+      className="flex min-w-0 flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-5 py-4"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id={id} className="m-0">
@@ -72,22 +71,30 @@ export function ReadingCard({
   numeric = true,
   unit,
   note,
+  icon,
 }: {
   label: string
   value: string
+  /** A glyph before the value — the padlock of a reading the floor withholds. */
+  icon?: ReactNode
   /** Whether `value` is a figure (mono, tabular) or a sentence. */
   numeric?: boolean
   unit?: string
   note: ReactNode
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-default bg-surface-card px-4 py-3.5 shadow-sm">
-      <span className="text-2xs font-bold uppercase tracking-label text-fg-tertiary">{label}</span>
+    <div className="flex min-w-0 flex-col gap-2 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5">
+      <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">{label}</span>
       <span className="flex flex-wrap items-baseline gap-2">
+        {icon !== undefined && (
+          <span aria-hidden="true" className="inline-flex self-center text-fg-secondary [&_svg]:size-5">
+            {icon}
+          </span>
+        )}
         <span
           className={cn(
             'text-fg-primary',
-            numeric ? 'font-mono text-kpi-hero tabular-nums' : 'text-2xl',
+            numeric ? 'text-kpi-hero tabular-nums' : 'text-2xl',
           )}
         >
           {value}
@@ -233,7 +240,7 @@ export function ClimateMapGrid({
             <th
               key={column}
               scope="col"
-              className="border-0 p-0 text-center align-bottom text-2xs font-bold uppercase leading-tight tracking-label text-fg-tertiary [overflow-wrap:normal]"
+              className="border-0 p-0 text-center align-bottom text-xs font-semibold leading-tight text-fg-label [overflow-wrap:normal]"
             >
               {dimensionLabel(column, t)}
             </th>
@@ -285,7 +292,7 @@ export function ClimateMapGrid({
                 // measured against. `derive.ts` `SCALE_MIN` records the whole argument.
                 return (
                   <td key={column} className="border-0 p-0">
-                    <span className="flex h-8.5 w-full items-center justify-center rounded-md bg-surface-icon-box font-mono text-sm tabular-nums text-fg-primary">
+                    <span className="flex h-8.5 w-full items-center justify-center rounded-md bg-surface-icon-box text-sm tabular-nums text-fg-primary">
                       <span className="sr-only">{`${description}: `}</span>
                       {score(value)}
                     </span>
@@ -300,20 +307,18 @@ export function ClimateMapGrid({
                 <td key={column} className="border-0 p-0">
                   <span
                     data-band={band}
-                    className="flex h-10 w-full flex-col items-center justify-center gap-px overflow-hidden rounded-md border px-1"
+                    className="flex h-10 w-full items-center justify-center gap-1 overflow-hidden rounded-md border px-1"
                     style={bandCellStyle(band)}
                     title={bandName(band, bands, t)}
                   >
                     <span className="sr-only">{`${description}: `}</span>
-                    <span className="font-mono text-sm font-semibold tabular-nums">{banded(value, bands)}</span>
-                    <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
-                    <span
-                      aria-hidden="true"
-                      className="inline-flex max-w-full items-center gap-0.75 text-3xs font-semibold uppercase tracking-label"
-                    >
+                    {/* The spec's `.hm td`: glyph before the figure, never colour alone; the
+                        legend under the grid names the glyphs, AT hears the full name. */}
+                    <span aria-hidden="true" className="inline-flex text-xs">
                       <BandGlyph band={band} />
-                      <span className="truncate">{bandShortName(band, bands, t)}</span>
                     </span>
+                    <span className="text-sm font-semibold tabular-nums">{banded(value, bands)}</span>
+                    <span className="sr-only">{` — ${bandName(band, bands, t)}`}</span>
                   </span>
                 </td>
               )
@@ -325,18 +330,33 @@ export function ClimateMapGrid({
   )
 }
 
-/** The map's key: the company's three areas, then the hatch. */
-export function ClimateMapLegend({ floor, bands }: { floor: number; bands: ResultBands | null }) {
+/**
+ * The map's key: the company's three areas, by their full names as every other banded
+ * surface prints them, then the hatch — only when the map draws a hatched row. A group the
+ * server withheld unnamed has no row, and a swatch matching nothing on the page promised a
+ * cell that never appears (review 12 Nov); the sentence under the map counts those.
+ */
+export function ClimateMapLegend({
+  floor,
+  bands,
+  showHatch,
+}: {
+  floor: number
+  bands: ResultBands | null
+  showHatch: boolean
+}) {
   const { t } = useTranslation()
-  const hatch = (
-    <span className="inline-flex items-center gap-1.5">
+  const hatch = showHatch ? (
+    <span className="inline-flex items-center gap-1.5" data-testid="map-legend-protected">
       <span aria-hidden="true" className={cn('inline-block size-4 rounded-xs bg-surface-icon-box', PROTECTED_HATCH)} />
       {t('surveyResults.next.legendProtected', { floor })}
     </span>
-  )
-  if (bands === null) return <div className="flex flex-wrap items-center gap-4 text-xs text-fg-tertiary">{hatch}</div>
+  ) : null
+  if (bands === null) {
+    return hatch === null ? null : <div className="flex flex-wrap items-center gap-4 text-xs text-fg-tertiary">{hatch}</div>
+  }
   return (
-    <BandLegend bands={bands} short className="text-fg-tertiary">
+    <BandLegend bands={bands} className="text-fg-tertiary">
       {hatch}
     </BandLegend>
   )

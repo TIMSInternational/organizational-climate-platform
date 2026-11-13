@@ -244,7 +244,8 @@ describe('against the previous wave, on the tenant’s real payloads', () => {
 
   it('treats a previous group under the floor as withheld, whatever the server flagged', () => {
     const under = q2()
-    under.breakdowns[0].segments.find((segment) => segment.key === VEN)!.respondentCount = 4
+    // Under the fixture's floor of 3 (moved from 5 with the 13 Oct ruling): 2 answers.
+    under.breakdowns[0].segments.find((segment) => segment.key === VEN)!.respondentCount = 2
     const model = against(under)
     expect(model.previous.status === 'loaded' && VEN in model.previous.wave.groupScores).toBe(false)
     expect(groupRows(model).find((candidate) => candidate.id === VEN)!.vsPrevious).toBeNull()

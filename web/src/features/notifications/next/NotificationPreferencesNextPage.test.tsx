@@ -48,7 +48,7 @@ function renderPage() {
   )
 }
 
-const row = (key: string) => document.querySelector(`tr[data-pref="${key}"]`) as HTMLElement
+const row = (key: string) => document.querySelector(`li[data-pref="${key}"]`) as HTMLElement
 const saveButton = () => screen.getByRole('button', { name: T.save })
 const discardButton = () => screen.getByRole('button', { name: T.discard })
 
@@ -81,6 +81,19 @@ describe('NotificationPreferencesNextPage', () => {
     await screen.findByRole('heading', { name: T.tableHeading })
     expect(screen.getAllByRole('switch')).toHaveLength(4)
     expect(screen.getByText(T.alwaysSent)).toBeTruthy()
+  })
+
+  it('titles the page «Cuenta» like its two sibling tabs and saves from the list’s own footer, not the header', async () => {
+    routeFetch()
+    renderPage()
+    await screen.findByRole('heading', { name: T.tableHeading })
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es.profile.next.tabs.label)
+    const header = document.querySelector('[data-slot="page-header"]') as HTMLElement
+    expect(within(header).queryByRole('button')).toBeNull()
+    const footer = document.querySelector('[data-slot="prefs-actions"]') as HTMLElement
+    expect(footer.closest('section')?.getAttribute('aria-labelledby')).toBe('prefs-table')
+    expect(within(footer).getByRole('button', { name: T.save })).toBeTruthy()
+    expect(within(footer).getByRole('button', { name: T.discard })).toBeTruthy()
   })
 
   it('draws Guardar and Descartar live on load, as the board does; Descartar puts back what is saved', async () => {

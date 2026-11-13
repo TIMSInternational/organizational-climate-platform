@@ -27,6 +27,22 @@ export { default as BandGlyph } from './BandGlyph'
 export { default as BandChip } from './BandChip'
 export { default as BandLegend } from './BandLegend'
 export { default as BandScaleBar } from './BandScaleBar'
+export { default as ClimateRangeBar } from './ClimateRangeBar'
+export { default as ClimateScaleAxis } from './ClimateScaleAxis'
+export { default as ProtectedMark } from './ProtectedMark'
+export {
+  CLIMATE_RANGE_COLUMNS,
+  climateRangeOf,
+  paintedSegments,
+  rangeWindow,
+  scalePercent,
+  visibleGroups,
+  type ClimateRange,
+  type ClimateRangeEnd,
+  type ClimateRangeGroup,
+  type PaintedSegment,
+} from './climateRange'
+export type { ClimateRangeBarProps, ClimateRangeComparison, ClimateRangeRow } from './ClimateRangeBar'
 export {
   BAND_PAINT,
   BOUNDARY_STEP,
@@ -95,6 +111,7 @@ export {
   SERIES_COLORS,
   divergingColor,
   divergingPair,
+  neutralPair,
   sequentialColor,
   sequentialInk,
   sequentialPair,

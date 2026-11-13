@@ -137,7 +137,7 @@ export default function SegmentBreakdownPanel({
                 </td>
               ) : (
                 <>
-                  <td className="font-mono tabular-nums">{segment.respondentCount}</td>
+                  <td className="tabular-nums">{segment.respondentCount}</td>
                   <td>
                     {/* Through `Intl`, not `${n}%`: Spanish renders `78 %` with a space
                         and English `78%`, and neither is spelled out here. See
@@ -147,7 +147,7 @@ export default function SegmentBreakdownPanel({
                       t('surveyResults.notApplicable')
                     ) : (
                       <>
-                        <span className="font-mono tabular-nums">
+                        <span className="tabular-nums">
                           {formatMetric(segment.participationRate, { kind: 'percentage' }, locale)}
                         </span>
                         {/* The denominator, beside the rate it explains. Only from

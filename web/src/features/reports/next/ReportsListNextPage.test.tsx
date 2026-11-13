@@ -3,6 +3,7 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../i18n'
+import es from '../../../i18n/es.json'
 import { setToken, clearToken } from '../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context'
 import { tokenFor } from '../../../test/jwtFixture'
@@ -231,7 +232,7 @@ describe('ReportsListNextPage — what it reads', () => {
     expect(tiles[0]).toContain('un CSV con los datos y un PDF para leer')
     expect(tiles[1]).toContain('1')
     expect(tiles[1]).toContain('enlace')
-    expect(tiles[1]).toContain('sin contraseña · vence el 10 oct · revísalo antes de reenviarlo')
+    expect(tiles[1]).toContain(es.reports.next.linksSubOne.replace('{date}', '10 oct'))
     expect(tiles[2]).toContain('0')
     expect(tiles[2]).toContain('ninguno se genera solo; Programar está en el menú de cada informe')
   })
@@ -252,6 +253,8 @@ describe('ReportsListNextPage — what it reads', () => {
       'Resumen de clima · creado el 10 sept · Sin programar',
     )
     expect(document.body.textContent).not.toContain('climate_summary')
+    // The schedule is the line's useful half: it wraps, never ends in an ellipsis.
+    expect(rowOf('r-csv').querySelector('[data-slot="report-meta"]')?.className).not.toMatch(/truncate/)
   })
 
   /**
@@ -340,6 +343,8 @@ describe('ReportsListNextPage — what it reads', () => {
     expect(rowOf('r-csv').querySelector('[data-slot="report-contents"]')).toBeNull()
     // Not another report's summary, and not a zero.
     expect(rowOf('r-csv').textContent).not.toContain('respuestas')
+    // Said, not left blank: an empty column read as a broken layout (review 12 Nov).
+    expect(rowOf('r-csv').querySelector('[data-slot="report-contents-none"]')?.textContent).toBe('Sin leer')
   })
 
   /**
@@ -384,6 +389,9 @@ describe('ReportsListNextPage — what it reads', () => {
     for (const id of ['r-gen', 'r-fail']) {
       expect(rowOf(id).querySelector('[data-slot="report-contents"]'), id).toBeNull()
       expect(rowOf(id).textContent, id).not.toContain('respuestas')
+      expect(rowOf(id).querySelector('[data-slot="report-contents-none"]')?.textContent, id).toBe(
+        'Todavía sin documento',
+      )
     }
     unmount()
 
@@ -528,7 +536,7 @@ describe('ReportsListNextPage — one test per role that matters', () => {
     // `canShareReports` is false until a company is chosen, so the links are neither read
     // nor offered — and the tile says why instead of printing "0".
     expect(calls((url) => url.pathname.endsWith('/shares'))).toHaveLength(0)
-    expect(screen.getByText('tu cuenta no puede ver los enlaces de esta empresa')).toBeTruthy()
+    expect(screen.getByText(es.reports.next.linksHidden)).toBeTruthy()
     expect(await menuItems('r-csv')).toEqual(['Programar'])
   })
 
@@ -609,6 +617,17 @@ describe('ReportsListNextPage — which survey a report covers', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Crear informe' }))
     await waitFor(() => expect(postedBody()).not.toBeNull())
     expect(postedBody()).not.toHaveProperty('filters')
+  })
+
+  it('heads the page with its sidebar section and no breadcrumb for a company administrator', async () => {
+    // Informes is a top-level page in a company administrator's sidebar, and their top bar
+    // names the company: the header rule (review 12 Nov) gives it the section and no trail.
+    routeFetch({ companyName: 'Empresa de Servicios Públicos de Heredia' })
+    renderAs({ role: 'company_admin', companyId: CID })
+    await screen.findByText('Datos de clima — T3 2026')
+    expect(screen.getByText(es.navigation.sectionAnalytics)).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: es.shell.breadcrumb })).toBeNull()
+    expect(screen.queryByText('Empresa de Servicios Públicos de Heredia')).toBeNull()
   })
 
   it('names the client in the header for a super administrator', async () => {

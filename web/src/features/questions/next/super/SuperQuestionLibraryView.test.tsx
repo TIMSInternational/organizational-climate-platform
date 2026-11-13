@@ -118,14 +118,15 @@ describe('QuestionLibraryNextPage (the old page\'s guarantees, on the redesigned
     expect(await screen.findByRole('button', { name: /Feedback/, pressed: true })).toBeTruthy()
     const row = document.querySelector('tr[data-library-item="item-1"]') as HTMLElement
     expect(within(row).getByText('Mi jefatura me da retroalimentación útil sobre mi trabajo.')).toBeTruthy()
-    expect(within(row).getByText('My manager gives me useful feedback on my work.')).toBeTruthy()
+    // Twice: the Pregunta (inglés) column, and the line under the Spanish that carries it below `sm`.
+    expect(within(row).getAllByText('My manager gives me useful feedback on my work.')).toHaveLength(2)
   })
 
   it('asks for the global rows too, by sending no companyId on either read', async () => {
     localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'acme')
     serve([libraryItem()])
     renderPage()
-    await screen.findByText('My manager gives me useful feedback on my work.')
+    await screen.findAllByText('My manager gives me useful feedback on my work.')
     for (const [input] of [...requests('GET', /\/admin\/question-categories/), ...requests('GET', /\/admin\/question-library(\?|$)/)]) {
       expect(String(input)).not.toContain('companyId')
     }
@@ -167,7 +168,7 @@ describe('QuestionLibraryNextPage (the old page\'s guarantees, on the redesigned
   it('creates a new question as global for a super administrator with no company chosen', async () => {
     serve([libraryItem()])
     renderPage()
-    await screen.findByText('My manager gives me useful feedback on my work.')
+    await screen.findAllByText('My manager gives me useful feedback on my work.')
     await userEvent.click(screen.getByRole('button', { name: next.newQuestion }))
     const editor = document.querySelector('[data-slot="library-editor"]') as HTMLElement
     await userEvent.type(within(editor).getByRole('textbox', { name: next.fieldTextEs }), 'Nueva')
@@ -192,7 +193,7 @@ describe('QuestionLibraryNextPage — a company administrator', () => {
     setToken(tokenFor({ role: 'company_admin', companyId: OWN }))
     serve([libraryItem({ companyId: OWN })], [{ ...CATEGORY, companyId: OWN }], detail({ companyId: OWN }))
     renderPage()
-    await screen.findByText('My manager gives me useful feedback on my work.')
+    await screen.findAllByText('My manager gives me useful feedback on my work.')
     await userEvent.click(screen.getByRole('button', { name: next.newQuestion }))
     const editor = document.querySelector('[data-slot="library-editor"]') as HTMLElement
     const owner = within(editor).getByRole('combobox', { name: next.fieldOwner }) as HTMLSelectElement
@@ -272,20 +273,54 @@ describe('QuestionLibraryNextPage — the artboard\'s order, names and chips', (
     expect(body.tags).toEqual([])
   })
 
-  it('draws the question table on the artboard\'s grid — Spanish 12 + 1.25fr, English the rest, each cell padded on its left only', async () => {
+  it('draws the question table with the Table primitive, the two languages sharing the free width, in a bordered card with no shadow', async () => {
     serveWithAcme()
     renderPage()
     await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
     const table = (document.querySelector('tr[data-library-item]') as HTMLElement).closest('table') as HTMLElement
-    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual(['w-[31.4%]', '', 'w-24', 'w-22', 'w-24', 'w-22.5'])
+    expect(table.getAttribute('data-slot')).toBe('table')
+    // Below `sm` only the Spanish and the action keep a column; the other four step out.
+    expect([...table.querySelectorAll('col')].map((col) => col.className)).toEqual([
+      '',
+      'hidden sm:table-column',
+      'hidden w-26 sm:table-column',
+      'hidden w-26 sm:table-column',
+      'hidden w-26 sm:table-column',
+      'w-20',
+    ])
+    expect(table.className.split(/\s+/)).toEqual(expect.arrayContaining(['sm:min-w-180', 'sm:table-fixed']))
     const cells = [...table.querySelectorAll('tbody tr:first-child td')]
     expect(cells).toHaveLength(6)
-    for (const cell of [...cells.slice(0, 5), ...table.querySelectorAll('th')].slice(0, 10)) {
-      expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['pl-3', 'pr-0']))
+    for (const cell of cells) expect(cell.getAttribute('data-slot')).toBe('table-cell')
+    for (const head of table.querySelectorAll('th')) expect(head.getAttribute('data-slot')).toBe('table-head')
+    const card = ((table.closest('[data-slot="table-container"]') as HTMLElement).parentElement as HTMLElement).className.split(/\s+/)
+    expect(card).toEqual(expect.arrayContaining(['rounded-xl', 'border-line-panel', 'bg-surface-card']))
+    expect(card.some((cls) => cls.startsWith('shadow'))).toBe(false)
+  })
+
+  it('marks the chosen category in the selection blue, and no other', async () => {
+    serveWithAcme()
+    renderPage()
+    await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
+    const rows = [...document.querySelectorAll('[data-slot="category-row"]')]
+    const chosen = rows.filter((row) => row.getAttribute('aria-pressed') === 'true')
+    expect(chosen).toHaveLength(1)
+    expect(chosen[0].className.split(/\s+/)).toEqual(expect.arrayContaining(['bg-accent-blue-soft', 'text-accent-blue-ink']))
+    for (const row of rows.filter((entry) => entry !== chosen[0])) expect(row.className).not.toMatch(/accent-blue/)
+  })
+
+  it('wraps a long category name to two lines with the full name on hover, never a one-line cut', async () => {
+    serveWithAcme()
+    renderPage()
+    await screen.findAllByRole('button', { name: next.editRow.replace('{text}', LIKERT.textEs) })
+    const rows = [...document.querySelectorAll('[data-slot="category-row"]')]
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      const name = row.querySelector('span') as HTMLElement
+      expect(name.className.split(/\s+/)).toContain('line-clamp-2')
+      expect(name.className.split(/\s+/)).not.toContain('truncate')
+      expect(name.getAttribute('title')).toBe(name.textContent)
     }
-    expect(cells[5].className.split(/\s+/)).toContain('px-3')
-    // A 31px header row: the card's 8px above the labels, 8px below, nothing on the <th>.
-    for (const head of table.querySelectorAll('th')) expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['pt-0', 'pb-2']))
   })
 
   it('sets the editor\'s help lines on the board\'s 1.45 leading and its two buttons at the canvas\'s 34px', async () => {

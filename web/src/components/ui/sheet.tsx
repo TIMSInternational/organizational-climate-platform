@@ -38,18 +38,22 @@ export function SheetContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         data-slot="sheet-overlay"
-        className="fixed inset-0 z-50 bg-surface-overlay data-[state=open]:animate-fade-in"
+        className="fixed inset-0 z-50 bg-surface-scrim data-[state=open]:animate-fade-in"
       />
       <DialogPrimitive.Content
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          'fixed z-50 flex flex-col gap-panel-gap bg-surface-panel p-panel text-fg-primary shadow-lg',
+          // `Dialog`'s sheet anchored to an edge: the same ground, padding and gap, and the
+          // sheet radius on the two corners that face the page.
+          'fixed z-50 flex flex-col gap-4 bg-surface-card px-6 py-5.5 text-fg-primary shadow-lg',
           'data-[state=open]:animate-slide-up',
-          side === 'right' && 'inset-y-0 right-0 h-full w-3/4 border-l border-line-panel sm:max-w-sm',
-          side === 'left' && 'inset-y-0 left-0 h-full w-3/4 border-r border-line-panel sm:max-w-sm',
-          side === 'top' && 'inset-x-0 top-0 h-auto border-b border-line-panel',
-          side === 'bottom' && 'inset-x-0 bottom-0 h-auto border-t border-line-panel',
+          side === 'right' &&
+            'inset-y-0 right-0 h-full w-3/4 rounded-l-sheet border-l border-line-panel sm:max-w-sm',
+          side === 'left' &&
+            'inset-y-0 left-0 h-full w-3/4 rounded-r-sheet border-r border-line-panel sm:max-w-sm',
+          side === 'top' && 'inset-x-0 top-0 h-auto rounded-b-sheet border-b border-line-panel',
+          side === 'bottom' && 'inset-x-0 bottom-0 h-auto rounded-t-sheet border-t border-line-panel',
           className,
         )}
         {...props}
@@ -57,7 +61,7 @@ export function SheetContent({
         {children}
         <DialogPrimitive.Close
           className={cn(
-            'absolute top-3 right-3 flex size-control-sm items-center justify-center',
+            'absolute top-4 right-4 flex size-control-lg items-center justify-center pointer-coarse:size-11',
             'rounded-md border-transparent bg-transparent p-0 text-fg-tertiary',
             'hover:bg-state-hover hover:text-fg-primary',
           )}
@@ -88,7 +92,7 @@ export function SheetTitle({ className, ...props }: ComponentProps<typeof Dialog
   return (
     <DialogPrimitive.Title
       data-slot="sheet-title"
-      className={cn('text-xl font-semibold leading-tight', className)}
+      className={cn('font-display text-2xl font-semibold leading-tight tracking-title', className)}
       {...props}
     />
   )
@@ -101,7 +105,7 @@ export function SheetDescription({
   return (
     <DialogPrimitive.Description
       data-slot="sheet-description"
-      className={cn('text-sm text-fg-tertiary', className)}
+      className={cn('text-base text-fg-secondary', className)}
       {...props}
     />
   )

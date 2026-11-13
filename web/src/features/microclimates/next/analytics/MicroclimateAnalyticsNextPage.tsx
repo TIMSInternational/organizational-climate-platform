@@ -1,12 +1,12 @@
 import { Link } from 'react-router'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
-import { CanvasCard, CanvasSectionHead, HatchField, HatchTag, NoteBand } from '../../../../components/canvas'
-import { Button, Chip, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../../components/ui'
+import { PageHeader } from '../../../../components/layout'
+import { CanvasCard, CanvasSectionHead, NoteBand } from '../../../../components/canvas'
+import { Button, CanvasLockIcon, Chip, EmptyState, LoadingRegion, NetworkError, ProtectedState, SkeletonText, Table } from '../../../../components/ui'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { cn } from '../../../../lib/cn'
 import { nameHead, percentReading } from '../../../dashboard/next/derive'
-import { participationPercent } from '../../microclimatePrivacy'
+import { flooredParticipationPercent } from '../../microclimatePrivacy'
 import { MicroclimateGate } from '../MicroclimateGate'
 import { FLOOR, barPosition, belowFloor, countTicks } from '../derive'
 import { dayRange, shortDay } from '../format'
@@ -42,8 +42,7 @@ function AnalyticsScreen() {
   const state = useMicroclimateAnalyticsModel()
 
   const header = (
-    <PageTopBar
-      compact
+    <PageHeader
       title={t('microclimates.next.analytics.title')}
       eyebrow={t('microclimates.next.analytics.eyebrow')}
       description={t('microclimates.next.analytics.description', { floor: FLOOR })}
@@ -58,7 +57,7 @@ function AnalyticsScreen() {
     return (
       <div>
         {header}
-        <NetworkError title={t('errors.generic')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
+        <NetworkError title={t('errors.loadFailed')} description={state.error ?? undefined} onRetry={state.reload} retryText={t('common.retry')} />
       </div>
     )
   }
@@ -110,7 +109,7 @@ function AnalyticsScreen() {
 
           <CanvasCard
             title={t('microclimates.next.analytics.pulseTitle')}
-            adornment={<Chip label={t('microclimates.next.proposed')} tone="warning" title={t('microclimates.next.analytics.pulseProposedHint')} />}
+            adornment={<Chip label={t('microclimates.next.proposed')} tone="neutral" title={t('microclimates.next.analytics.pulseProposedHint')} />}
             aside={t('microclimates.next.analytics.pulseAside')}
           >
             <ul className="m-0 flex list-none flex-col gap-2 p-0">
@@ -184,7 +183,7 @@ function ParticipationBar({ row, zone }: { row: SessionRow; zone: string }) {
         })}
         className="m-0 flex flex-col gap-1.5 pt-1"
       >
-        <div className="relative h-4 text-2xs text-fg-tertiary">
+        <div className="relative h-4 text-xs text-fg-tertiary">
           <span className="absolute top-0 whitespace-nowrap pl-1.5" style={{ left: `${floorAt}%` }}>
             {t('microclimates.next.analytics.floorMark', { floor: FLOOR })}
           </span>
@@ -194,18 +193,18 @@ function ParticipationBar({ row, zone }: { row: SessionRow; zone: string }) {
           <div aria-hidden="true" className="absolute -top-3 -bottom-3 border-l-2 border-dashed border-line-hover" style={{ left: `${floorAt}%` }} />
         </div>
         <div className="pt-2 text-sm">
-          <span className="font-mono tabular-nums text-fg-primary">{responses}</span>{' '}
+          <span className="font-semibold tabular-nums text-fg-primary">{responses}</span>{' '}
           <span className="text-fg-tertiary">
             {target > 0 ? t('microclimates.next.analytics.ofTarget', { target }) : t('microclimates.next.analytics.noTarget')}
           </span>
           {under && (
             <>
               <span className="text-fg-tertiary">{' · '}</span>
-              <span className="text-accent-red-ink">{t('microclimates.next.analytics.underFloor', { floor: FLOOR })}</span>
+              <span className="text-fg-secondary">{t('microclimates.next.analytics.underFloor', { floor: FLOOR })}</span>
             </>
           )}
         </div>
-        <div aria-hidden="true" className="relative mt-1 h-4 font-mono text-2xs tabular-nums text-fg-tertiary">
+        <div aria-hidden="true" className="relative mt-1 h-4 text-xs tabular-nums text-fg-tertiary">
           {countTicks(max).map((tick) => (
             <span key={tick} className="absolute -translate-x-1/2" style={{ left: `${(tick / max) * 100}%` }}>
               {tick}
@@ -224,15 +223,16 @@ function PulsePoint({ row, zone }: { row: SessionRow; zone: string }) {
   const day = sessionDay(row, locale, zone)
   const name = nameHead(session.title ?? t('microclimates.untitled'))
   return (
-    <li className="flex items-center gap-3 rounded-xl border border-dashed border-line-default px-3.5 py-3">
-      {under ? (
-        <HatchField className="size-4 shrink-0 rounded-full border border-line-default" />
-      ) : (
-        <span aria-hidden="true" className="size-4 shrink-0 rounded-full border border-line-default bg-surface-icon-box" />
-      )}
+    // A neutral tile, not a dashed box with an empty circle: that read as an unselected radio
+    // button on a row nothing can select. The glyph says "no figure" — the padlock under the
+    // floor, an em dash where the pulse is simply not kept — and the words carry the reason.
+    <li data-slot="pulse-point" className="flex items-center gap-3 rounded-xl bg-surface-fill-subtle px-3.5 py-3">
+      <span aria-hidden="true" className="inline-flex size-4 shrink-0 items-center justify-center text-fg-tertiary">
+        {under ? <CanvasLockIcon className="size-3.25" /> : '—'}
+      </span>
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-base text-fg-primary">
-          <span className="font-mono tabular-nums">{day}</span>
+          <span className="tabular-nums">{day}</span>
           {' · '}
           {t(under ? 'microclimates.next.analytics.pointProtected' : 'microclimates.next.analytics.pointNotKept', { name })}
         </span>
@@ -253,7 +253,8 @@ function PulsePoint({ row, zone }: { row: SessionRow; zone: string }) {
  */
 const SESSION_COLUMNS = [102, 112, 162, 122, 122, 92, 134] as const
 
-const HEAD = 'pl-3 pr-0 pt-2 pb-2 text-left align-bottom text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
+/** The Apple design's `.tbl th`: 12px semibold in the secondary ink, sentence case, not tracked. */
+const HEAD = 'pl-3 pr-0 pt-2 pb-2 text-left align-bottom text-xs font-semibold leading-normal text-fg-secondary whitespace-nowrap border-b border-line-default'
 const CELL = 'pl-3 pr-0 py-3 align-middle border-b border-line-light'
 
 function SessionsTable({ rows, zone }: { rows: readonly SessionRow[]; zone: string }) {
@@ -261,7 +262,7 @@ function SessionsTable({ rows, zone }: { rows: readonly SessionRow[]; zone: stri
   return (
     // `Table`, not a bare `<table>`: the primitive is the scroll container, so at 1024 the
     // eight columns scroll inside the card instead of pushing the page wide (#218).
-    <div className="rounded-xl border border-line-default bg-surface-card pt-2 shadow-xs">
+    <div className="rounded-xl border border-line-default bg-surface-card pt-2">
       {/* `relative`: the sr-only "Acciones" header and caption are absolutely positioned, and
           with no positioned ancestor inside the scroll container they escaped its clip — at
           1024 the page measured 1051px wide (document scrollWidth), 27px past the viewport. */}
@@ -299,7 +300,8 @@ function SessionsTable({ rows, zone }: { rows: readonly SessionRow[]; zone: stri
           {rows.map((row, index) => {
             const { session } = row
             const under = belowFloor(session.responseCount)
-            const share = participationPercent(session.responseCount, session.targetParticipantCount)
+            // Floored: 31 of 48 is 64,58 % and reads "64 %", never a rounded "65 %".
+            const share = flooredParticipationPercent(session.responseCount, session.targetParticipantCount)
             const last = index === rows.length - 1
             const cell = cn(CELL, last && 'border-b-0')
             return (
@@ -326,7 +328,7 @@ function SessionsTable({ rows, zone }: { rows: readonly SessionRow[]; zone: stri
                 </td>
                 <td className={cell}>
                   <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="font-mono text-lg tabular-nums text-fg-primary">{session.responseCount}</span>
+                    <span className="text-lg font-semibold tabular-nums text-fg-primary">{session.responseCount}</span>
                     <span className="text-sm text-fg-secondary">
                       {session.targetParticipantCount > 0
                         ? t('microclimates.next.analytics.ofTarget', { target: session.targetParticipantCount })
@@ -342,13 +344,13 @@ function SessionsTable({ rows, zone }: { rows: readonly SessionRow[]; zone: stri
                       <span className="inline-flex h-1.5 w-17.5 shrink-0 overflow-hidden rounded-sm bg-line-light">
                         <span className="h-full rounded-sm bg-accent-blue" style={{ width: `${Math.min(100, share)}%` }} />
                       </span>
-                      <span className="font-mono text-sm tabular-nums text-fg-secondary">{percentReading(share, locale)}</span>
+                      <span className="text-sm tabular-nums text-fg-secondary">{percentReading(share, locale)}</span>
                     </span>
                   )}
                 </td>
                 <td className={cell}>
                   {under ? (
-                    <HatchTag label={t('microclimates.next.analytics.protectedOne')} />
+                    <ProtectedState floor={FLOOR} />
                   ) : (
                     <span className="text-fg-tertiary" title={t('microclimates.next.analytics.pulseNotKept')}>
                       {t('microclimates.next.analytics.noFigure')}
@@ -357,14 +359,14 @@ function SessionsTable({ rows, zone }: { rows: readonly SessionRow[]; zone: stri
                 </td>
                 <td className={cell}>
                   {row.words.status === 'protected' ? (
-                    <HatchTag label={t('microclimates.next.analytics.protectedMany')} />
+                    <ProtectedState floor={FLOOR} />
                   ) : row.words.status === 'ready' ? (
                     <span className="text-sm text-fg-secondary">{t('microclimates.next.analytics.wordCount', { count: row.words.value })}</span>
                   ) : (
                     <span className="text-fg-tertiary">{t('microclimates.next.analytics.noFigure')}</span>
                   )}
                 </td>
-                <td className={cn(cell, 'whitespace-nowrap font-mono text-sm tabular-nums text-fg-secondary')}>
+                <td className={cn(cell, 'whitespace-nowrap text-sm tabular-nums text-fg-secondary')}>
                   {sessionDay(row, locale, zone)}
                 </td>
                 <td className={cn(cell, 'pr-3 text-right')}>

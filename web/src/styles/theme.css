@@ -19,6 +19,9 @@
   /* -- Typeface ---------------------------------------------------------- */
   --font-sans: var(--admin-font-sans);
   --font-mono: var(--admin-font-mono);
+  /* `font-display`: the title serif — page titles, card titles, the respondent's
+     question, nothing else. index.css already sets it on h1 and h2. */
+  --font-display: var(--admin-font-display);
 
   /* -- Surfaces ---------------------------------------------------------- */
   --color-surface-outer: var(--admin-bg-outer);
@@ -32,6 +35,14 @@
   --color-surface-icon-box: var(--admin-bg-icon-box);
   --color-surface-overlay: var(--admin-bg-overlay);
   --color-surface-scrim: var(--admin-bg-scrim);
+  /* The company select's well in the navy bar (the canvas's `.cosel`). */
+  --color-surface-shell-sunken: var(--admin-shell-bg-sunken);
+  /* Fills (translucent, like the state layers): a segmented control's track, a
+     meter, an off toggle, a skeleton; the quiet ground of a note or a protected
+     cell; and the every-other-row zebra. */
+  --color-surface-fill: var(--admin-bg-fill);
+  --color-surface-fill-subtle: var(--admin-bg-fill-subtle);
+  --color-surface-zebra: var(--admin-bg-zebra);
 
   /* -- Interaction states (translucent, layer over any surface) ---------- */
   --color-state-hover: var(--admin-bg-hover);
@@ -79,6 +90,25 @@
   --color-accent-green-ink: var(--admin-accent-green-ink);
   --color-accent-amber-ink: var(--admin-accent-amber-ink);
   --color-accent-red-ink: var(--admin-accent-red-ink);
+  /* Blue as TEXT — a link, the live chip's word. Not `text-accent-blue`, which is
+     the identity blue and deliberately under 4.5:1 on white. */
+  --color-accent-blue-ink: var(--admin-accent-blue-ink);
+
+  /* -- The three result areas (Fortaleza / Oportunidad / Crítica) ----------
+     `text-band-str-ink` on `bg-band-str-bg` for a word or a number;
+     `bg-band-str-fill` / `fill-band-str-fill` for a mark. Always with the glyph
+     and the name, never colour alone; WHERE a score falls comes from the
+     company's ResultBands (`charts/resultBands.ts`), never from here. */
+  --color-band-str-ink: var(--admin-band-str-ink);
+  --color-band-str-bg: var(--admin-band-str-bg);
+  --color-band-str-fill: var(--admin-band-str-fill);
+  --color-band-opp-ink: var(--admin-band-opp-ink);
+  --color-band-opp-bg: var(--admin-band-opp-bg);
+  --color-band-opp-fill: var(--admin-band-opp-fill);
+  --color-band-crit-ink: var(--admin-band-crit-ink);
+  --color-band-crit-bg: var(--admin-band-crit-bg);
+  --color-band-crit-fill: var(--admin-band-crit-fill);
+  --color-band-track: var(--admin-band-track);
 
   /* -- Data visualisation (#79) ------------------------------------------
      Exposed as utilities so a chart can write `fill-chart-series-1` rather
@@ -120,6 +150,16 @@
   --color-chart-div-mid-ink: var(--admin-chart-div-mid-ink);
   --color-chart-div-pos-1-ink: var(--admin-chart-div-pos-1-ink);
   --color-chart-div-pos-2-ink: var(--admin-chart-div-pos-2-ink);
+  --color-chart-neutral-1: var(--admin-chart-neutral-1);
+  --color-chart-neutral-2: var(--admin-chart-neutral-2);
+  --color-chart-neutral-3: var(--admin-chart-neutral-3);
+  --color-chart-neutral-4: var(--admin-chart-neutral-4);
+  --color-chart-neutral-5: var(--admin-chart-neutral-5);
+  --color-chart-neutral-1-ink: var(--admin-chart-neutral-1-ink);
+  --color-chart-neutral-2-ink: var(--admin-chart-neutral-2-ink);
+  --color-chart-neutral-3-ink: var(--admin-chart-neutral-3-ink);
+  --color-chart-neutral-4-ink: var(--admin-chart-neutral-4-ink);
+  --color-chart-neutral-5-ink: var(--admin-chart-neutral-5-ink);
 
   --color-chart-grid: var(--admin-chart-grid);
   --color-chart-axis: var(--admin-chart-axis);
@@ -187,6 +227,10 @@
   --spacing-row: var(--admin-size-row-gap);
   --spacing-inline: var(--admin-size-inline-gap);
   --spacing-section: var(--admin-size-section-gap);
+  /* The content box's inner padding: `px-box-x pt-box-top pb-box-bottom`. */
+  --spacing-box-x: var(--admin-size-box-padding-x);
+  --spacing-box-top: var(--admin-size-box-padding-top);
+  --spacing-box-bottom: var(--admin-size-box-padding-bottom);
 
   /* -- Sizes -------------------------------------------------------------
      These are in the `--spacing-*` namespace, not `--size-*`, on purpose.
@@ -233,6 +277,9 @@
   --radius-md: var(--admin-radius-md);
   --radius-lg: var(--admin-radius-lg);
   --radius-xl: var(--admin-radius-xl);
+  /* The content box inside the navy frame, and a dialog or sheet. */
+  --radius-box: var(--admin-radius-box);
+  --radius-sheet: var(--admin-radius-sheet);
 
   /* -- Type scale -------------------------------------------------------- */
   --text-2xs: var(--admin-text-2xs);
@@ -241,6 +288,8 @@
   --text-xs--line-height: var(--admin-leading-snug);
   --text-sm: var(--admin-text-sm);
   --text-sm--line-height: var(--admin-leading-normal);
+  --text-ui: var(--admin-text-ui);
+  --text-ui--line-height: var(--admin-leading-normal);
   --text-base: var(--admin-text-base);
   --text-base--line-height: var(--admin-leading-normal);
   --text-lg: var(--admin-text-lg);
@@ -259,6 +308,8 @@
   --text-kpi-lg--line-height: 1;
   --text-kpi-hero: var(--admin-text-kpi-hero);
   --text-kpi-hero--line-height: 1;
+  --text-kpi-display: var(--admin-text-kpi-display);
+  --text-kpi-display--line-height: 1;
   /* The respond card's question: the canvas sets it at 17px with line-height 1.4. */
   --text-question: var(--admin-text-question);
   --text-question--line-height: 1.4;
@@ -268,6 +319,8 @@
   --text-respond-lg: var(--admin-text-respond-lg);
   --text-respond-question: var(--admin-text-respond-question);
   --text-respond-question--line-height: 1.35;
+  --text-respond-display: var(--admin-text-respond-display);
+  --text-respond-display--line-height: 1.2;
 
   --leading-tight: var(--admin-leading-tight);
   --leading-snug: var(--admin-leading-snug);
@@ -284,6 +337,8 @@
   --tracking-eyebrow: var(--admin-tracking-eyebrow);
   --tracking-kpi: var(--admin-tracking-kpi);
   --tracking-tile: var(--admin-tracking-tile);
+  --tracking-display: var(--admin-tracking-display);
+  --tracking-title: var(--admin-tracking-title);
 
   /* -- Elevation --------------------------------------------------------- */
   --shadow-sm: var(--admin-shadow-sm);

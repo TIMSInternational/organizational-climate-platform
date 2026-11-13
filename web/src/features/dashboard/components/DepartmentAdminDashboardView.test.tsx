@@ -12,6 +12,7 @@ import {
   type DepartmentAdminDashboard,
   type EmployeeDashboard,
 } from '../api/dashboard'
+import en from '../../../i18n/en.json'
 
 /**
  * The team view a `leader` and a `supervisor` land on, and — since #138 — what it does
@@ -246,9 +247,17 @@ describe('DepartmentAdminDashboardView', () => {
       }
 
       // No reading of any kind in the grid — and in particular not the 0 the payload
-      // carries, which is the number the floor exists to withhold.
+      // carries, which is the number the floor exists to withhold. Each row is pinned
+      // whole: its name plus «Fewer than {floor}» once, the floor being the one number a
+      // withheld row may say (it is policy, not a count). Any withheld reading changes it.
       const body = within(table).getAllByRole('row').slice(1)
-      for (const row of body) expect(row.textContent).not.toMatch(/\d/)
+      expect(body.length).toBeGreaterThan(0)
+      const floorWords = en.charts.protectedUnderFloor.replace('{threshold}', '5')
+      for (const row of body) {
+        const name = row.querySelector('th')?.textContent ?? ''
+        expect(name).not.toMatch(/\d/)
+        expect(row.textContent).toBe(name + floorWords)
+      }
 
       // ...while the team's own size is still on the page. Count unfloored, scores
       // floored: that split is the ruling, not an oversight. Scoped to the tile rather

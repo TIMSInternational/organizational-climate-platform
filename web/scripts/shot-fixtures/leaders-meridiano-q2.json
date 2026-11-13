@@ -105,7 +105,7 @@
       "surveyEndDate": "2026-05-13T02:03:12.138+00:00",
       "respondentCount": 6,
       "isSuppressed": false,
-      "minimumGroupSize": 5,
+      "minimumGroupSize": 3,
       "dimensions": [
         {
           "dimension": "belonging",

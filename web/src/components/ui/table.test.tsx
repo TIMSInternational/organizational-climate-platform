@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   Table,
@@ -49,6 +49,25 @@ describe('Table', () => {
     expect(container.querySelector('[data-slot=table-container]')?.className).toContain(
       'overflow-x-auto',
     )
+  })
+
+  it('is the containing block of its cells, so a screen-reader label cannot widen the page', () => {
+    // `sr-only` is `position: absolute`. Without a positioned ancestor a label in a cell
+    // past the scroller's edge escapes the clip and gives the page a sideways scroll: the
+    // climate map's labels made /dashboard 646px wide at 390. happy-dom has no layout, so
+    // the class is the proxy; the screenshot is the measurement.
+    const { container } = render(
+      <Table>
+        <TableBody>
+          <TableRow>
+            <TableCell>
+              <span className="sr-only">x</span>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    )
+    expect(container.querySelector('[data-slot=table-container]')?.classList.contains('relative')).toBe(true)
   })
 })
 
@@ -143,5 +162,85 @@ describe('TableEmpty', () => {
     expect(cell.getAttribute('colspan')).toBe('2')
     // Inside tbody, so the table's semantics still hold.
     expect(cell.closest('tbody')).not.toBeNull()
+  })
+})
+
+describe('Table, as the Apple design draws it', () => {
+  function Rows({ zebra }: { zebra?: boolean }) {
+    return (
+      <Table zebra={zebra}>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Departamento</TableHead>
+            <TableHead numeric>Respuestas</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {['Gestión', 'Finanzas', 'Operaciones'].map((name, index) => (
+            <TableRow key={name}>
+              <TableCell>{name}</TableCell>
+              <TableCell numeric>{index + 10}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    )
+  }
+
+  it('sets the column head at 13px semibold in the tertiary ink', () => {
+    render(<Rows />)
+    const head = screen.getByRole('columnheader', { name: 'Departamento' }).className.split(/\s+/)
+    expect(head).toEqual(expect.arrayContaining(['text-sm', 'font-semibold', 'text-fg-tertiary']))
+    expect(head).not.toContain('uppercase')
+  })
+
+  it('sets the rows at the 15px body size, in tabular figures', () => {
+    render(<Rows />)
+    expect(screen.getByRole('table').className.split(/\s+/)).toEqual(expect.arrayContaining(['text-base', 'tabular-nums']))
+  })
+
+  it('right-aligns a numeric column, head and cells alike', () => {
+    render(<Rows />)
+    const head = screen.getByRole('columnheader', { name: 'Respuestas' })
+    expect(head.className.split(/\s+/)).toContain('text-right')
+    expect(head.getAttribute('data-numeric')).toBe('true')
+    const cell = screen.getByRole('cell', { name: '10' })
+    expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-right', 'tabular-nums']))
+    // A text column is left alone.
+    expect(screen.getByRole('cell', { name: 'Gestión' }).className.split(/\s+/)).not.toContain('text-right')
+  })
+
+  it('stripes the body rows only when asked', () => {
+    render(<Rows zebra />)
+    const body = screen.getAllByRole('rowgroup')[1]!
+    for (const row of within(body).getAllByRole('row')) {
+      expect(row.className.split(/\s+/)).toContain('even:bg-surface-zebra')
+    }
+    cleanup()
+    render(<Rows />)
+    for (const row of screen.getAllByRole('row')) {
+      expect(row.className.split(/\s+/)).not.toContain('even:bg-surface-zebra')
+    }
+  })
+
+  it('keeps the row hover listed after the stripe, so a striped row still shows it', () => {
+    render(<Rows zebra />)
+    const classes = within(screen.getAllByRole('rowgroup')[1]!).getAllByRole('row')[0]!.className.split(/\s+/)
+    expect(classes.indexOf('even:bg-surface-zebra')).toBeLessThan(classes.indexOf('hover:bg-state-hover'))
+  })
+
+  it('right-aligns a numeric sort header', async () => {
+    render(
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableSortHeader label="Respuestas" numeric onSort={() => {}} />
+          </TableRow>
+        </TableHeader>
+      </Table>,
+    )
+    const head = screen.getByRole('columnheader')
+    expect(head.className.split(/\s+/)).toContain('text-right')
+    expect(within(head).getByRole('button').className.split(/\s+/)).toContain('justify-end')
   })
 })

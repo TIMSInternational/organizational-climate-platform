@@ -81,7 +81,8 @@ export type PlanFinding =
       /** The screen chose this cell from the map because the plan recorded none. */
       proposed: boolean
     }
-  | { status: 'protected'; surveyId: string; surveyTitle: string; code: string; proposed: boolean }
+  /** `floor` is the one this group was withheld under, so the screen prints exactly that. */
+  | { status: 'protected'; surveyId: string; surveyTitle: string; code: string; proposed: boolean; floor: number }
   | { status: 'none' }
 
 export function planFinding(
@@ -122,7 +123,7 @@ export function planFinding(
 
   if (!point) return { status: 'none' }
   if (point.isSuppressed || isSuppressed(point.respondentCount, floor)) {
-    return { status: 'protected', surveyId: survey.surveyId, surveyTitle, code, proposed }
+    return { status: 'protected', surveyId: survey.surveyId, surveyTitle, code, proposed, floor }
   }
 
   const cell = tagged === null ? lowestOf(point.scores, trends) : scoreOf(point.scores, trends, tagged)
@@ -174,8 +175,8 @@ export function planFinding(
  */
 export type PlanMove =
   | { status: 'moved'; fromCode: string; from: number; toCode: string; to: number; surveyId: string }
-  /** Waves closed after this plan's, but none of them discloses the cell. */
-  | { status: 'protected'; code: string }
+  /** Waves closed after this plan's, but none of them discloses the cell (under `floor`). */
+  | { status: 'protected'; code: string; floor: number }
   /** Nothing has closed since the plan was raised. */
   | { status: 'awaiting'; code: string }
   /** No baseline to measure from — the plan records no cell, or the map has none. */
@@ -216,7 +217,7 @@ export function planMove(
       surveyId: survey.surveyId,
     }
   }
-  return { status: 'protected', code: finding.code }
+  return { status: 'protected', code: finding.code, floor }
 }
 
 /** One named dimension's score on a row, or null where the wave has no number for it. */

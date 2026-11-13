@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useParams } from 'react-router'
 import { Check, FileText, Filter, Lock, Plus, Shield } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, KpiTile, isSuppressed } from '../../../../components/charts'
 import { PROTECTED_HATCH } from '../../../../components/charts/suppression'
 import {
@@ -22,13 +22,13 @@ import type { DemographicField } from '../../api/demographicFields'
 import { peoplePerValue } from '../../components/demographicReach'
 import { fieldVerdict, usableCuts } from '../super/demographics'
 import { CanvasChip, IconBox, Panel } from '../super/parts'
-import { FieldForm, FloorRules } from '../super/SuperDemographicFieldsView'
+import { FieldForm, FloorRules, type FieldSeed } from '../super/SuperDemographicFieldsView'
 import { mergedRanges } from './adminDemographics'
 import { SAMPLE_CATALOGUE } from './sampleCatalogue'
 import { useAdminDemographicsModel } from './useAdminDemographicsModel'
 
 const TH =
-  'border-b border-line-default bg-transparent px-1.5 pb-2 pt-1 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label whitespace-nowrap text-fg-tertiary'
+  'border-b border-line-default bg-transparent px-1.5 pb-2 pt-1 first:pl-3 last:pr-3 text-xs font-semibold whitespace-nowrap text-fg-secondary'
 /**
  * The board's row is a grid with a 12px gap inside 12px of padding; a cell's 6px either side,
  * 12px at the row's two ends, is the same rhythm, so the column widths below are the board's.
@@ -48,7 +48,7 @@ interface Row {
   real: DemographicField | null
 }
 
-type Editing = { kind: 'new'; seed: boolean } | { kind: 'field'; field: DemographicField } | null
+type Editing = { kind: 'new'; seed: boolean; from?: FieldSeed } | { kind: 'field'; field: DemographicField } | null
 
 /**
  * `/admin/companies/:companyId/demographic-fields` for a company administrator — the canvas's
@@ -99,19 +99,14 @@ export default function AdminDemographicFieldsView() {
   const active = state.fields.filter((field) => field.isActive).length
   const usable = state.people === undefined ? null : usableCuts(state.fields, state.people, ANONYMITY_FLOOR)
 
-  // The DemographicFields board sets the breadcrumb 14px over the header (its glyphs at y=76, the
-  // eyebrow's at y=110 at 1440), not the 38px of the other admin boards: `tightBreadcrumb`.
+  // One header rule for the sidebar's destinations (fix round 1): the eyebrow is the sidebar
+  // section, and no breadcrumb over a top-level row of Organización.
   const header = (
     <div className="-mb-6">
-      <PageTopBar
-        eyebrow={state.companyName ?? t('navigation.companyAdministration')}
+      <PageHeader
+        eyebrow={t('navigation.sectionOrganization')}
         title={t('navigation.demographicFields')}
-        tightBreadcrumb
         description={t('demographicFields.next.description', { floor: ANONYMITY_FLOOR })}
-        breadcrumbs={[
-          { label: t('navigation.companyAdministration'), href: `/admin/companies/${companyId}` },
-          { label: t('navigation.demographicFields') },
-        ]}
         actions={
           allowed ? (
             <Button type="button" variant="primary" onClick={() => setEditing(editing ? null : { kind: 'new', seed: false })}>
@@ -160,12 +155,13 @@ export default function AdminDemographicFieldsView() {
         >
           {editing && companyId && state.status === 'ready' && (
             <FieldForm
-              key={editing.kind === 'field' ? editing.field.id : `new-${String(editing.seed)}`}
+              key={editing.kind === 'field' ? editing.field.id : `new-${String(editing.seed)}-${editing.from?.field ?? ''}`}
               companyId={companyId}
               field={editing.kind === 'field' ? editing.field : null}
               people={state.people}
               nextOrder={state.fields.length + 1}
               seedExample={editing.kind === 'new' && editing.seed}
+              seedFrom={editing.kind === 'new' ? editing.from : undefined}
               onDone={() => {
                 setEditing(null)
                 state.reload()
@@ -255,7 +251,15 @@ export default function AdminDemographicFieldsView() {
                 isSample={isSample}
                 company={company}
                 people={state.people}
-                onEdit={(row) => setEditing(row.real ? { kind: 'field', field: row.real } : { kind: 'new', seed: true })}
+                onEdit={(row) =>
+                  // A sample row is not a field of this company: its action starts a NEW field
+                  // filled from that row, and nothing exists until «Crear campo».
+                  setEditing(
+                    row.real
+                      ? { kind: 'field', field: row.real }
+                      : { kind: 'new', seed: false, from: { label: row.label, field: row.field, type: row.type, values: row.values, required: row.required } },
+                  )
+                }
               />
 
               <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
@@ -290,14 +294,14 @@ function Catalogue({
       data-sample={isSample ? 'true' : undefined}
       className={cn(
         'flex min-w-0 flex-col overflow-hidden rounded-xl bg-surface-card',
-        isSample ? 'border border-dashed border-line-default' : 'border border-line-default shadow-sm',
+        isSample ? 'border border-dashed border-line-default' : 'border border-line-default',
       )}
     >
       <div className="flex flex-col gap-1.5 px-4 pt-4 pb-3">
         {isSample && (
           <div className="flex flex-wrap items-center gap-2">
             <p className="m-0 text-2xs font-bold uppercase tracking-label text-fg-tertiary">{t('demographicFields.next.catalogue.eyebrowSample')}</p>
-            <CanvasChip tone="warning" label={t('dashboard.next.sampleChip')} />
+            <CanvasChip tone="neutral" label={t('dashboard.next.sampleChip')} />
           </div>
         )}
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -305,7 +309,7 @@ function Catalogue({
             <h2 id="demographics-catalogue" className="m-0 text-2xl">
               {isSample ? t('demographicFields.next.catalogue.headingSample') : t('demographicFields.next.catalogue.heading')}
             </h2>
-            <span className="font-mono text-xs tabular-nums text-fg-tertiary">{rows.length}</span>
+            <span className="text-xs tabular-nums text-fg-tertiary">{rows.length}</span>
           </div>
           <span className="text-xs text-fg-tertiary">
             {isSample ? t('demographicFields.next.catalogue.metaSample', { company }) : t('demographicFields.next.catalogue.metaReal')}
@@ -373,12 +377,12 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
     cut = { chip: <CanvasChip tone="neutral" label={t('demographicFields.next.catalogue.notOffered')} />, sub: t('demographicFields.next.catalogue.notOfferedSub') }
   } else if (verdict === 'usable') {
     cut = {
-      chip: <CanvasChip tone="good" icon={<Check className="size-3" />} label={t('demographicFields.next.catalogue.usable')} />,
+      chip: <CanvasChip tone="neutral" icon={<Check className="size-3" />} label={t('demographicFields.next.catalogue.usable')} />,
       sub: t('demographicFields.next.catalogue.usableSub', { floor: ANONYMITY_FLOOR }),
     }
   } else if (verdict === 'narrow') {
     cut = {
-      chip: <CanvasChip tone="warning" icon={<Lock className="size-3" />} label={t('demographicFields.next.catalogue.narrow')} />,
+      chip: <CanvasChip tone="neutral" icon={<Lock className="size-3" />} label={t('demographicFields.next.catalogue.narrow')} />,
       sub: merged
         ? t('demographicFields.next.catalogue.narrowSub', { ranges: merged.ranges, perValue: merged.perValue })
         : t('demographicFields.next.catalogue.narrowSubNone'),
@@ -398,7 +402,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
             {row.required && <CanvasChip tone="neutral" label={t('demographicFields.next.catalogue.required')} />}
             {!row.isActive && <CanvasChip tone="neutral" label={t('demographicFields.next.catalogue.inactive')} />}
           </span>
-          <span className="font-mono text-2xs text-fg-tertiary">{row.field}</span>
+          <span className="font-mono text-xs text-fg-tertiary">{row.field}</span>
         </div>
       </td>
       <td className={TD}>
@@ -426,14 +430,14 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
               <HatchSwatch />
               {t('demographicFields.next.catalogue.belowFloor', { floor: ANONYMITY_FLOOR })}
             </span>
-            <span className="text-2xs text-fg-tertiary">{t('demographicFields.next.catalogue.perValueProtectedSub', { values: count })}</span>
+            <span className="text-xs text-fg-tertiary">{t('demographicFields.next.catalogue.perValueProtectedSub', { values: count })}</span>
           </span>
         ) : (
           <span className="flex flex-col gap-0.5">
-            <span data-per-value className="font-mono text-sm tabular-nums text-fg-primary">
+            <span data-per-value className="text-sm tabular-nums text-fg-primary">
               {perValue}
             </span>
-            <span className="text-2xs text-fg-tertiary">
+            <span className="text-xs text-fg-tertiary">
               {t('demographicFields.next.catalogue.perValueSub', { people: people ?? 0, values: count })}
             </span>
           </span>
@@ -442,7 +446,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
       <td className={TD}>
         <span className="flex flex-col items-start gap-1">
           {cut.chip}
-          {cut.sub && <span className="text-2xs leading-snug text-fg-tertiary">{cut.sub}</span>}
+          {cut.sub && <span className="text-xs leading-snug text-fg-tertiary">{cut.sub}</span>}
         </span>
       </td>
       <td className={cn(TD, 'text-right')}>
@@ -456,7 +460,7 @@ function CatalogueRow({ row, people, onEdit }: { row: Row; people: number | unde
           }
           onClick={onEdit}
         >
-          {t('demographicFields.next.catalogue.edit')}
+          {row.real ? t('demographicFields.next.catalogue.edit') : t('demographicFields.next.catalogue.createFrom')}
         </Button>
       </td>
     </tr>

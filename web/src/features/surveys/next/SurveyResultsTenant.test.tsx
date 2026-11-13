@@ -121,7 +121,7 @@ describe('the survey results on the tenant’s real payload', () => {
 
   it('names the day the survey closed, not the day of its last response, and the wave it compares with', async () => {
     await open()
-    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    const eyebrow = document.querySelector('[data-slot="page-header-eyebrow"]')
     expect(eyebrow?.textContent).toBe('Encuesta de Clima Q3 · cerró el 6 de agosto')
     expect(eyebrow?.textContent).not.toContain('última respuesta')
     expect(screen.getByRole('heading', { level: 1, name: 'Resultados de Encuesta de Clima Q3' })).toBeTruthy()
@@ -141,14 +141,16 @@ describe('the survey results on the tenant’s real payload', () => {
     // 3,6533 against Q2's 3,3600; Q1 3,03 → Q2 3,36 → Q3 3,65 makes this the second rise.
     const delta = screen.getByTestId('climate-delta')
     expect(delta.textContent).toBe('+0,29 frente a Q2 · segunda alza seguida')
-    expect(delta.className).toContain('text-accent-green-ink')
+    // The sign carries the rise; green and red belong to the three result areas only.
+    expect(delta.className).toContain('text-fg-secondary')
+    expect(delta.className).not.toContain('text-accent-green-ink')
     expect(tiles).toContain('24respuestas completas')
     expect(tiles).not.toContain('sin terminar')
     expect(tiles).toContain('cerró el 6 de agosto · sin lista de invitados')
     expect(tiles).toContain('de 5 legibles')
     // Finanzas is withheld: counted, and since 2026-10-12 never named -- beside the
     // withheld headcount /analytics serves, its name was its size.
-    expect(tiles).toContain('1 grupo bajo el umbral de 5: protegido, sin nombre')
+    expect(tiles).toContain('1 grupo bajo el umbral de 3: protegido, sin nombre')
     expect(tiles).not.toContain('Finanzas')
     // The fourth tile counts the map's cells in the critical area — all three Operaciones'.
     expect(tiles).toContain('Área crítica')
@@ -205,7 +207,7 @@ describe('the survey results on the tenant’s real payload', () => {
   it('draws ONE grid: the columns, the whole company first, then every group with its change since Q2', async () => {
     await open()
     const map = screen.getByRole('region', { name: 'Clima por grupo y dimensión · Q3' })
-    expect(within(map).getByText('tres áreas de resultado · selecciona una celda para ver su pregunta')).toBeTruthy()
+    expect(within(map).getByText('tres áreas de resultado · seleccione una celda para ver su pregunta')).toBeTruthy()
     expect(within(map).getAllByRole('table')).toHaveLength(1)
     const grid = screen.getByTestId('climate-grid')
     expect(within(grid).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
@@ -239,7 +241,11 @@ describe('the survey results on the tenant’s real payload', () => {
       '«Frente a Q2» por grupo aparece cuando la encuesta anterior tiene ese mismo grupo por encima del umbral.',
     )
     const legend = screen.getByTestId('grid-legend')
-    expect(within(legend).getByText('protegido, menos de 5 respuestas')).toBeTruthy()
+    // The tenant's withheld group arrives counted and unnamed, so no hatched row is drawn —
+    // and no swatch promises one (review 12 Nov). A drawn hatch keeps its swatch:
+    // SurveyResultsNextPage.test.tsx, 'never prints a number for a protected group'.
+    expect(within(legend).queryByText('protegido, menos de 3 respuestas')).toBeNull()
+    expect(within(legend).queryByTestId('grid-legend-protected')).toBeNull()
     for (const [name, range] of [
       ['Área de fortaleza', '4,00 a 5,00'],
       ['Área de oportunidad', '3,00 a 3,99'],
@@ -248,10 +254,30 @@ describe('the survey results on the tenant’s real payload', () => {
       expect(within(legend).getByText(name)).toBeTruthy()
       expect(within(legend).getByText(range)).toBeTruthy()
     }
-    // Every disclosed cell prints its band's word under the number: colour is never alone.
+    // Every disclosed cell draws its band's glyph beside the number and names the area to
+    // assistive technology: colour is never alone.
     const operaciones = screen.getByTestId(`group-row-${OPS}`)
-    expect(operaciones.querySelectorAll('[data-band="critical"]')).toHaveLength(3)
-    expect(operaciones.textContent).toContain('Crítica')
+    const critical = [...operaciones.querySelectorAll('[data-band="critical"]')]
+    expect(critical).toHaveLength(3)
+    for (const cell of critical) {
+      expect(cell.querySelector('[data-band-glyph="critical"]')).not.toBeNull()
+      expect(cell.textContent).toContain('Área crítica')
+    }
+  })
+
+  it('draws one climate range bar per dimension: the disclosed groups’ low and high, the whole survey’s dot', async () => {
+    await open()
+    const section = screen.getByRole('region', { name: 'Clima por dimensión' })
+    const tracks = within(section).getAllByRole('img')
+    // One per map column, in the map's order.
+    expect(tracks).toHaveLength(6)
+    // Seguridad psicológica: Operaciones 2,6 is the lowest disclosed cell, Personas 4,4 the
+    // highest, and 3,8 is the company row's own cell in the map — nothing computed here.
+    expect(tracks[0].getAttribute('aria-label')).toBe('De 2,6 a 4,4; media 3,8')
+    expect(section.textContent).toContain('Operaciones 2,6 · Personas 4,4')
+    // The withheld group is neither in the range, nor in a caption, nor in a label.
+    expect(section.textContent).not.toContain('Finanzas')
+    for (const track of tracks) expect(track.getAttribute('aria-label')).not.toContain('Finanzas')
   })
 
   it('never names the withheld group, let alone prints a number for it: no row, no "other group", no name', async () => {
@@ -481,8 +507,8 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(screen.queryByText('Los resultados por pregunta están reservados')).toBeNull()
     expect(within(grid).getByTestId('company-row')).toBeTruthy()
     expect(within(grid).queryAllByTestId(/^group-row-/)).toHaveLength(0)
-    expect(screen.getByText('ningún grupo llegó a 5 respuestas, así que el mapa muestra solo a toda la empresa')).toBeTruthy()
-    expect(screen.getByText('ningún grupo llegó al umbral de 5')).toBeTruthy()
+    expect(screen.getByText('ningún grupo llegó a 3 respuestas, así que el mapa muestra solo a toda la empresa')).toBeTruthy()
+    expect(screen.getByText('ningún grupo llegó al umbral de 3')).toBeTruthy()
     // Findings rank GROUP cells; with none, the section would claim "every cell is in
     // Fortaleza" about a map that has no group cell.
     expect(screen.queryByRole('heading', { level: 2, name: 'Dónde mirar primero' })).toBeNull()

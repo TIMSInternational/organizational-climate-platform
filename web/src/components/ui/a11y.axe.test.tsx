@@ -68,9 +68,12 @@ import {
   EmptyState,
   ErrorState,
   Input,
+  KpiCard,
   Label,
   LiveRegion,
   LoadingRegion,
+  LoadingState,
+  Note,
   NetworkError,
   NotificationDropdown,
   Pagination,
@@ -83,10 +86,12 @@ import {
   PopoverContent,
   PopoverTrigger,
   Progress,
+  ProtectedState,
   RadioField,
   RadioGroup,
   RadioGroupItem,
   ScrollArea,
+  SegmentedControl,
   SegmentedScale,
   SelectField,
   Separator,
@@ -338,6 +343,63 @@ const SPECIMENS: Specimen[] = [
       </Card>
     ),
   },
+  {
+    name: 'KpiCard with a meter and a protected reading',
+    render: () => (
+      <>
+        <KpiCard label="Participación · Clima 2026" value="84,8" unit="%" footnote="412 de 486 personas">
+          <Progress value={84.8} aria-label="Participación" />
+        </KpiCard>
+        <KpiCard label="Equipo de Finanzas" value={<ProtectedState floor={3} />} footnote="Encuesta completa" />
+      </>
+    ),
+  },
+  {
+    name: 'SegmentedControl',
+    render: () => (
+      <SegmentedControl
+        label="Filtrar por estado"
+        value="activas"
+        options={[
+          { value: 'todas', label: 'Todas' },
+          { value: 'activas', label: 'Activas' },
+          { value: 'borradores', label: 'Borradores', disabled: true },
+        ]}
+        onChange={() => {}}
+      />
+    ),
+  },
+  {
+    name: 'ProtectedState in a table cell',
+    render: () => (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Departamento</TableHead>
+            <TableHead numeric>Respuestas</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell>Auditoría</TableCell>
+            <TableCell numeric>
+              <ProtectedState floor={3} />
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    ),
+  },
+  {
+    name: 'Note',
+    render: () => (
+      <>
+        <Note icon={<CanvasLockIcon />}>Los comentarios abiertos se muestran como frecuencia de palabras.</Note>
+        <Note tone="info">Un departamento se muestra a la administración desde 1 respuesta.</Note>
+      </>
+    ),
+  },
+  { name: 'LoadingState', render: () => <LoadingState rows={2} /> },
   {
     name: 'Typography and Separator',
     render: () => (

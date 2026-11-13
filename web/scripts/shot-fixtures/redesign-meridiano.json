@@ -219,7 +219,7 @@
       }
     ],
     "suppressedGroupCount": 0,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-10T17:14:25.578153+00:00"
   },
   "GET /surveys/climate-trends?groupBy=department": {
@@ -578,7 +578,7 @@
       }
     ],
     "suppressedGroupCount": 1,
-    "minimumGroupSize": 5,
+    "minimumGroupSize": 3,
     "generatedAt": "2026-09-10T17:14:25.608839+00:00"
   },
   "GET /dashboard/company-admin": {
@@ -1098,7 +1098,7 @@
     "responseCount": 24,
     "targetAudienceCount": null,
     "version": 1,
-    "departmentIds": [],
+    "departmentIds": [], "userIds": [],
     "questions": [
       {
         "id": "2233394c-b0c6-4f74-a3fb-7014c53c0d08",
@@ -1231,7 +1231,7 @@
       "anonymous": false,
       "highestRecordableState": "completed",
       "suppressedStates": [],
-      "guarantee": "Esta encuesta no es anónima. El ciclo completo de la invitación se registra por cada persona invitada."
+      "guarantee": "Esta encuesta es anónima: su organización ve quién ha respondido, nunca qué respondió. TIMS International recibe los resultados y los analiza, y entrega a su organización únicamente resultados agrupados. El ciclo completo de la invitación se registra por cada persona invitada."
     }
   }
 }

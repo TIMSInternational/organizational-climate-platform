@@ -38,7 +38,11 @@ describe('zonedWindow — the survey window on the company clock (G16)', () => {
   })
 
   it('names the zone with its offset, and prints day and 24-hour time in that zone', () => {
-    expect(zoneLabel(CR, Date.parse('2026-10-28T12:00:00Z'))).toBe('America/Costa_Rica (GMT-6)')
+    expect(zoneLabel(CR, Date.parse('2026-10-28T12:00:00Z'))).toBe('Costa Rica (GMT-6)')
+    // The place, not the IANA id: the last segment, underscores as spaces; an id with no
+    // place segment prints as it is.
+    expect(zoneLabel('America/Argentina/Buenos_Aires', Date.parse('2026-10-28T12:00:00Z'))).toBe('Buenos Aires (GMT-3)')
+    expect(zoneLabel('UTC', Date.parse('2026-10-28T12:00:00Z'))).toMatch(/^UTC \(GMT/)
     expect(dayTimeIn('2026-10-29T05:59:00Z', CR, 'es')).toBe('28 oct 2026 · 23:59')
     expect(dayTimeIn('2026-10-29T05:59:00Z', CR, 'en')).toBe('Oct 28, 2026 · 23:59')
   })

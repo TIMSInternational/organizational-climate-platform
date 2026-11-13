@@ -37,4 +37,25 @@ describe('Alert', () => {
     const [success, destructive] = Array.from(container.querySelectorAll('[data-slot=alert]'))
     expect(success.className).not.toBe(destructive.className)
   })
+
+  it('paints no result-area tint on a success, a warning or an error — the glyph carries the kind', () => {
+    const { container } = render(
+      <>
+        <Alert variant="success">a</Alert>
+        <Alert variant="warning">b</Alert>
+        <Alert variant="destructive">c</Alert>
+      </>,
+    )
+    const [success, warning, destructive] = Array.from(container.querySelectorAll('[data-slot=alert]'))
+    for (const alert of [success, warning, destructive]) {
+      // Green, amber and red belong to Fortaleza, Oportunidad and Crítica only (11 Nov).
+      expect(alert.className).not.toMatch(/accent-(green|amber|red)-(soft|ring)/)
+      expect(alert.className).toContain('border-line-panel')
+    }
+    expect(warning.className).toContain('bg-surface-fill-subtle')
+    expect(destructive.className).toContain('bg-surface-fill-subtle')
+    // The error is still told from a warning: its icon wears the red ink.
+    expect(destructive.className).toContain('[&>svg]:text-accent-red-ink')
+    expect(warning.className).not.toContain('accent-red')
+  })
 })

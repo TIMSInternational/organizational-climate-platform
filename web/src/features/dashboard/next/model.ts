@@ -155,11 +155,19 @@ export type RegionKey =
   | 'tracking'
   | 'microclimates'
 
+/**
+ * How a region's read failed, in the terms a reader can act on. The section prints a
+ * sentence for the cause and never the server's own text: that is English, and it can
+ * carry paths and ids (CLAUDE.md). The text stays on `error`, for a debugger, unrendered.
+ * Absent reads as `other`.
+ */
+export type FailureCause = 'forbidden' | 'notFound' | 'server' | 'network' | 'other'
+
 export type RegionState =
   /** Read from the API. */
   | { status: 'live' }
   /** The fetch failed; this region's fields are absent and the section says why. */
-  | { status: 'fallback'; reason: 'failed'; error: string | null }
+  | { status: 'fallback'; reason: 'failed'; error: string | null; cause?: FailureCause }
   /** The fetch succeeded but the tenant has nothing to show; the section says so. */
   | { status: 'fallback'; reason: 'empty' }
   /** Not part of this deployment: no tracking service is configured. */

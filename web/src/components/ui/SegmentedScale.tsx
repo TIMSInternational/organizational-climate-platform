@@ -36,25 +36,25 @@ import { cn } from '../../lib/cn'
  * bare numeric scale — never a label. Submitting a label is what splits one answer
  * into two across languages (#195).
  *
- * ## The canvas's drawing (RespondSurveyPhone, 10 Sep)
+ * ## The drawing (the Apple design's `.scale`, 11 Nov)
  *
- * Five boxes 52px tall on the card surface with a hairline border, the number in the
- * ink, and the chosen one **filled with the ink** — `#110a29` behind white — rather than
- * with an accent. A row of 6px ticks under the boxes, then the two anchors under the
- * ends. `RespondMicroclimatePhone` inherits the same control, so both respond flows
- * draw it from here.
+ * Five boxes 56px tall on the card surface with the 3:1 control edge, the number in the
+ * ink at the respond page's 17px step, semibold, in tabular figures, and the chosen one
+ * **filled with the action blue** — white on `--admin-accent-blue-fill` (#2563eb), 5.17:1
+ * in both themes, the same pair `styles/accentContrast.test.ts` measures for the primary
+ * button. A row of 6px ticks under the boxes, then the two anchors under the ends.
+ * `RespondMicroclimatePhone` inherits the same control, so both respond flows draw it from
+ * here.
  *
  * ## Colour
  *
- * The chosen segment is `bg-fg-primary` with `text-surface-card`: the ink and the card
- * swapped, which is what the artboard draws in light and what stays legible in dark,
- * where the ink is the light end of the palette. It is NOT `bg-accent-blue-fill` any
- * more: that fill is the red of the primary action (`tokens.css`), and a scale point
- * drawn in the same red as "Siguiente" beside it read as a second call to action.
- * `features/surveys/respondContrast.test.ts` measures the pair in both themes. The
- * anchors are `text-fg-secondary`, the pair the same file measures for "scale end
- * labels"; `text-fg-tertiary` is 3.90:1 on this surface and is banned from this page
- * by name.
+ * Blue, because a chosen point is a SELECTION and blue is the one colour for action,
+ * selection and live (the user's ruling of 11 Nov). It used to be the ink and the card
+ * swapped, because the primary action was then the OCC red and a red point beside a red
+ * "Siguiente" read as a second call to action; the primary action is blue now, and the red
+ * is the mark's alone. The anchors are `text-fg-secondary`, the pair
+ * `features/surveys/respondContrast.test.ts` measures for "scale end labels";
+ * `text-fg-tertiary` is banned from this page by name.
  *
  * The focus ring is the app's one global `:focus-visible` outline from `index.css`,
  * as every primitive here does — nothing sets `outline-none`, which is the only way
@@ -190,18 +190,17 @@ export function SegmentedScale({
               onClick={() => select(index)}
               onKeyDown={(event) => handleKeyDown(event, index)}
               className={cn(
-                // 52px, the canvas's box — and on the 4px grid (13 × 4), so it needs no
-                // arbitrary value. Well past the 44px WCAG 2.5.5 target size, which is
-                // what the height is for.
-                'h-13 flex-1 rounded-lg border',
-                // The instrument rule: a reading is mono with tabular figures, so
-                // the row does not shift as points are chosen. 17px, the canvas's
-                // size for the points, as the question above them (`text-question`).
-                'font-mono text-question tabular-nums',
+                // 56px, the Apple design's `.scale button` — on the 4px grid (14 × 4), so it
+                // needs no arbitrary value, and past the 44px HIG / WCAG 2.5.5 target. The
+                // content box's 14px radius (`rounded-box`).
+                'h-14 flex-1 rounded-box border',
+                // Tabular figures, so the row does not shift as points are chosen; 17px
+                // (`text-question`), the respond page's step for the points.
+                'text-question font-semibold tabular-nums',
                 'transition-[background-color,border-color,color] ease-out',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 checked
-                  ? 'border-fg-primary bg-fg-primary text-surface-card'
+                  ? 'border-transparent bg-accent-blue-fill text-fg-on-accent'
                   : cn(
                       'border-line-control bg-surface-card text-fg-primary',
                       'hover:not-disabled:border-line-hover',

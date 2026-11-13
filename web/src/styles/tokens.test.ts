@@ -7,6 +7,7 @@ import indexCss from '../index.css?raw'
 import adminThemeSource from '../theme/adminTheme.ts?raw'
 import respondShellSource from '../components/layout/RespondShell.tsx?raw'
 import sidebarBrandSource from '../components/layout/SidebarBrand.tsx?raw'
+import fontsCss from './fonts.css?raw'
 
 /**
  * The token layer is a port, not a design. These tests pin the two things a
@@ -86,13 +87,19 @@ describe('type scale', () => {
     const sizes = [...tokensCss.matchAll(/^\s*--admin-text-[\w-]+:\s*([^;]+);/gm)].map((m) =>
       m[1].trim(),
     )
-    // The legacy eight, the canvas's five named steps (10 Sep) -- 9, 17, 22, 26 and 28px --
-    // and the respond page's own four. The count is the tripwire: a new type token has to
-    // be declared HERE, with what it is for, rather than appearing in the scale unremarked.
-    expect(sizes.length).toBe(17)
+    // The legacy eight, the canvas's five named steps (10 Sep) -- 11, 17, 22, 26 and 30px
+    // since the Apple design (11 Nov) re-set the 9px and 28px ones -- the respond page's
+    // own four, the Apple canvas's 14px row/control step (`--admin-text-ui`), and the
+    // Respond board's 24px serif question (`--admin-text-respond-display`), and the 40px
+    // deadline count on an action plan (`--admin-text-kpi-display`, 12 Nov: it was a bare
+    // `text-[2.5rem]` in the component). The count
+    // is the tripwire: a new type token has to be declared HERE, with what it is for,
+    // rather than appearing in the scale unremarked.
+    expect(sizes.length).toBe(20)
+    expect(token('--admin-text-ui')).toBe('0.875rem')
     for (const size of sizes) expect(size).toMatch(/rem$/)
     expect([token('--admin-text-3xs'), token('--admin-text-reading'), token('--admin-text-kpi-lg'), token('--admin-text-kpi-hero')]).toEqual(
-      ['0.5625rem', '1.375rem', '1.625rem', '1.75rem'],
+      ['0.6875rem', '1.375rem', '1.625rem', '1.875rem'],
     )
     // The respond card's question and its scale points: 17px, line-height 1.4
     // (RespondSurveyPhone.dc.html `font-size: 17px; line-height: 1.4`).
@@ -112,6 +119,10 @@ describe('type scale', () => {
     ]).toEqual(['0.8125rem', '0.9375rem', '1rem', '1.25rem'])
     expect(themeCss).toMatch(/--text-respond:\s*var\(--admin-text-respond\)\s*;/)
     expect(themeCss).toMatch(/--text-respond-question--line-height:\s*1\.35\s*;/)
+    // The Respond board's 24px serif question, as a step rather than `text-[1.5rem]`.
+    expect(token('--admin-text-respond-display')).toBe('1.5rem')
+    expect(themeCss).toMatch(/--text-respond-display:\s*var\(--admin-text-respond-display\)\s*;/)
+    expect(themeCss).toMatch(/--text-respond-display--line-height:\s*1\.2\s*;/)
   })
 
   it('does not pin the root font size', () => {
@@ -120,10 +131,25 @@ describe('type scale', () => {
     expect(htmlBlock![1]).not.toMatch(/font-size/)
   })
 
-  it('is the 13px admin base — legacy AppShell.tsx/Sidebar.tsx `fontSize: 13`', () => {
-    // 0.8125rem = 13px at a 16px default.
-    expect(token('--admin-text-base')).toBe('0.8125rem')
+  it('is the Apple design scale — body 15px, secondary 13px (user ruling, 11 Nov)', () => {
+    // Was the legacy console's 13px base (AppShell.tsx/Sidebar.tsx `fontSize: 13`). The
+    // canvas (`occ.css`) sets the app at `font: 15px/1.45` and its secondary text at 13px,
+    // and the user ruled both on 11 Nov.
+    expect(token('--admin-text-base')).toBe('0.9375rem')
+    expect(token('--admin-text-sm')).toBe('0.8125rem')
+    expect(token('--admin-leading-normal')).toBe('1.45')
     expect(indexRules).toMatch(/body\s*\{[^}]*font-size:\s*var\(--admin-text-base\)/)
+  })
+
+  it('never sets a step under 11px, the floor the ruling reserves for uppercase labels', () => {
+    // "minimum 11px (only uppercase tracked eyebrows/section labels)". Every admin type
+    // token, read at a 16px default, must be at least 0.6875rem -- the 9px column heads and
+    // the 10px eyebrows of the 10 Sep scale were the two steps under it.
+    const steps = [...tokensCss.matchAll(/^\s*(--admin-text-[\w-]+):\s*([\d.]+)rem;/gm)]
+    expect(steps.length).toBe(20)
+    const under = steps.filter((m) => Number(m[2]) * 16 < 11).map((m) => `${m[1]} ${Number(m[2]) * 16}px`)
+    expect(under).toEqual([])
+    expect(token('--admin-text-2xs')).toBe('0.6875rem')
   })
 
   it('carries the legacy heading treatment — globals.css h1..h6', () => {
@@ -144,9 +170,12 @@ describe('control density', () => {
     ['--admin-size-icon-box', '1.75rem'],
     // Legacy nav icons: `h-4 w-4`.
     ['--admin-size-icon', '16px'],
-    // ui/button.tsx / ui/input.tsx `rounded-[4px]`; AppShell <main> radius 8.
-    ['--admin-radius-md', '4px'],
-    ['--admin-radius-xl', '8px'],
+    // The Apple design's radii (occ.css): controls 8px (`.in`; `.btn` 7px), cards 12px
+    // (`.card`), the content box 14px (`.page`). They were the legacy `rounded-[4px]` and
+    // AppShell's `borderRadius: 8`.
+    ['--admin-radius-md', '8px'],
+    ['--admin-radius-xl', '12px'],
+    ['--admin-radius-box', '14px'],
     // AppShell.tsx content inset 12 and inter-panel gap 8.
     ['--admin-size-shell-gutter', 'var(--admin-space-12)'],
     ['--admin-size-panel-gap', 'var(--admin-space-8)'],
@@ -217,11 +246,16 @@ describe('colour palette', () => {
     // `chipVariantContrast`, `accentContrast`, ...). Two different claims, kept in
     // two places on purpose: this one catches a value changing AT ALL, those catch a
     // value changing into something unreadable.
-    expect(token('--admin-bg-outer')).toBe('#f5f8fc')
+    //
+    // Re-valued again by the Apple design (11 Nov): the canvas's `occ.css` neutrals --
+    // `--bg2` #f5f5f7, `--sep` #e5e7eb, `--label` #1d1d1f -- inside the same navy frame,
+    // re-darkened one step where a canvas grey failed the state-layer composites (see the
+    // ink block in tokens.css).
+    expect(token('--admin-bg-outer')).toBe('#f5f5f7')
     expect(token('--admin-bg-panel')).toBe('#ffffff')
-    expect(token('--admin-border-default')).toBe('#d7deeb')
-    expect(token('--admin-font-primary')).toBe('#070f21')
-    expect(token('--admin-font-secondary')).toBe('#374565')
+    expect(token('--admin-border-default')).toBe('#e5e7eb')
+    expect(token('--admin-font-primary')).toBe('#1d1d1f')
+    expect(token('--admin-font-secondary')).toBe('#48484d')
     // Re-valued by #83, together with `--admin-font-section-label` and
     // `--admin-font-light`: at #78879c this was 3.66:1 on white, and it is the ink
     // on every `CardDescription`, `TableCaption` and breadcrumb in the product.
@@ -231,24 +265,62 @@ describe('colour palette', () => {
     // that tint on every selected row. `styles/inkContrast.test.ts` is what measures
     // the new values; this line, as the block above says, only catches them changing
     // AT ALL.
-    expect(token('--admin-font-tertiary')).toBe('#5e6a82')
-    expect(token('--admin-font-section-label')).toBe('#5e6a82')
-    expect(token('--admin-font-light')).toBe('#7c879e')
+    expect(token('--admin-font-tertiary')).toBe('#6c6c71')
+    expect(token('--admin-font-section-label')).toBe('#6c6c71')
+    expect(token('--admin-font-light')).toBe('#89898e')
     // The shell frame itself. Pinned because it is the one token the redesign is
     // ABOUT: it is what "blue on the shell" means, and it is deliberately a separate
     // token from `--admin-bg-outer`, which is also the ground of the sign-in and
     // survey-answering screens and must stay white.
-    expect(token('--admin-bg-shell')).toBe('#0c1c3a')
-    expect(darkToken('--admin-bg-shell')).toBe('#061120')
+    expect(token('--admin-bg-shell')).toBe('#0f1a33')
+    expect(darkToken('--admin-bg-shell')).toBe('#0a1122')
     // The brand accent. NOT byte-for-byte legacy any more: UI-0 revalued it from
     // the legacy `#2e9098` (oklch chroma 0.089, under the 0.1 floor, which is why
     // the product read grey) to the validated teal, and split off a darker fill
     // step so white-on-accent can clear AA. `accentContrast.test.ts` is what pins
     // the relationship between the three; this only pins the values.
-    expect(token('--admin-accent-blue')).toBe('#4d76c7')
-    expect(token('--admin-accent-blue-fill')).toBe('#1b63f4')
-    expect(token('--admin-accent-blue-fill-hover')).toBe('#0a53dd')
+    //
+    // The Apple design makes blue three tokens: the app's #2563eb is the FILL in both
+    // themes (the primary button, the selected rail row -- user ruling 11 Nov), the
+    // canvas's `--tint` #1d4ed8 is the TEXT ink, and the identity blue is a graphic step
+    // that stays under 4.5:1 with white, which `accentContrast.test.ts` holds.
+    expect(token('--admin-accent-blue')).toBe('#3a7af0')
+    expect(token('--admin-accent-blue-fill')).toBe('#2563eb')
+    expect(darkToken('--admin-accent-blue-fill')).toBe('#2563eb')
+    expect(token('--admin-accent-blue-fill-hover')).toBe('#1d4ed8')
+    expect(token('--admin-accent-blue-ink')).toBe('#1d4ed8')
     expect(token('--admin-font-on-accent')).toBe('#ffffff')
+  })
+
+  /**
+   * One colour, one meaning (user ruling, 11 Nov): green, amber and red are the three
+   * result areas and nothing else. The status chip's `good` / `warning` / `critical`
+   * tones are those areas, so their fill and ink must BE the band tokens -- repeated as
+   * literals (respondContrast reads them as colours), which is exactly how the two could
+   * drift apart without this.
+   */
+  it.each([
+    ['good', 'str'],
+    ['warning', 'opp'],
+    ['critical', 'crit'],
+  ])('paints the %s chip in the %s result area, in both themes', (tone, band) => {
+    for (const read of [token, darkToken]) {
+      expect(read(`--admin-chip-bg-${tone}`)).toBe(read(`--admin-band-${band}-bg`))
+      expect(read(`--admin-chip-ink-${tone}`)).toBe(read(`--admin-band-${band}-ink`))
+    }
+  })
+
+  it('declares every result-area token in both themes and exposes it as a utility', () => {
+    for (const band of ['str', 'opp', 'crit']) {
+      for (const part of ['ink', 'bg', 'fill']) {
+        const name = `--admin-band-${band}-${part}`
+        expect(token(name)).toMatch(/^#[0-9a-f]{6}$/)
+        expect(darkToken(name)).toMatch(/^#[0-9a-f]{6}$/)
+        expect(themeCss).toContain(`--color-band-${band}-${part}: var(${name});`)
+      }
+    }
+    // The three areas are three hues: no two inks may be the same colour.
+    expect(new Set(['str', 'opp', 'crit'].map((b) => token(`--admin-band-${b}-ink`))).size).toBe(3)
   })
 
   it('ships a dark palette that a mode switch can actually reach', () => {
@@ -310,6 +382,39 @@ describe('sequential ramp paired ink', () => {
     for (const n of steps) {
       expect(themeCss).toContain(`--color-chart-seq-${n}-ink: var(--admin-chart-seq-${n}-ink);`)
     }
+  })
+})
+
+/**
+ * The title serif (user ruling, 11 Nov): New York first, then the self-hosted Source
+ * Serif 4 behind its metric-matched fallback, then Georgia -- and ONLY on page titles and
+ * card titles in the element layer. h3-h6 stay in the UI face.
+ */
+describe('the display serif', () => {
+  it('is New York, then Source Serif 4 and its fallback, then Georgia, in that order', () => {
+    const stack = token('--admin-font-display').split(',').map((f) => f.trim().replace(/'/g, ''))
+    expect(stack).toEqual(['ui-serif', 'New York', 'Source Serif 4', 'Source Serif 4 Fallback', 'Georgia', 'serif'])
+  })
+
+  it('self-hosts the two title weights and declares the fallback face it names', () => {
+    expect(fontsCss).toMatch(/@import '@fontsource\/source-serif-4\/latin-600\.css';/)
+    expect(fontsCss).toMatch(/@import '@fontsource\/source-serif-4\/latin-700\.css';/)
+    expect(fontsCss).toMatch(/font-family:\s*'Source Serif 4 Fallback'/)
+    // An @import after any other rule is dropped, so every @import must precede the first
+    // rule. Measured on the rules, not the prose: the comments name both at-rules.
+    const rules = stripComments(fontsCss)
+    const firstRule = rules.search(/@font-face/)
+    expect(firstRule).toBeGreaterThan(0)
+    expect(rules.lastIndexOf('@import')).toBeLessThan(firstRule)
+  })
+
+  it('sets h1 and h2 in it, and nothing smaller', () => {
+    expect(indexRules).toMatch(/\bh1\s*\{[^}]*font-family:\s*var\(--admin-font-display\)/)
+    expect(indexRules).toMatch(/\bh2\s*\{[^}]*font-family:\s*var\(--admin-font-display\)/)
+    const h3 = /\bh3,\s*h4\s*\{([^}]*)\}/.exec(indexRules)
+    expect(h3).not.toBeNull()
+    expect(h3![1]).not.toMatch(/font-family/)
+    expect(themeCss).toMatch(/--font-display:\s*var\(--admin-font-display\)\s*;/)
   })
 })
 

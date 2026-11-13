@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Plus, Shield, Trash2 } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import {
   Button,
   Chip,
@@ -16,13 +16,16 @@ import {
   ErrorState,
   Input,
   Label,
+  LoadingState,
+  Note,
+  SegmentedControl,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  SkeletonText,
   Table,
+  TableHead,
   Tabs,
   TabsContent,
   TabsList,
@@ -32,7 +35,6 @@ import { isApiStatus } from '../../../../api/authFetch'
 import { describeApiError } from '../../../../api/describeApiError'
 import { useCompanyScope } from '../../../../company-context/useCompanyScope'
 import { calendarDayLong } from '../../../../lib/calendarDay'
-import { cn } from '../../../../lib/cn'
 import { listSurveys, type SurveyListItem } from '../../../surveys/api/surveys'
 import { dimensionLabel } from '../../../surveys/dimensionLabel'
 import { licensedServiceLabel } from '../../../surveys/surveyVocabulary'
@@ -57,6 +59,11 @@ import { belowSummary, dimensionStanding, printedIndex, signedDelta } from './de
  *
  * The page says the three things the old one chose silently -- which survey, which group,
  * how far from the group -- and a group short of companies says so instead of a number.
+ *
+ * Apple design (11 Nov): `PageHeader` with "Nuevo grupo" as the one primary, the sort as a
+ * `SegmentedControl`, bordered cards with no shadow, figures in the sans at tabular figures,
+ * the table primitive's sentence-case heads, and every chip neutral — a group being ready or
+ * short of companies is not a result area, so it is no longer green or amber.
  */
 
 type Sort = 'gap' | 'survey'
@@ -139,13 +146,13 @@ export default function BenchmarkGroupsPage() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={reading?.companyName ?? undefined}
-        title={t('navigation.benchmarks')}
+        title={t('navigation.references')}
         description={t('benchmarks.groups.description')}
-        actions={
+        primaryAction={
           tab === 'groups' ? (
-            <Button type="button" variant="outline" size="canvas" onClick={() => setCreating(true)}>
+            <Button type="button" variant="primary" size="canvas" onClick={() => setCreating(true)}>
               <Plus aria-hidden="true" />
               {t('benchmarks.groups.newGroup')}
             </Button>
@@ -158,7 +165,7 @@ export default function BenchmarkGroupsPage() {
           <TabsTrigger value="compare">{t('benchmarks.groups.tabCompare')}</TabsTrigger>
           <TabsTrigger value="groups">
             {t('benchmarks.groups.tabGroups')}
-            {groups && <span className="ml-1.5 font-mono text-xs tabular-nums text-fg-label">{groups.length}</span>}
+            {groups && <span className="ml-1.5 text-sm tabular-nums text-fg-tertiary">{groups.length}</span>}
           </TabsTrigger>
         </TabsList>
 
@@ -166,7 +173,7 @@ export default function BenchmarkGroupsPage() {
           {groupsError ? (
             <ErrorState title={t('benchmarks.groups.loadFailed')} description={groupsError} />
           ) : groups === null ? (
-            <SkeletonText lines={6} />
+            <LoadingState rows={6} label={t('common.loading')} />
           ) : groups.length === 0 ? (
             <EmptyState
               title={t('benchmarks.groups.noGroupsTitle')}
@@ -183,7 +190,7 @@ export default function BenchmarkGroupsPage() {
             <>
               <div
                 data-slot="choices"
-                className="flex flex-wrap items-end gap-x-5 gap-y-3 rounded-xl border border-line-default bg-surface-outer px-4 py-3.5"
+                className="flex flex-wrap items-end gap-x-5 gap-y-3 rounded-xl border border-line-panel bg-surface-card px-5 py-4"
               >
                 <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:min-w-64">
                   <Label htmlFor="bench-survey">{t('benchmarks.groups.survey')}</Label>
@@ -203,7 +210,7 @@ export default function BenchmarkGroupsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <span className="pb-2.5 text-sm text-fg-label">{t('benchmarks.groups.against')}</span>
+                <span className="pb-2 text-sm text-fg-tertiary">{t('benchmarks.groups.against')}</span>
                 <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:min-w-64">
                   <Label htmlFor="bench-group">{t('benchmarks.groups.group')}</Label>
                   <Select value={chosenGroupId} onValueChange={chooseGroup}>
@@ -222,29 +229,23 @@ export default function BenchmarkGroupsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="m-0 ml-auto max-w-64 pb-1 text-xs text-fg-label">{t('benchmarks.groups.companyHint')}</p>
+                <p className="m-0 max-w-72 pb-1 text-sm text-fg-tertiary xl:ml-auto">{t('benchmarks.groups.companyHint')}</p>
               </div>
 
               {readingError ? (
                 <ErrorState title={t('benchmarks.groups.readFailed')} description={readingError} />
               ) : reading === null || chosenGroup === undefined ? (
-                <SkeletonText lines={6} />
+                <LoadingState rows={6} label={t('common.loading')} />
               ) : (
                 <ReadingRegion reading={reading} group={chosenGroup} sort={sort} onSort={setSort} t={t} locale={locale} />
               )}
 
-              <p
-                data-slot="privacy-note"
-                className="m-0 flex items-start gap-2.5 rounded-lg bg-surface-icon-box px-3.5 py-3 text-sm text-fg-secondary"
-              >
-                <Shield aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                <span>
-                  {t('benchmarks.groups.privacy', {
-                    service: licensedServiceLabel(t, chosenGroup?.serviceType ?? ''),
-                    minimum: chosenGroup?.minimumCompanies ?? 3,
-                  })}
-                </span>
-              </p>
+              <Note data-slot="privacy-note" icon={<Shield />}>
+                {t('benchmarks.groups.privacy', {
+                  service: licensedServiceLabel(t, chosenGroup?.serviceType ?? ''),
+                  minimum: chosenGroup?.minimumCompanies ?? 3,
+                })}
+              </Note>
             </>
           )}
         </TabsContent>
@@ -254,14 +255,14 @@ export default function BenchmarkGroupsPage() {
           {groupsError ? (
             <ErrorState title={t('benchmarks.groups.loadFailed')} description={groupsError} />
           ) : groups === null ? (
-            <SkeletonText lines={4} />
+            <LoadingState rows={4} label={t('common.loading')} />
           ) : groups.length === 0 ? (
             <EmptyState title={t('benchmarks.groups.groupsEmptyTitle')} description={t('benchmarks.groups.groupsEmptyBody')} />
           ) : (
             <GroupsTable groups={groups} onDelete={setDeleting} t={t} locale={locale} />
           )}
-          <p className="m-0 text-xs text-fg-label">
-            <Link to="/analytics/benchmarks?vista=referencias" className="underline">
+          <p className="m-0 text-sm">
+            <Link to="/analytics/benchmarks?vista=referencias" className="inline-flex min-h-11 items-center text-accent-blue-ink pointer-fine:min-h-0">
               {t('benchmarks.groups.manualReferences')}
             </Link>
           </p>
@@ -316,7 +317,7 @@ function ReadingRegion({
   const company = reading.companyName ?? ''
   const service = licensedServiceLabel(t, group.serviceType)
   const box = (slot: string, title: string, description: string) => (
-    <div data-slot={slot} className="rounded-xl border border-line-default bg-surface-card shadow-xs">
+    <div data-slot={slot} className="rounded-xl border border-line-panel bg-surface-card">
       <EmptyState title={title} description={description} />
     </div>
   )
@@ -418,11 +419,11 @@ function Ready({
     <>
       <section
         data-slot="headline"
-        className="grid gap-5 rounded-xl border border-line-default bg-surface-card px-5 py-4.5 shadow-xs md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center"
+        className="grid gap-5 rounded-xl border border-line-panel bg-surface-card px-5 py-4.5 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center"
       >
         <div className="flex min-w-0 flex-col gap-1.5">
           <h2 className="mb-0 text-2xl">{headline}</h2>
-          <p className="m-0 text-sm text-fg-secondary">
+          <p className="m-0 text-base text-fg-secondary">
             {!below.compared
               ? t('benchmarks.groups.sublineNoMedians')
               : below.widest
@@ -447,27 +448,21 @@ function Ready({
         dimensions={sorted.map((d) => ({ key: d.key, label: d.name, score: d.score, cohortMedian: d.median }))}
         locale={locale}
         heading={
-          <span className="flex flex-wrap items-center gap-3">
-            {t('benchmarks.next.byDimensionHeading')}
-            <span
-              role="group"
-              aria-label={t('benchmarks.groups.sortLabel')}
-              className="inline-flex rounded-md border border-line-default p-0.5"
-            >
-              {(['gap', 'survey'] as const).map((option) => (
-                <Button
-                  key={option}
-                  type="button"
-                  size="sm"
-                  variant={sort === option ? 'secondary' : 'ghost'}
-                  aria-pressed={sort === option}
-                  onClick={() => onSort(option)}
-                  className="h-7 px-2.5 font-sans text-sm font-normal"
-                >
-                  {t(option === 'gap' ? 'benchmarks.groups.sortGap' : 'benchmarks.groups.sortSurvey')}
-                </Button>
-              ))}
-            </span>
+          <span className="flex w-full min-w-0 flex-wrap items-center gap-3 sm:w-auto">
+            <span className="min-w-0">{t('benchmarks.next.byDimensionHeading')}</span>
+            <SegmentedControl<Sort>
+              label={t('benchmarks.groups.sortLabel')}
+              value={sort}
+              onChange={onSort}
+              fullWidth
+              // Full width on a phone, where the two labels need the whole card; its own size beside
+              // the title from sm up.
+              className="font-sans tracking-normal sm:inline-flex sm:w-auto"
+              options={[
+                { value: 'gap', label: t('benchmarks.groups.sortGap') },
+                { value: 'survey', label: t('benchmarks.groups.sortSurvey') },
+              ]}
+            />
           </span>
         }
         summary={null}
@@ -481,14 +476,13 @@ function Ready({
 function Stat({ label, value, sub }: { label: string; value: number; sub: string }) {
   return (
     <div className="flex flex-col gap-0.5 md:border-l md:border-line-default md:pl-5">
-      <span className="text-2xs font-bold uppercase tracking-label text-fg-label">{label}</span>
-      <span className="font-mono text-4xl tabular-nums text-fg-primary">{value}</span>
-      <span className="text-xs text-fg-label">{sub}</span>
+      <span className="text-2xs font-semibold uppercase tracking-tile text-fg-label">{label}</span>
+      <span className="text-kpi-hero font-semibold tracking-display tabular-nums text-fg-primary">{value}</span>
+      <span className="text-sm text-fg-tertiary">{sub}</span>
     </div>
   )
 }
 
-const HEAD = 'px-3 pt-2 pb-2 text-left text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
 
 function GroupsTable({
   groups,
@@ -502,18 +496,18 @@ function GroupsTable({
   locale: string
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-line-default bg-surface-card shadow-xs">
+    <div className="overflow-hidden rounded-xl border border-line-panel bg-surface-card">
       <Table className="min-w-200">
         <thead>
           <tr className="border-b border-line-default">
-            <th className={HEAD}>{t('benchmarks.groups.colGroup')}</th>
-            <th className={HEAD}>{t('benchmarks.groups.colCriteria')}</th>
-            <th className={HEAD}>{t('benchmarks.groups.colCompanies')}</th>
-            <th className={HEAD}>{t('benchmarks.groups.colStatus')}</th>
-            <th className={HEAD}>{t('benchmarks.groups.colLatest')}</th>
-            <th className={HEAD}>
+            <TableHead>{t('benchmarks.groups.colGroup')}</TableHead>
+            <TableHead>{t('benchmarks.groups.colCriteria')}</TableHead>
+            <TableHead>{t('benchmarks.groups.colCompanies')}</TableHead>
+            <TableHead>{t('benchmarks.groups.colStatus')}</TableHead>
+            <TableHead>{t('benchmarks.groups.colLatest')}</TableHead>
+            <TableHead>
               <span className="sr-only">{t('benchmarks.groups.colActions')}</span>
-            </th>
+            </TableHead>
           </tr>
         </thead>
         <tbody>
@@ -526,21 +520,21 @@ function GroupsTable({
                 <td className="px-3 py-3 text-base font-semibold text-fg-primary">{group.name}</td>
                 <td className="px-3 py-3">
                   <span className="flex flex-wrap gap-1.5">
-                    <Chip tone="accent" label={licensedServiceLabel(t, group.serviceType)} />
+                    <Chip tone="neutral" label={licensedServiceLabel(t, group.serviceType)} />
                     <Chip tone="neutral" label={group.industry ?? t('benchmarks.groups.anyIndustry')} />
                     <Chip tone="neutral" label={group.companySize ?? t('benchmarks.groups.anySize')} />
                     <Chip tone="neutral" label={group.country ?? t('benchmarks.groups.anyCountry')} />
                   </span>
                 </td>
-                <td className="px-3 py-3 font-mono text-base tabular-nums text-fg-primary">
+                <td className="px-3 py-3 text-base tabular-nums text-fg-primary">
                   {group.companyCount}
-                  <span className="ml-1.5 font-sans text-xs text-fg-label">
+                  <span className="ml-1.5 text-sm text-fg-tertiary">
                     {t('benchmarks.groups.minimum', { minimum: group.minimumCompanies })}
                   </span>
                 </td>
                 <td className="px-3 py-3">
                   <Chip
-                    tone={missing <= 0 ? 'good' : 'warning'}
+                    tone="neutral"
                     label={missing <= 0 ? t('benchmarks.groups.statusReady') : t('benchmarks.groups.statusShort', { missing })}
                   />
                 </td>
@@ -551,7 +545,7 @@ function GroupsTable({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     aria-label={t('benchmarks.groups.deleteFor', { group: group.name })}
                     onClick={() => onDelete(group)}
                   >
@@ -672,7 +666,7 @@ function CreateGroupDialog({
     >
       <DialogContent closeLabel={t('common.close')} className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-normal">{t('benchmarks.groups.newGroupTitle')}</DialogTitle>
+          <DialogTitle className="text-2xl">{t('benchmarks.groups.newGroupTitle')}</DialogTitle>
           <DialogDescription>{t('benchmarks.groups.newGroupBody')}</DialogDescription>
         </DialogHeader>
         <form
@@ -692,21 +686,15 @@ function CreateGroupDialog({
             {select('g-size', t('benchmarks.groups.fieldSize'), companySize, setCompanySize, options?.companySizes ?? [], t('benchmarks.groups.anySize'))}
             {select('g-country', t('benchmarks.groups.fieldCountry'), country, setCountry, options?.countries ?? [], t('benchmarks.groups.anyCountry'))}
           </div>
-          <p
-            data-slot="preview"
-            className={cn(
-              'm-0 rounded-lg border px-3.5 py-3 text-sm',
-              enough
-                ? 'border-accent-green-ring bg-chip-good-fill text-chip-good-ink'
-                : 'border-accent-amber-ring bg-chip-warning-fill text-chip-warning-ink',
-            )}
-          >
+          {/* Blue (info) when the criteria reach the minimum, the quiet grey when they do not:
+              green and amber are result areas, and the sentence says which case it is. */}
+          <Note data-slot="preview" data-enough={enough || undefined} tone={enough ? 'info' : 'neutral'}>
             {preview === null
               ? t('common.loading')
               : t(preview === 1 ? 'benchmarks.groups.previewOne' : 'benchmarks.groups.preview', { count: preview, minimum })}
-          </p>
+          </Note>
           {error && (
-            <p role="alert" className="m-0 text-sm text-accent-red">
+            <p role="alert" className="m-0 text-sm text-accent-red-ink">
               {error}
             </p>
           )}

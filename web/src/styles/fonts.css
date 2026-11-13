@@ -13,6 +13,9 @@
 @import '@fontsource/poppins/latin-500.css';
 @import '@fontsource/poppins/latin-600.css';
 @import '@fontsource/poppins/latin-700.css';
+/* Source Serif 4, the display serif — see the note further down. */
+@import '@fontsource/source-serif-4/latin-600.css';
+@import '@fontsource/source-serif-4/latin-700.css';
 
 /* ---------------------------------------------------------------------------
  * "Poppins Fallback" — the no-layout-shift half of the story.
@@ -46,4 +49,59 @@
   descent-override: 31.21%;
   line-gap-override: 8.92%;
   size-adjust: 112.16%;
+}
+
+/* ---------------------------------------------------------------------------
+ * Source Serif 4 — the display serif, self-hosted, latin subset, 600 and 700.
+ *
+ * The one new package of the Apple design (user ruling, 11 Nov). It sits in
+ * `--admin-font-display` behind New York: Safari on Apple devices resolves
+ * `ui-serif` to New York and never fetches this file; every other browser gets
+ * Source Serif 4. Display use only — page titles, card titles and the
+ * respondent's question — so only the title weights ship: 600 (every title on
+ * the canvas is `font-weight: 600`) and 700 for a `<strong>` inside one. A title
+ * that asks for a lighter weight matches the 600 face rather than a faux one.
+ * The latin subset carries the whole Spanish set (á é í ó ú ñ ü ¿ ¡ « »),
+ * checked against the file's cmap. SIL Open Font License 1.1.
+ *
+ * The static package rather than `@fontsource-variable/source-serif-4`: the
+ * variable file's optical-size axis would set a 30px title in the Display cut,
+ * which is nicer, but it ships every weight and every optical size to draw two
+ * title weights, and the browsers that matter most here (Safari on the
+ * client's Apple devices) never load it at all.
+ *
+ * Its @imports sit at the top of this file with Poppins': an @import after any
+ * other rule is invalid CSS and is dropped.
+ * ------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * "Source Serif 4 Fallback" — the same no-layout-shift face as Poppins', for
+ * the serif. Georgia Bold's local outlines with Source Serif 4 SemiBold's
+ * metrics, so a title occupies the same box before and after the swap.
+ *
+ * Measured with fontTools, not copied: the size-adjust is the ratio of the two
+ * faces' frequency-weighted average advance widths (the capsize method next/font
+ * uses), Source Serif 4 600 (latin woff, upm 1000) against Georgia Bold (macOS
+ * Supplemental, upm 2048), and the overrides are Source Serif 4's hhea metrics
+ * normalised by it:
+ *
+ *   size-adjust        94.27%   (480.13 / 1000) / (1043.07 / 2048)
+ *   ascent-override   109.90%   = (1036 / 1000) / 0.9427
+ *   descent-override   35.54%   = ( 335 / 1000) / 0.9427
+ *   line-gap-override   0.00%   (hhea lineGap 0)
+ *
+ * One face for every weight (`font-weight: 100 900`) so the browser never
+ * synthesises bold on top of the bold outlines. Keep it directly behind
+ * 'Source Serif 4' in the stack, or the metric matching stops applying.
+ * ------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Source Serif 4 Fallback';
+  font-style: normal;
+  font-weight: 100 900;
+  src: local('Georgia Bold'), local('Georgia-Bold'), local('Georgia');
+  ascent-override: 109.9%;
+  descent-override: 35.54%;
+  line-gap-override: 0%;
+  size-adjust: 94.27%;
 }

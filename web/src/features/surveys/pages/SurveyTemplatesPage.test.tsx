@@ -138,13 +138,13 @@ describe('SurveyTemplatesPage', () => {
     expect(fetchMock.mock.calls.every((call) => !String(call[0]).includes('/use'))).toBe(true)
   })
 
-  it('states each template’s size on its card, in the mono face', async () => {
+  it('states each template’s size on its card, in tabular figures', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(row({ questionCount: 34, usageCount: 12 }))))
     renderPage()
 
     expect(await screen.findByText('34 questions')).toBeTruthy()
     const used = screen.getByText('12')
-    expect(used.className).toContain('font-mono')
+    expect(used.className).not.toContain('font-mono')
     expect(used.className).toContain('tabular-nums')
   })
 
