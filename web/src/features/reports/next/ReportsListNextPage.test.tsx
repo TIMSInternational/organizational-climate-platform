@@ -232,7 +232,7 @@ describe('ReportsListNextPage — what it reads', () => {
     expect(tiles[0]).toContain('un CSV con los datos y un PDF para leer')
     expect(tiles[1]).toContain('1')
     expect(tiles[1]).toContain('enlace')
-    expect(tiles[1]).toContain('sin contraseña · vence el 10 oct · revísalo antes de reenviarlo')
+    expect(tiles[1]).toContain(es.reports.next.linksSubOne.replace('{date}', '10 oct'))
     expect(tiles[2]).toContain('0')
     expect(tiles[2]).toContain('ninguno se genera solo; Programar está en el menú de cada informe')
   })
@@ -536,7 +536,7 @@ describe('ReportsListNextPage — one test per role that matters', () => {
     // `canShareReports` is false until a company is chosen, so the links are neither read
     // nor offered — and the tile says why instead of printing "0".
     expect(calls((url) => url.pathname.endsWith('/shares'))).toHaveLength(0)
-    expect(screen.getByText('tu cuenta no puede ver los enlaces de esta empresa')).toBeTruthy()
+    expect(screen.getByText(es.reports.next.linksHidden)).toBeTruthy()
     expect(await menuItems('r-csv')).toEqual(['Programar'])
   })
 
