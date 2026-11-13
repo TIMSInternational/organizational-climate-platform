@@ -2,21 +2,26 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Domain.Entities;
 
 namespace ClimateProject.Application.Surveys;
 
 /// <summary>
 /// The company columns a per-survey credentials email is composed from. A record so a query
-/// can project straight into it and both callers read the same four columns.
+/// can project straight into it and both callers read the same five columns.
 /// </summary>
-public sealed record SurveyCredentialCompany(string Name, string? Language, string? LogoUrl, string? PrimaryColor);
+/// <param name="Timezone">The company's zone, which the survey's close is printed in.</param>
+public sealed record SurveyCredentialCompany(
+    string Name, string? Language, string? LogoUrl, string? PrimaryColor, string? Timezone);
 
 /// <summary>
 /// Everything about ONE survey's credentials email that does not depend on the person: the
-/// company's language, its brand, and the survey's title in that language.
+/// company's language, its brand, the survey's title in that language, and the day it closes
+/// in the company's zone.
 /// </summary>
-public sealed record SurveyCredentialMail(string? CompanyLanguage, EmailBrand Brand, string? SurveyTitle, string UsernamePrefix);
+public sealed record SurveyCredentialMail(
+    string? CompanyLanguage, EmailBrand Brand, string? SurveyTitle, string UsernamePrefix, DateOnly SurveyClosesOn);
 
 /// <summary>
 /// Minting and mailing a per-survey key (<see cref="SurveyCredential"/>), shared by the two
@@ -49,7 +54,12 @@ public static class SurveyCredentialIssuance
             company?.Language,
             company is null ? EmailBrand.None : new EmailBrand(company.LogoUrl, company.Name, company.PrimaryColor),
             LocalizedContent.ResolveText(survey.TitleEn, survey.TitleEs, locale, survey.Language),
-            MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty));
+            MassInviteCredentials.PrefixFor(company?.Name ?? string.Empty),
+            // The DAY it closes on the company's clock, never the UTC date: `EndDate` is an
+            // instant, and a close at or after 18:00 in Costa Rica is the next day in UTC --
+            // the respondent screens' R2 defect (audit 2026-10-22), which this mail must not
+            // reintroduce. A blank or unknown zone resolves to UTC, as every scheduler here does.
+            DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(survey.EndDate, SchedulingTimeZone.Resolve(company?.Timezone))));
     }
 
     /// <summary>
@@ -100,6 +110,6 @@ public static class SurveyCredentialIssuance
         ArgumentNullException.ThrowIfNull(mail);
         return sender.SendAsync(
             toEmail, recipientName, username, password, mail.CompanyLanguage,
-            mail.Brand, CredentialsEmailPurpose.Invitation, mail.SurveyTitle, cancellationToken);
+            mail.Brand, CredentialsEmailPurpose.Invitation, mail.SurveyTitle, mail.SurveyClosesOn, cancellationToken);
     }
 }

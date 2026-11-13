@@ -16,7 +16,8 @@ public sealed class EmailCredentialsEmailSender(
 {
     public async Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
-        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, CancellationToken cancellationToken)
+        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, DateOnly? surveyClosesOn,
+        CancellationToken cancellationToken)
     {
         // Refused before composing, for InvitationEmailComposer's reason: a reserved domain can
         // only hard-bounce, and the bounce rate is scored against a shared sending account.
@@ -32,7 +33,7 @@ public sealed class EmailCredentialsEmailSender(
             toEmail, recipientName, username, password, options.LinkTo(CredentialsEmailComposer.LoginPath),
             // The stored logo is a root-relative path; only this layer holds the base URL it has
             // to be resolved against before a mail client can fetch it.
-            companyLanguage, purpose, brand?.ResolvedAgainst(options), surveyName);
+            companyLanguage, purpose, brand?.ResolvedAgainst(options), surveyName, surveyClosesOn);
         var outcome = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);
 
         if (!outcome.Delivered)

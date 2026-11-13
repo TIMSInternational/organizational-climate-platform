@@ -36,7 +36,13 @@ public interface ICredentialsEmailSender
     /// inbox carrying two different passwords is how somebody signs in to the wrong survey
     /// with the right password and is told their details are invalid.
     /// </param>
+    /// <param name="surveyClosesOn">
+    /// The day <paramref name="surveyName"/> closes, in the COMPANY's zone; null when no survey
+    /// is named. Required, with no default, for the same reason: a per-survey sender that left
+    /// it off would mail a message with no deadline and nothing would notice.
+    /// </param>
     Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
-        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, CancellationToken cancellationToken);
+        EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, DateOnly? surveyClosesOn,
+        CancellationToken cancellationToken);
 }
