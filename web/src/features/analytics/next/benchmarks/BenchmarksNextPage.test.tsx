@@ -3,6 +3,7 @@ import { render, screen, cleanup, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { TranslationProvider, LOCALE_STORAGE_KEY } from '../../../../i18n'
+import es from '../../../../i18n/es.json'
 import { setToken, clearToken } from '../../../../auth/token'
 import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../../company-context'
 import { tokenFor } from '../../../../test/jwtFixture'
@@ -156,9 +157,9 @@ describe('BenchmarksNextPage — the read-out', () => {
     expect(tiles[0]).toContain('Encuesta de Clima Q3 · 24 respuestas')
     expect(tiles[1]).toContain('68')
     expect(tiles[1]).toContain('42 empresas · Manufactura · 500–1000 personas')
-    // "Tu percentil" prints no percentile: the cohort reading's stored 68 is the same for
+    // "Su percentil" prints no percentile: the cohort reading's stored 68 is the same for
     // every tenant, and a company's rank needs a distribution no endpoint returns.
-    expect(tiles[2]).toContain('Tu percentil')
+    expect(tiles[2]).toContain(es.benchmarks.yourPercentile)
     expect(tiles[2]).toContain('—')
     expect(tiles[2]).toContain('sin calcular')
     expect(tiles[2]).toContain('1 punto bajo la mediana · sin la distribución del grupo no hay percentil')
@@ -394,7 +395,7 @@ describe('BenchmarksNextPage — one test per role that matters', () => {
     routeFetch()
     renderAs({ role: 'super_admin', companyId: '' }, '/analytics/benchmarks?vista=referencias')
 
-    expect(await screen.findByText('Elige una empresa para leerla frente a su grupo')).toBeTruthy()
+    expect(await screen.findByText(es.benchmarks.next.pickCompanyTitle)).toBeTruthy()
     expect(document.querySelector('[data-slot="cohort-readout"]')).toBeNull()
     expect(requested('/surveys').length).toBe(0)
     expect(screen.getByRole('table')).toBeTruthy()
