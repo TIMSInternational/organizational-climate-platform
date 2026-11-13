@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { TranslationProvider } from '../../../i18n'
@@ -156,7 +156,9 @@ describe('SurveyHistoryPage (/surveys/:id/history)', () => {
     expect(within(versions[1]).queryByRole('button', { name: copy.showChanges })).toBeNull()
     // The newest version opens its difference with the previous one without a click.
     expect(within(versions[0]).getByRole('button', { name: copy.hideChanges }).getAttribute('aria-expanded')).toBe('true')
-    expect(vi.mocked(compareSurveyVersions)).toHaveBeenCalledTimes(1)
+    // The comparison is requested from an effect, after the render that drew the heading, so it
+    // is waited for: asserted synchronously it read 0 calls whenever the machine was loaded.
+    await waitFor(() => expect(vi.mocked(compareSurveyVersions)).toHaveBeenCalledTimes(1))
     expect(vi.mocked(compareSurveyVersions).mock.calls[0].slice(1, 4)).toEqual(['s-esph', 1, 2])
     const rows = await within(versions[0]).findAllByRole('row')
     const body = rows.filter((row) => row.getAttribute('data-slot') === 'diff-row')

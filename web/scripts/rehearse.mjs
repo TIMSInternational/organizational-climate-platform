@@ -212,7 +212,7 @@ await step('03 surveys list', values.admin, async ({ page }) => {
   return `${titles.length} survey titles: ${titles.join(' / ').slice(0, 200)}`
 })
 
-await step('04 results Q3 and drill-in', values.admin, async ({ page, token }) => {
+await step('04 results and drill-in', values.admin, async ({ page, token }) => {
   const list = await api(`/surveys?lang=es`, token)
   // Any closed survey with enough responses, the runbook's Q3 first when there is one.
   const q3 = pickResultsSurvey(list?.surveys)
