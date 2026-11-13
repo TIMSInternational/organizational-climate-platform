@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
-import { buildNavSections, isPerUserOnly } from '../navigation/navSections'
+import { buildNavSections, drawsRespondentShell } from '../navigation/navSections'
 import { isTrackingEnabled } from '../features/tracking/api/config'
 import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
@@ -99,7 +99,11 @@ function AdminShell() {
   // pickers, and SIGN OUT -- move into the strip. That last one is why this is not a
   // `hidden` class on the aside: delete the rail without moving its footer and a
   // respondent has no way to leave.
-  const perUserOnly = isPerUserOnly(sections)
+  //
+  // An EMPLOYEE only, since 2026-11-12: a supervisor's rows are the same per-person pages, but
+  // the owner ruled that the role that runs a team keeps the rail. `drawsRespondentShell`
+  // carries the exception and the ruling it narrows.
+  const perUserOnly = drawsRespondentShell(role, sections)
 
   return (
     <div className="flex h-dvh flex-col bg-surface-shell">
