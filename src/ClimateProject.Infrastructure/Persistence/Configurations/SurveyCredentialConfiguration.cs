@@ -23,6 +23,13 @@ public class SurveyCredentialConfiguration : IEntityTypeConfiguration<SurveyCred
         builder.Property(c => c.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(c => c.LastSignInAt).HasColumnName("last_sign_in_at");
 
+        // Both nullable-or-defaulted and written only by the remind route. `reminder_count`
+        // carries a stored default so an existing row reads 0 rather than null -- there is no
+        // such thing as "unknown how many reminders", and a nullable int would push that
+        // distinction onto every reader for no gain.
+        builder.Property(c => c.LastRemindedAt).HasColumnName("last_reminded_at");
+        builder.Property(c => c.ReminderCount).HasColumnName("reminder_count").HasDefaultValue(0);
+
         // UNIQUE, and it has to be. Sign-in resolves an identifier against users.Username
         // and then against this column; two rows sharing a username would make that lookup
         // answer "which person, which survey?" with a coin toss. The generator is deduped

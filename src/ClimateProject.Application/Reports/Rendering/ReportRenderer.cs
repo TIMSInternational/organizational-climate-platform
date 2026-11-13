@@ -130,7 +130,7 @@ public static class ReportRenderer
         var copy = ReportRenderCopy.For(context.ChromeLocale);
         var title = string.IsNullOrWhiteSpace(context.Title) ? copy.UntitledReport : context.Title;
 
-        var document = new PdfDocument(title);
+        var document = new PdfDocument(title) { Credit = Localization.NexadevCredit.For(context.ChromeLocale) };
         document.Title(title);
         document.Paragraph(
             $"{copy.Type}: {context.Type} · {copy.GeneratedAt}: {context.GeneratedAt:yyyy-MM-dd HH:mm} UTC");

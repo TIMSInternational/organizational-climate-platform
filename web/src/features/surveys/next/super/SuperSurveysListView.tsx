@@ -29,6 +29,8 @@ import { calendarDay, calendarDayLong } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { allResponsesFileName, getAllResponsesWorkbook } from '../../api/responseExport'
+import { companyStatusFileName, getDeliveryAuditWorkbook } from '../../api/statusExport'
+import { StatusWorkbookButton } from '../StatusWorkbookButton'
 
 /**
  * The API origin, the same way every other caller reads it. An empty string here is not a
@@ -115,8 +117,10 @@ function waveOrdinal(t: TranslateFn, place: number): string {
 export default function SuperSurveysListView() {
   const { t, locale } = useTranslation()
   const scope = useCompanyScope()
+  const headerCompanyId = scope.status === 'ready' ? (scope.companyId ?? '') : ''
   const capabilities = useViewerCapabilities()
   const model = useSuperSurveysListModel()
+  const filesCompany = model.company || headerCompanyId
   const { base } = model
   const sections = groupSuperSections(model.visible)
   const facets = [
@@ -138,6 +142,19 @@ export default function SuperSurveysListView() {
           capabilities.canAuthorSurveys || readViewerClaims().role === 'super_admin' ? (
             <div className="flex flex-wrap gap-2">
             {readViewerClaims().role === 'super_admin' && <AllResponsesButton t={t} />}
+            {/* Once a company is picked: its status workbook (what the client receives) and the
+                delivery audit (what TIMS keeps). A super admin has no company claim, so the
+                tenant page's status button never reached the people who send that file. */}
+            {/* The table's company filter, or else the header's company: the header said a
+                client while these buttons waited for the filter, two notions of "the chosen
+                company" on one page (walkthrough, C). */}
+            {readViewerClaims().role === 'super_admin' && filesCompany && (
+              <CompanyFilesButtons
+                companyId={filesCompany}
+                companyName={model.companyNames.get(filesCompany) ?? ''}
+                t={t}
+              />
+            )}
             <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
             {capabilities.canAuthorSurveys && <Button asChild variant="primary">
               <Link to="/surveys/new">
@@ -564,6 +581,11 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
               {readViewerClaims().role === 'super_admin' && (
                 <OneClimateResponsesItem surveyId={row.id} title={row.title ?? ''} t={t} />
               )}
+              {/* The same rows without a single answer: the list a client asks for to check
+                  demographics before the analysis (Eagle, 2026-11-02). */}
+              {readViewerClaims().role === 'super_admin' && (
+                <OneClimateResponsesItem surveyId={row.id} title={row.title ?? ''} t={t} demographicsOnly />
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -579,15 +601,25 @@ function SuperRow({ row, model, t, locale }: { row: SurveyRow; model: SuperSurve
  * for it: a menu item that closes the menu and does nothing is indistinguishable from a
  * download the browser is still preparing, and the reader would press it again.
  */
-function OneClimateResponsesItem({ surveyId, title, t }: { surveyId: string; title: string; t: TranslateFn }) {
+function OneClimateResponsesItem({
+  surveyId,
+  title,
+  t,
+  demographicsOnly = false,
+}: {
+  surveyId: string
+  title: string
+  t: TranslateFn
+  demographicsOnly?: boolean
+}) {
   const [failed, setFailed] = useState(false)
 
   async function run() {
     setFailed(false)
     try {
       downloadBlobFile(
-        allResponsesFileName(new Date(), title),
-        await getAllResponsesWorkbook(RESPONSE_EXPORT_BASE_URL, surveyId),
+        allResponsesFileName(new Date(), title, demographicsOnly ? 'demograficos' : 'respuestas'),
+        await getAllResponsesWorkbook(RESPONSE_EXPORT_BASE_URL, surveyId, { answers: !demographicsOnly }),
       )
     } catch {
       setFailed(true)
@@ -601,8 +633,62 @@ function OneClimateResponsesItem({ surveyId, title, t }: { surveyId: string; tit
         void run()
       }}
     >
-      {failed ? t('surveys.next.super.exportFailed') : t('surveys.next.super.exportOne')}
+      {failed
+        ? t('surveys.next.super.exportFailed')
+        : t(demographicsOnly ? 'surveys.next.super.exportOneDemographics' : 'surveys.next.super.exportOne')}
     </DropdownMenuItem>
+  )
+}
+
+/**
+ * The two per-company files, for the company picked in the filter. Each failure is said beside
+ * the buttons, as the platform-wide download does: a fetch that rejects gives no sign otherwise.
+ */
+function CompanyFilesButtons({
+  companyId,
+  companyName,
+  t,
+}: {
+  companyId: string
+  companyName: string
+  t: TranslateFn
+}) {
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  // The delivery audit is one file per company with no sheets to choose between, so it stays a
+  // single press. Only the status workbook asks which surveys.
+  async function downloadAudit() {
+    setBusy(true)
+    setFailed(false)
+    try {
+      const blob = await getDeliveryAuditWorkbook(RESPONSE_EXPORT_BASE_URL, companyId)
+      downloadBlobFile(companyStatusFileName('auditoria-envios', companyName, new Date()), blob)
+    } catch {
+      setFailed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {failed && (
+        <span className="m-0 text-sm text-accent-red-ink" role="alert">
+          {t('surveys.next.super.exportFailed')}
+        </span>
+      )}
+      <StatusWorkbookButton
+        companyId={companyId}
+        companyName={companyName}
+        baseUrl={RESPONSE_EXPORT_BASE_URL}
+        label={t('surveys.next.super.companyStatus')}
+      />
+      <Button type="button" variant="outline" disabled={busy} onClick={() => void downloadAudit()}>
+        <Download aria-hidden="true" />
+        {busy ? t('surveys.next.super.exportBusy') : t('surveys.next.super.deliveryAudit')}
+      </Button>
+    </div>
   )
 }
 

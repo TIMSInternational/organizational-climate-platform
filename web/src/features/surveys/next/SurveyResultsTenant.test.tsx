@@ -11,6 +11,7 @@ import { COMPANY_CONTEXT_STORAGE_KEY } from '../../../company-context/companyCon
 import { setToken } from '../../../auth/token'
 import { tokenFor } from '../../../test/jwtFixture'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
+import { getResultBands } from '../../result-bands/api'
 import type { ClimateTrendsResponse } from '../api/climateTrends'
 import type { SurveyAnalyticsResponse } from '../api/surveyResults'
 
@@ -152,9 +153,11 @@ describe('the survey results on the tenant’s real payload', () => {
     // The fourth tile counts the map's cells in the critical area — all three Operaciones'.
     expect(tiles).toContain('Área crítica')
     expect(tiles).toContain('celdas, todas de Operaciones')
-    expect(screen.getByTestId('critical-cells').textContent).toBe(
-      'Carga de trabajo 2,4 · Seguridad psicológica 2,6 · Reconocimiento 2,8',
-    )
+    // The tile gives the spread and a way to the cells, never the cells themselves joined
+    // by `·`: with ESPH Clima's twelve that was a paragraph nobody could parse (3 Nov 2026).
+    expect(screen.getByTestId('critical-spread').textContent).toBe('en 3 dimensiones')
+    expect(screen.queryByTestId('critical-cells')).toBeNull()
+    expect(tiles).not.toContain('Carga de trabajo 2,4 · Seguridad psicológica')
     expect(tiles).not.toContain('media')
     // Every figure on the tiles is measured: no sample chip among them.
     expect(tiles).not.toContain(SAMPLE)
@@ -287,6 +290,33 @@ describe('the survey results on the tenant’s real payload', () => {
     expect(doing.textContent).toMatch(/Q2\s*\d,\d/)
     expect(doing.textContent).toMatch(/Q3\s*\d,\d/)
     expect(doing.textContent).toContain('El texto libre de Operaciones no se muestra')
+  })
+
+  it('lists the critical cells under the findings, by dimension, each opening its question', async () => {
+    await open()
+    const section = screen.getByTestId('critical-areas')
+    expect(within(section).getByRole('heading', { level: 2, name: 'Área crítica' })).toBeTruthy()
+    expect(section.textContent).toContain('Celdas con menos de 3,00 · cada una abre su pregunta')
+    // All three are Operaciones', so there is one reading and nothing to regroup.
+    expect(within(section).queryByRole('group', { name: 'Agrupar las celdas críticas' })).toBeNull()
+    const clusters = [...section.querySelectorAll('li[data-cluster]')].map((item) => item.textContent)
+    expect(clusters).toEqual([
+      'Carga de trabajoen 1 grupo2,4Operaciones',
+      'Seguridad psicológicaen 1 grupo2,6Operaciones',
+      'Reconocimientoen 1 grupo2,8Operaciones',
+    ])
+    await userEvent.click(within(section).getByRole('button', { name: 'Operaciones · Reconocimiento: 2,8. Abrir su pregunta' }))
+    const opened = heading('Operaciones · Reconocimiento')
+    expect(opened).toBeTruthy()
+    expect(scrolled).toHaveBeenCalled()
+    expect(document.activeElement).toBe(opened)
+  })
+
+  it('takes the reader from the tile to the critical cells, focus and all', async () => {
+    await open()
+    await userEvent.click(screen.getByRole('button', { name: 'Ver cuáles' }))
+    expect(scrolled).toHaveBeenCalled()
+    expect(document.activeElement).toBe(within(screen.getByTestId('critical-areas')).getByRole('heading', { level: 2 }))
   })
 
   it('keeps the cell open when "Ver la pregunta" names the cell already open, and brings it into view', async () => {
@@ -457,6 +487,32 @@ describe('the survey results on the tenant’s real payload', () => {
     // Fortaleza" about a map that has no group cell.
     expect(screen.queryByRole('heading', { level: 2, name: 'Dónde mirar primero' })).toBeNull()
     expect(document.getElementById('results-next-questions')).not.toBeNull()
+  })
+
+  /**
+   * The scale that decides "Área crítica" is the SURVEY's company's, never the header's: a TIMS
+   * operator who opened this survey while the header held another client had it coloured by that
+   * client's bands (docs/audits/2026-11-08-operator-ui-walkthrough.md). And the header then moves
+   * to the survey's company, so the next "Nueva encuesta" lands where they are looking.
+   */
+  it("reads the survey company's scale, not the header's, for a super administrator whose header holds another client", async () => {
+    // `getResultBands` is the suite-wide mock (src/test/setup.ts); its calls name the company
+    // whose scale was read. Cleared first so only this page's reads count.
+    vi.mocked(getResultBands).mockClear()
+    window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'otra-empresa')
+    renderAs({ role: 'super_admin', companyId: '' })
+    expect(await screen.findByTestId('cell-panel')).toBeTruthy()
+    const scalesRead = vi.mocked(getResultBands).mock.calls.map((call) => call[1])
+    expect(scalesRead).toContain(COMPANY)
+    expect(scalesRead).not.toContain('otra-empresa')
+    await waitFor(() => expect(window.localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe(COMPANY))
+  })
+
+  it('draws the page for a super administrator with nothing selected, and selects the survey’s company', async () => {
+    renderAs({ role: 'super_admin', companyId: '' })
+    expect(await screen.findByTestId('cell-panel')).toBeTruthy()
+    expect(screen.queryByTestId('home')).toBeNull()
+    await waitFor(() => expect(window.localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe(COMPANY))
   })
 
   it('draws the same page for a super administrator who chose the company', async () => {

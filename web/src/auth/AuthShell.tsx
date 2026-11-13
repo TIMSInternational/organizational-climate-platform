@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { LanguageSwitcher, useTranslation } from '../i18n'
-import { ThemeSwitcher } from '../components/layout'
+import { PoweredByNexadev, ThemeSwitcher } from '../components/layout'
 import { Card, CardContent, CardDescription, CardHeader, H2 } from '../components/ui'
 import { HeroRule } from '../components/storefront/StorefrontPrimitives'
 import { cn } from '../lib/cn'
@@ -168,6 +168,10 @@ export function AuthShell({
             )}
           </div>
         </main>
+
+        <footer className="flex justify-center px-6 pb-6">
+          <PoweredByNexadev />
+        </footer>
       </div>
     )
   }
@@ -205,6 +209,8 @@ export function AuthShell({
         <LanguageSwitcher compact />
         <ThemeSwitcher />
       </div>
+
+      <PoweredByNexadev />
     </div>
   )
 }

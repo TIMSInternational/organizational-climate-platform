@@ -16,6 +16,7 @@ import {
 } from '../../../../components/ui'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import type { CreateMicroclimateInvitationsInput, MicroclimateInvitationBatchResult } from '../../api/microclimateInvitations'
+import { describeApiError } from '../../../../api/describeApiError'
 
 /**
  * "Invitar personas": `POST /microclimates/{id}/invitations` with exactly one selector — the
@@ -73,7 +74,7 @@ export function InviteDialog({
     try {
       setResult(await onInvite(mode === 'all' ? { allCompanyUsers: true } : { departmentIds: [...picked] }))
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setSending(false)
     }

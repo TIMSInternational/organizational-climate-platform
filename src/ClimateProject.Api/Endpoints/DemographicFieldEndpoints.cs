@@ -205,7 +205,7 @@ public static class DemographicFieldEndpoints
 
         if (request.Type == "select" && options.Count == 0)
         {
-            return Results.Json(new { message = "Select fields require at least one option" }, statusCode: 400);
+            return Results.Json(new { message = "Select fields require at least one option", code = AdminRefusals.DemographicFieldOptionsRequired }, statusCode: 400);
         }
 
         var fieldKey = request.Field.Trim();
@@ -218,7 +218,7 @@ public static class DemographicFieldEndpoints
         if (SelfDeclaredDepartment.IsReservedKey(fieldKey))
         {
             return Results.Json(
-                new { message = $"'{fieldKey}' is reserved for the área a respondent declares; choose another key" },
+                new { message = $"'{fieldKey}' is reserved for the área a respondent declares; choose another key", code = AdminRefusals.DemographicFieldKeyReserved },
                 statusCode: 400);
         }
         // IX_demographic_fields_company_id_field is a UNIQUE index (companyId, field).
@@ -231,7 +231,7 @@ public static class DemographicFieldEndpoints
             .FirstOrDefaultAsync(f => f.CompanyId == request.CompanyId && f.Field == fieldKey, cancellationToken);
         if (existing is not null)
         {
-            return Results.Json(new { message = $"A demographic field with key '{fieldKey}' already exists for this company" }, statusCode: 409);
+            return Results.Json(new { message = $"A demographic field with key '{fieldKey}' already exists for this company", code = AdminRefusals.DemographicFieldKeyTaken }, statusCode: 409);
         }
 
         var now = DateTimeOffset.UtcNow;

@@ -379,7 +379,7 @@ public static class SurveyExport
         var aggregate = context.Aggregate;
         var summary = aggregate.Summary;
 
-        var document = new PdfDocument(context.Title ?? copy.UntitledSurvey);
+        var document = new PdfDocument(context.Title ?? copy.UntitledSurvey) { Credit = Localization.NexadevCredit.For(context.ResolvedLocale) };
         document.Title(context.Title ?? copy.UntitledSurvey);
         document.Paragraph($"{copy.Status}: {context.Status} · {copy.GeneratedAt}: {context.GeneratedAt:yyyy-MM-dd HH:mm} UTC");
         document.Spacer(4);

@@ -50,6 +50,8 @@ export default function CompaniesListNextPage() {
   const [plan, setPlan] = useState('')
   const state = useCompaniesListModel(capabilities.canManageCompanies)
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
+  const navigateTo = useNavigate()
+  const { selectCompany } = useCompanyContext()
 
   function closeCreate() {
     setCreating(false)
@@ -57,7 +59,7 @@ export default function CompaniesListNextPage() {
   }
 
   async function handleCreate(values: CompanyFormValues) {
-    await createCompany(baseUrl, {
+    const created = await createCompany(baseUrl, {
       name: values.name,
       emailDomain: values.emailDomain,
       industry: values.industry,
@@ -65,8 +67,11 @@ export default function CompaniesListNextPage() {
       country: values.country,
       subscriptionTier: values.subscriptionTier || undefined,
     })
-    closeCreate()
-    state.reload()
+    // Straight into the new client, as "Abrir" does, with its setup steps on top: the form used
+    // to close onto the list with no word, the new company somewhere mid-list
+    // (docs/audits/2026-11-08-operator-ui-walkthrough.md, C).
+    selectCompany(created.id)
+    navigateTo(`/admin/companies/${created.id}?nueva=1`)
   }
 
   const header = (
@@ -280,9 +285,15 @@ function CompanyRow({ row }: { row: CompanyListRow }) {
         )}
       </td>
       <td className="px-3 py-3">
-        {/* Not read here: the only read of a tenant's settings is an audited PUT (see
-            `useCompaniesListModel`). The cell says where the language is, never guesses it. */}
-        <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.languageInDetail')}</span>
+        {/* The list payload carries the setting since 2026-11-08. An unknown value, or an API
+            older than the field, says where to read it rather than guessing it. */}
+        {row.language === 'es' || row.language === 'en' ? (
+          <span className="block truncate text-fg-primary">
+            {t(row.language === 'es' ? 'superadmin.next.companies.languageEs' : 'superadmin.next.companies.languageEn')}
+          </span>
+        ) : (
+          <span className="text-xs text-fg-tertiary">{t('superadmin.next.companies.languageInDetail')}</span>
+        )}
       </td>
       <td className="px-3 py-3">
         {tier ? (

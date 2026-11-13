@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { LanguageSwitcher, useTranslation } from '../../i18n'
-import { BrandLockup, ThemeSwitcher } from '../../components/layout'
+import { BrandLockup, PoweredByNexadev, ThemeSwitcher } from '../../components/layout'
 import { SkipLink } from '../../components/ui'
 import { cn } from '../../lib/cn'
 
@@ -154,13 +154,22 @@ export function AuthCanvas({
               corner. They are not part of the auth flow, so they come AFTER the form in
               reading order as well as below it — which is also where a reader who needs
               the language picker looks once the form has not helped. */}
-          <footer
-            className="flex w-full flex-wrap items-center justify-end gap-1.5 px-6 pb-6 pt-2 sm:px-10"
-            role="group"
-            aria-label={t('shell.settings')}
-          >
-            <LanguageSwitcher variant="chip" />
-            <ThemeSwitcher variant="chip" />
+          <footer className="flex w-full flex-wrap items-center justify-between gap-3 px-6 pb-6 pt-2 sm:px-10">
+            {/* The builder's credit, on the left so the settings keep the corner they had.
+                The ground under it changes at `lg`: the photograph is the page from there up in
+                BOTH themes, and below it the photo panel is gone and the page is the theme's own.
+                So `on-shell` (the rail's inks and the white mark) from `lg` up, the plain badge
+                below -- one of the two is `display: none`, so it is never announced twice. */}
+            <span className="hidden lg:block">
+              <PoweredByNexadev className="on-shell" />
+            </span>
+            <span className="lg:hidden">
+              <PoweredByNexadev />
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('shell.settings')}>
+              <LanguageSwitcher variant="chip" />
+              <ThemeSwitcher variant="chip" />
+            </div>
           </footer>
         </div>
       </div>

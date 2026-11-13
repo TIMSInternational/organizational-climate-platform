@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
+import { useCompanyNameFor } from '../../../company-context'
 import { Check, Download, MoreHorizontal, Plus, Shield } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
@@ -44,6 +45,7 @@ import {
 } from './derive'
 import type { ReportContents, ReportRow } from './model'
 import { useReportsListModel } from './useReportsListModel'
+import { describeApiError } from '../../../api/describeApiError'
 
 // The canvas's `.label` head: 10px bold uppercase spaced .06em, 8px under it, over the
 // default hairline — the same head `SurveysListNextPage` draws.
@@ -84,6 +86,7 @@ export default function ReportsListNextPage() {
   const mayRead = companyId !== undefined && capabilities.canOpenResults({ companyId })
   const mayShare = mayRead && capabilities.canShareReports
   const state = useReportsListModel(companyId, { mayRead, mayShare })
+  const companyName = useCompanyNameFor(companyId)
   const [searchParams, setSearchParams] = useSearchParams()
   const [creating, setCreating] = useState(false)
   const [scheduling, setScheduling] = useState<ReportRow | null>(null)
@@ -123,7 +126,7 @@ export default function ReportsListNextPage() {
     } catch (err) {
       // The server's own refusal, not a generic sentence: a download that does nothing
       // reads as a broken build.
-      setActionError(err instanceof Error ? err.message : t('errors.generic'))
+      setActionError(describeApiError(err, t))
     } finally {
       setDownloadingId(null)
     }
@@ -139,12 +142,14 @@ export default function ReportsListNextPage() {
       <PageTopBar
         // The artboard's eyebrow is the area the page belongs to, which the nav does not
         // say: Informes sits among the work surfaces in the sidebar, under the company.
-        eyebrow={t('navigation.companySettings')}
+        // The client's name when it is known: a TIMS operator moves between clients all day, and
+        // "Configuración de empresa" did not say whose reports these were (walkthrough, C).
+        eyebrow={companyName ?? t('navigation.companySettings')}
         title={t('navigation.reports')}
         description={t('reports.next.description')}
         // `/admin/companies/:companyId` is loadable by exactly who can load this page.
         breadcrumbs={[
-          { label: t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
+          { label: companyName ?? t('navigation.companySettings'), href: `/admin/companies/${companyId}` },
           { label: t('navigation.reports') },
         ]}
         actions={
@@ -324,6 +329,7 @@ export default function ReportsListNextPage() {
             <DialogDescription>{t('reports.next.newReportDescription', { floor: ANONYMITY_FLOOR })}</DialogDescription>
           </DialogHeader>
           <ReportForm
+            surveys={state.surveys}
             onSubmit={async (values) => {
               await state.create(values)
               setCreating(false)

@@ -1,16 +1,20 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { Check, ChevronRight, CircleAlert, Clock, LayoutPanelTop, Plus, Shield, Users } from 'lucide-react'
+import { Check, ChevronRight, CircleAlert, Clock, Download, LayoutPanelTop, Plus, Shield, Users } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
 import { PageTopBar } from '../../../components/layout'
 import { KpiTile } from '../../../components/charts'
 import { Alert, AlertDescription, Button, Chip, EmptyState, LoadingRegion, NetworkError, SkeletonText, Table, chipVariants } from '../../../components/ui'
+import { useCompanyScope } from '../../../company-context'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../lib/calendarDay'
+import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { cn } from '../../../lib/cn'
 import { KpiRow } from '../../dashboard/components/dashboardGrammar'
-import { createPlanAccion, type CreatePlanAccionInput, type PlanAccion } from '../api/trackingApi'
+import { createPlanAccion, exportPlanesAccionSheet, trackingSheetFileName, type CreatePlanAccionInput, type PlanAccion } from '../api/trackingApi'
+import { listHallazgoOptions } from '../api/trackingPickers'
+import { todayIso } from '../planDates'
 import PlanDeAccionForm from '../components/PlanDeAccionForm'
 import { SEMAFORO_ORDER, semaforoPresentation, type SemaforoEstado } from '../semaforo'
 import { canCreatePlan, readTrackingClaims } from '../trackingAccess'
@@ -19,6 +23,7 @@ import { joinNames } from './derive'
 import { PersonaAvatar } from './parts'
 import { coverage, groupRows, nodoNamesOf, toRows, type ListRow } from './planesList'
 import { usePlanesListModel } from './usePlanesListModel'
+import { describeApiError } from '../../../api/describeApiError'
 
 const TH = 'h-auto bg-transparent px-1.5 pb-2 pt-2 first:pl-3 last:pr-3 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
 /**
@@ -131,6 +136,16 @@ export default function PlanesListNextPage() {
   const companyName = useCompanyName()
   const claims = useMemo(() => readTrackingClaims(), [])
   const state = usePlanesListModel()
+  const scopeCompanyId = useCompanyScope().companyId
+  // Memoised: the form re-asks whenever this identity changes, and it should change only
+  // with the company or the language, never on every render of the board.
+  const loadHallazgos = useMemo(
+    () =>
+      scopeCompanyId
+        ? (nodoExternalId: string) => listHallazgoOptions(scopeCompanyId, nodoExternalId, locale)
+        : undefined,
+    [locale, scopeCompanyId],
+  )
   const [nodo, setNodo] = useState(ALL)
   const [scope, setScope] = useState<Scope>('all')
   const [estado, setEstado] = useState(ALL)
@@ -138,6 +153,8 @@ export default function PlanesListNextPage() {
   const [submitting, setSubmitting] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [created, setCreated] = useState<PlanAccion | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportFailed, setExportFailed] = useState(false)
   const mayCreate = canCreatePlan(claims)
   /** The node leader's board: `role === 'leader'` with a `nodoId` that names a real nodo. */
   const leaderView = capabilities.leadsANodo
@@ -161,6 +178,22 @@ export default function PlanesListNextPage() {
     ? state.nodos.map((item) => ({ id: item.id, name: item.name }))
     : [...new Set(rows.map((row) => row.nodoExternalId))].map((id) => ({ id, name: names.get(id) ?? t('tracking.next.nodoUnnamed') }))
 
+  // The leader's own sheet (G25). `GET /api/planes-accion/export` filters through the same
+  // `Visible` predicate as the list (`TrackingSheetExportEndpoints.cs:46-47`), so it holds
+  // exactly the rows this board shows them — their nodo's plans and the plans that name them —
+  // and the service has always answered a leader with it; only the button was missing.
+  async function exportSheet() {
+    setExporting(true)
+    setExportFailed(false)
+    try {
+      downloadBlobFile(trackingSheetFileName(todayIso()), await exportPlanesAccionSheet())
+    } catch {
+      setExportFailed(true)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   async function handleCreate(input: CreatePlanAccionInput) {
     setSubmitting(true)
     setCreateError(null)
@@ -170,7 +203,7 @@ export default function PlanesListNextPage() {
       setCreating(false)
       state.reload()
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : t('tracking.serviceUnavailableTitle'))
+      setCreateError(describeApiError(err, t, 'tracking.serviceUnavailableTitle'))
     } finally {
       setSubmitting(false)
     }
@@ -222,6 +255,12 @@ export default function PlanesListNextPage() {
                     equivalent is their own nodo's board. `/tracking/tablero` takes no id:
                     `TableroAsync` answers a caller who names none with their own nodo. */}
                 {leaderView && (
+                  <Button type="button" variant="outline" disabled={exporting} aria-busy={exporting || undefined} onClick={() => void exportSheet()}>
+                    <Download aria-hidden="true" />
+                    {exporting ? t('tracking.next.exporting') : t('tracking.next.exportSheet')}
+                  </Button>
+                )}
+                {leaderView && (
                   <Button asChild variant="outline">
                     <Link to="/tracking/tablero">
                       <LayoutPanelTop aria-hidden="true" />
@@ -249,6 +288,12 @@ export default function PlanesListNextPage() {
         />
       </div>
 
+      {exportFailed && (
+        <Alert variant="destructive">
+          <AlertDescription>{t('tracking.next.exportFailed')}</AlertDescription>
+        </Alert>
+      )}
+
       {created && (
         <Alert variant="success">
           <AlertDescription>{t('tracking.planes.created', { code: created.planCode })}</AlertDescription>
@@ -265,9 +310,10 @@ export default function PlanesListNextPage() {
           </h2>
           <PlanDeAccionForm
             claims={claims}
-            nodos={[...(state.nodos ?? [])]}
-            personas={[...state.personas]}
-            directoryUnavailable={state.directoryUnavailable || state.nodos === null}
+            nodos={[...state.form.nodos]}
+            personas={[...state.form.personas]}
+            directoryUnavailable={state.form.unavailable}
+            loadHallazgos={loadHallazgos}
             submitting={submitting}
             error={createError}
             onSubmit={(input) => void handleCreate(input)}

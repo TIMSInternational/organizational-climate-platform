@@ -73,24 +73,47 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     // The counts
     // ------------------------------------------------------------------
 
-    [Fact]
-    public async Task An_open_surveys_small_team_and_company_counts_are_reported()
+    /// <summary>
+    /// A team of two that has answered an open survey reads as withheld -- null on the wire,
+    /// never 2 and never 0 -- and so does the company's count beside it, which at 2 is under
+    /// the same floor. Ruled 2026-10-21: a leader's own team is held to 3.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task An_open_surveys_team_count_under_three_is_withheld_and_absent_reads_the_same(int answered)
     {
         var survey = await SeedSurveyAsync(
-            "Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), companyResponseCount: SurveyResultsPrivacy.MinimumRespondents - 1, targetAudienceCount: 24);
-        await SeedResponsesAsync(survey, _engineeringId, SurveyResultsPrivacy.MinimumRespondents - 1);
+            "Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), companyResponseCount: answered, targetAudienceCount: 24);
+        await SeedResponsesAsync(survey, _engineeringId, answered);
 
         var raw = await ReadRawAsync(await LeaderAsync());
         var row = SurveyRow(raw, survey);
 
-        // A single department reports its count from one respondent onward.
-        Assert.Equal(2, row.GetProperty("responseCount").GetInt32());
-        // Participation counts are disclosed; the whole-survey floor still governs scores.
-        Assert.Equal(2, row.GetProperty("companyResponseCount").GetInt32());
+        // Withheld, and withheld identically for 0, 1 and 2: "nobody answered" and "two
+        // answered" must not be told apart.
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("responseCount").ValueKind);
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("companyResponseCount").ValueKind);
         // The invited headcount is not a response count, and travels as the author entered it.
         Assert.Equal(24, row.GetProperty("companyTargetAudienceCount").GetInt32());
-        // The running total agrees with the disclosed department count.
-        Assert.Equal(2, raw.GetProperty("completedResponseCount").GetInt32());
+        // The running total carries no survey this team answered under the floor.
+        Assert.Equal(0, raw.GetProperty("completedResponseCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task An_open_surveys_team_count_of_three_is_reported()
+    {
+        var survey = await SeedSurveyAsync(
+            "Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), companyResponseCount: 3, targetAudienceCount: 24);
+        await SeedResponsesAsync(survey, _engineeringId, SurveyResultsPrivacy.MinimumSegmentRespondents);
+
+        var raw = await ReadRawAsync(await LeaderAsync());
+        var row = SurveyRow(raw, survey);
+
+        Assert.Equal(3, row.GetProperty("responseCount").GetInt32());
+        Assert.Equal(3, row.GetProperty("companyResponseCount").GetInt32());
+        Assert.Equal(3, raw.GetProperty("completedResponseCount").GetInt32());
     }
 
     [Fact]
@@ -115,28 +138,30 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
 
     /// <summary>
     /// The running total is read twice by anyone who opens the page twice. Counted over every
-    /// survey, it moved by exactly the open survey's hatched count between the two reads.
+    /// survey, it would move by exactly the open survey's withheld count between the two reads,
+    /// so it sums only the surveys this team answered at or over the floor.
     /// </summary>
     [Fact]
-    public async Task The_running_total_includes_every_disclosed_single_department_count()
+    public async Task The_running_total_moves_only_when_a_surveys_team_count_reaches_the_floor()
     {
         var closed = await SeedSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-10));
         await SeedResponsesAsync(closed, _engineeringId, 6);
         var open = await SeedSurveyAsync("Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
-        await SeedResponsesAsync(open, _engineeringId, SurveyResultsPrivacy.MinimumRespondents - 2);
+        await SeedResponsesAsync(open, _engineeringId, 1);
 
         var leader = await LeaderAsync();
-        Assert.Equal(6 + SurveyResultsPrivacy.MinimumRespondents - 2, (await ReadAsync(leader)).CompletedResponseCount);
+        Assert.Equal(6, (await ReadAsync(leader)).CompletedResponseCount);
 
-        // One more answer changes the total, just as it changes the disclosed team row.
+        // A second answer is still under the floor: the total does not move, so the two reads
+        // cannot be differenced into "one more person answered".
         await SeedResponsesAsync(open, _engineeringId, 1);
-        Assert.Equal(6 + SurveyResultsPrivacy.MinimumRespondents - 1, (await ReadAsync(leader)).CompletedResponseCount);
+        Assert.Equal(6, (await ReadAsync(leader)).CompletedResponseCount);
 
-        // At the floor the open survey's count is printed anyway, so the total may carry it.
+        // At the floor the open survey's count is printed, so the total may carry it.
         await SeedResponsesAsync(open, _engineeringId, 1);
         var body = await ReadAsync(leader);
-        Assert.Equal(6 + SurveyResultsPrivacy.MinimumRespondents, body.CompletedResponseCount);
-        Assert.Equal<int?>(SurveyResultsPrivacy.MinimumRespondents, Assert.Single(body.ActiveSurveys, s => s.Id == open).ResponseCount);
+        Assert.Equal(6 + SurveyResultsPrivacy.MinimumSegmentRespondents, body.CompletedResponseCount);
+        Assert.Equal<int?>(SurveyResultsPrivacy.MinimumSegmentRespondents, Assert.Single(body.ActiveSurveys, s => s.Id == open).ResponseCount);
     }
 
     // ------------------------------------------------------------------
@@ -179,37 +204,189 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// <b>The 2026-10-02 ruling, superseded on 2026-10-15, with the cost kept in writing.</b>
+    /// <b>The rest-of-company guard, at 3 again since 2026-10-21.</b>
     ///
     /// <para>
-    /// Engineering at five, everyone else at two: the company's reading and the team's, with
-    /// both counts, give the rest's reading by subtraction. After the TIMS dry run that was
-    /// ruled a leak and the whole team reading was withheld -- one rule everywhere, the
-    /// leader's team included.
-    /// </para>
-    /// <para>
-    /// The 2026-10-15 ruling reports every department at any size, so the two-person
-    /// department whose reading the subtraction yields is published on the results page
-    /// outright. Defending it here would withhold a leader's own team to protect a number
-    /// printed on the screen next door, so the team reading and the organisation side are both
-    /// disclosed. This test now asserts that, and it is the test that fails first if the floor
-    /// is ever restored.
+    /// Engineering at five, everyone else at one or two: the company's reading and the team's,
+    /// with both counts, give the rest's reading by subtraction -- (7 x company - 5 x team) / 2
+    /// is two people's answers. A leader cannot open the results screens, so this would be the
+    /// only way they could learn it, and the organisation side is withheld. The team's own
+    /// reading, at five, is still disclosed.
     /// </para>
     /// </summary>
-    [Fact]
-    public async Task A_team_reading_and_its_organisation_side_survive_a_small_remainder()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task A_rest_of_company_under_three_withholds_the_organisation_side_and_keeps_the_team(int rest)
     {
-        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 5, sales: SurveyResultsPrivacy.MinimumRespondents - 1);
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 5, sales: rest);
 
         var climate = (await ReadAsync(await LeaderAsync())).Climate!;
 
         Assert.False(climate.IsSuppressed);
         Assert.Equal(5, climate.RespondentCount);
-        Assert.Contains(climate.Dimensions, d => d.AverageScore is not null);
+        Assert.Equal<double?>(4.0, Score(climate.Dimensions, "trust"));
+        Assert.Null(climate.Organization);
+    }
 
-        // The org side too: seven answered the survey, five of them this team.
+    [Fact]
+    public async Task A_rest_of_company_of_three_discloses_the_organisation_side()
+    {
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 5, sales: 3);
+
+        var climate = (await ReadAsync(await LeaderAsync())).Climate!;
+
+        var organization = Assert.IsType<DashboardOrganizationClimate>(climate.Organization);
+        Assert.Equal(8, organization.RespondentCount);
+        // (5x4 + 3x2) / 8 = 3.25.
+        Assert.Equal<double?>(3.25, Score(organization.Dimensions, "trust"));
+    }
+
+    // ------------------------------------------------------------------
+    // The team's own reading, held to 3 for every caller (ruled 2026-10-21)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A team of one or two is withheld from its leader and its supervisor: no score, no
+    /// respondent count (0, the same value an absent team gets), no organisation side -- and the
+    /// floor reported is the one that withheld it, 3, not the administrator's 1.
+    /// </summary>
+    [Theory]
+    [InlineData(Roles.Leader, 1)]
+    [InlineData(Roles.Leader, 2)]
+    [InlineData(Roles.Supervisor, 1)]
+    [InlineData(Roles.Supervisor, 2)]
+    public async Task A_team_of_one_or_two_is_withheld_and_reports_the_floor_of_three(string role, int team)
+    {
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: team, sales: 6);
+
+        var climate = (await ReadAsync(await _harness.ClientAsync(role, _companyId, _engineeringId))).Climate!;
+
+        Assert.True(climate.IsSuppressed);
+        Assert.Equal(0, climate.RespondentCount);
+        Assert.Equal(SurveyResultsPrivacy.MinimumSegmentRespondents, climate.MinimumGroupSize);
+        Assert.Equal(3, climate.MinimumGroupSize);
+        Assert.NotEmpty(climate.Dimensions);
+        Assert.All(climate.Dimensions, d => Assert.Null(d.AverageScore));
+        Assert.Null(climate.Organization);
+    }
+
+    /// <summary>
+    /// Too small and absent are one answer: the payload for a team of two is byte-for-byte the
+    /// payload for a team that did not answer, so a reader cannot difference them.
+    /// </summary>
+    [Fact]
+    public async Task A_team_of_two_and_a_team_that_did_not_answer_read_identically()
+    {
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 2, sales: 6);
+
+        var engineering = (await ReadRawAsync(await LeaderAsync())).GetProperty("climate");
+        var sales = (await ReadRawAsync(await _harness.ClientAsync(Roles.Leader, _companyId, _salesId))).GetProperty("climate");
+        var absentDepartment = await _harness.SeedDepartmentAsync(_companyId, "Legal");
+        var absent = (await ReadRawAsync(await _harness.ClientAsync(Roles.Leader, _companyId, absentDepartment))).GetProperty("climate");
+
+        // Sales, at six, is the control: a disclosed reading, so the comparison is not two
+        // empty payloads agreeing.
+        Assert.False(sales.GetProperty("isSuppressed").GetBoolean());
+        Assert.Equal(absent.GetRawText(), engineering.GetRawText());
+    }
+
+    [Theory]
+    [InlineData(Roles.Leader)]
+    [InlineData(Roles.Supervisor)]
+    public async Task A_team_of_three_is_shown_and_reports_the_floor_of_three(string role)
+    {
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 3, sales: 6);
+
+        var climate = (await ReadAsync(await _harness.ClientAsync(role, _companyId, _engineeringId))).Climate!;
+
+        Assert.False(climate.IsSuppressed);
+        Assert.Equal(3, climate.RespondentCount);
+        Assert.Equal(3, climate.MinimumGroupSize);
+        Assert.Equal<double?>(4.0, Score(climate.Dimensions, "trust"));
+        Assert.Equal<double?>(3.0, Score(climate.Dimensions, "workload"));
         Assert.NotNull(climate.Organization);
-        Assert.Equal(7, climate.Organization!.RespondentCount);
+    }
+
+    /// <summary>
+    /// A survey under its own floor reports the team floor too, not the administrator's 1.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_under_its_own_floor_reports_the_team_floor()
+    {
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 2, sales: 0);
+
+        var climate = (await ReadAsync(await LeaderAsync())).Climate!;
+
+        Assert.True(climate.IsSuppressed);
+        Assert.Empty(climate.Dimensions);
+        Assert.Equal(3, climate.MinimumGroupSize);
+    }
+
+    /// <summary>
+    /// <b>An administrator calling the team view gets the team view's floor.</b> The 2026-10-15
+    /// ruling (a single department reported from one respondent) is kept on the administrator's
+    /// own screens; this page is one floor whoever asks, so it and its export cannot differ by
+    /// caller.
+    /// </summary>
+    [Theory]
+    [InlineData(Roles.CompanyAdmin)]
+    [InlineData(Roles.SuperAdmin)]
+    public async Task An_administrator_reading_the_team_view_gets_the_same_floor_of_three(string role)
+    {
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 2, sales: 6);
+
+        var client = await _harness.ClientAsync(role, _companyId);
+        var response = await client.GetAsync($"/dashboard/department-admin?departmentId={_engineeringId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var climate = (await response.Content.ReadFromJsonAsync<DepartmentAdminDashboard>())!.Climate!;
+
+        Assert.True(climate.IsSuppressed);
+        Assert.Equal(3, climate.MinimumGroupSize);
+        Assert.All(climate.Dimensions, d => Assert.Null(d.AverageScore));
+    }
+
+    // ------------------------------------------------------------------
+    // The export mirrors the screen
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task The_export_withholds_a_team_of_two_exactly_as_the_screen_does()
+    {
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 2, sales: 6);
+        var open = await SeedSurveyAsync("Q4 open", SurveyStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), companyResponseCount: 2);
+        await SeedResponsesAsync(open, _engineeringId, 2);
+
+        var leader = await LeaderAsync();
+        var screen = await ReadAsync(leader);
+        Assert.True(screen.Climate!.IsSuppressed);
+        Assert.Null(Assert.Single(screen.ActiveSurveys).ResponseCount);
+
+        var csv = await (await leader.GetAsync("/dashboard/department-admin/export")).Content.ReadAsStringAsync();
+
+        // The withheld reading prints as the notice and the floor that withheld it -- 3.
+        Assert.Contains("This team is below the anonymity floor", csv, StringComparison.Ordinal);
+        Assert.Contains("\"Minimum group size\",\"3\"", csv, StringComparison.Ordinal);
+        // The open survey's two is printed as the word, with the floor of 3 in the notice.
+        Assert.Contains("Q4 open", csv, StringComparison.Ordinal);
+        Assert.Contains("fewer than 3 responses from this team", csv, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Respondents\"", csv, StringComparison.Ordinal);
+        Assert.Contains("\"Completed responses\",\"0\"", csv, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_export_discloses_a_team_of_three_exactly_as_the_screen_does()
+    {
+        await SeedScoredSurveyAsync("Q3", SurveyStatuses.Closed, DateTimeOffset.UtcNow.AddDays(-30), engineering: 3, sales: 6);
+
+        var leader = await LeaderAsync();
+        var screen = await ReadAsync(leader);
+        Assert.False(screen.Climate!.IsSuppressed);
+
+        var csv = await (await leader.GetAsync("/dashboard/department-admin/export")).Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain("This team is below the anonymity floor", csv, StringComparison.Ordinal);
+        Assert.Contains($"\"Respondents\",\"{screen.Climate.RespondentCount}\"", csv, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -231,9 +408,9 @@ public class DepartmentDashboardFloorTests : IAsyncLifetime
     /// floor that used to produce it.
     /// </summary>
     /// <remarks>
-    /// There were two ways to a withheld reading: the team was too small, or the team did not
-    /// answer. Since 2026-10-15 only the second is left, so the fixture gives Engineering NO
-    /// responses. The handler returns before it computes the organisation side, and that early
+    /// There are two ways to a withheld reading: the team was too small, or the team did not
+    /// answer. This fixture is the second -- Engineering has NO responses; the first is
+    /// <see cref="A_team_of_one_or_two_is_withheld_and_reports_the_floor_of_three"/>. The handler returns before it computes the organisation side, and that early
     /// return is what this test pins: told apart, a reader could difference "we did not answer"
     /// against "we were too few" and learn roughly how few -- which is why the two collapse to
     /// one withheld answer on purpose, and still do.

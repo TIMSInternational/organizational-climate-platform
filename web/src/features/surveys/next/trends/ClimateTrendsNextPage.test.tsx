@@ -12,6 +12,7 @@ import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import ClimateTrendsNextPage from './ClimateTrendsNextPage'
 import { downloadTextFile } from '../../../../lib/downloadTextFile'
 import en from '../../../../i18n/en.json'
+import { ApiError } from '../../../../api/authFetch'
 /**
  * The floor the *server* says it applied, deliberately NOT `ANONYMITY_FLOOR`.
  *
@@ -362,10 +363,11 @@ describe('ClimateTrendsNextPage', () => {
   })
 
   it('recovers from a failed load without a reload', async () => {
-    vi.mocked(getClimateTrends).mockRejectedValueOnce(new Error('Request failed: 500'))
+    vi.mocked(getClimateTrends).mockRejectedValueOnce(new ApiError(500, 'Request failed: 500'))
     renderAt('company_admin')
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain('Request failed: 500')
+    expect(alert.textContent).toContain(en.errors.api.server)
+    expect(alert.textContent).not.toContain('Request failed')
     await userEvent.click(screen.getByRole('button', { name: en.common.retry }))
     await waitFor(() => expect(document.querySelectorAll('[data-slot="trend-card"]')).toHaveLength(2))
     expect(screen.queryByRole('alert')).toBeNull()

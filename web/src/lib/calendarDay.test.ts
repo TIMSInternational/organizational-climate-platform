@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { calendarDay, calendarDayOf, instantDay } from './calendarDay'
+import { calendarDay, calendarDayOf, instantCalendarDay, instantDay } from './calendarDay'
 
 /**
  * The ambient zone, restored after every case.
@@ -120,5 +120,31 @@ describe('calendarDayOf', () => {
 
   it('hands back what it cannot parse', () => {
     expect(calendarDayOf('not a date')).toBe('not a date')
+  })
+})
+
+/** Audit 2026-10-22, R2: a survey's close, as the respondent screens print and count it. */
+describe('a respondent’s close on their own clock (R2)', () => {
+  // 00:30 UTC on 28 Oct is 18:30 on 27 Oct in Costa Rica — the shape of a close at or after
+  // 18:00 there, which UTC used to print as the next day.
+  const close = Date.parse('2026-10-28T00:30:00Z')
+  const now = Date.parse('2026-10-21T16:00:00Z')
+
+  it('prints the previous calendar day in Costa Rica', () => {
+    expect(instantDay(close, 'es', { now, timeZone: 'America/Costa_Rica' })).toBe('27 oct')
+    // The control: the same instant in UTC is the 28th, which is what `calendarDay` prints.
+    expect(instantDay(close, 'es', { now, timeZone: 'UTC' })).toBe('28 oct')
+    expect(calendarDay(close, 'es', now)).toBe('28 oct')
+  })
+
+  it('names the same day as an ISO calendar day, for counting beside it', () => {
+    expect(instantCalendarDay(close, 'America/Costa_Rica')).toBe('2026-10-27')
+    expect(instantCalendarDay(close, 'UTC')).toBe('2026-10-28')
+    expect(instantCalendarDay(new Date(close), 'America/Costa_Rica')).toBe('2026-10-27')
+  })
+
+  it('returns an unparseable value as given, so a count from it is NaN rather than a number', () => {
+    expect(instantCalendarDay(Number.NaN, 'America/Costa_Rica')).toBe('NaN')
+    expect(Number.isNaN(Date.parse(instantCalendarDay(Number.NaN)))).toBe(true)
   })
 })

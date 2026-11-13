@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ClimateProject.Api.Infrastructure.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Questions;
@@ -40,6 +41,9 @@ public static class SurveyEndpoints
         // and freezes the survey's content), and an update that could also publish is an
         // update that publishes by accident.
         group.MapPut("/{id:guid}/status", UpdateStatusAsync);
+        // Reopening a closed survey: a separate, super-admin-only route, deliberately NOT an edge
+        // in SurveyStatuses' transition map -- see ReopenAsync.
+        group.MapPost("/{id:guid}/reopen", ReopenAsync);
 
         group.MapPost("/{id:guid}/duplicate", DuplicateAsync);
     }
@@ -201,7 +205,7 @@ public static class SurveyEndpoints
         }
 
         var query = SurveyQueries.AssignedTo(
-            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, myCompanyId, me.DepartmentId, me.Id,
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded), myCompanyId, me.DepartmentId, me.Id,
             currentUser.SurveyScope);
 
         var rows = await SurveyQueries.ToMyRows(query, db.Questions).ToListAsync(cancellationToken);
@@ -342,12 +346,6 @@ public static class SurveyEndpoints
                 statusCode: 400);
         }
 
-        // Survey's own choice, else the company's, else `shared` -- resolved HERE and frozen
-        // onto the row, exactly as `language` is two statements above. Resolving it at read
-        // time instead would let a company settings change re-shape a survey whose
-        // credentials have already been mailed, and credentials are mailed exactly once.
-        var credentialMode = CredentialModes.Resolve(request.Settings?.CredentialMode, company.CredentialMode);
-
         var type = request.Type?.Trim();
         if (string.IsNullOrWhiteSpace(type))
         {
@@ -377,7 +375,7 @@ public static class SurveyEndpoints
 
         if (request.StartDate >= request.EndDate)
         {
-            return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
+            return Results.Json(new { message = "StartDate must be before EndDate", code = AdminRefusals.SurveyDatesOutOfOrder }, statusCode: 400);
         }
 
         if (request.Title is null)
@@ -474,75 +472,14 @@ public static class SurveyEndpoints
             UpdatedAt = now,
         };
 
-        // Anonymous unless the caller says otherwise. Respondents never log in (ruled
-        // 2026-10-12), and an unauthenticated respondent can answer ONLY an anonymous survey
-        // (`ResolveRespondentAsync`), so a survey created without a word about it must be one
-        // they can answer. The entity's own default (false) is the legacy shape and stays,
-        // because changing it would silently re-read every row materialised without the flag.
-        survey.Settings.Anonymous = true;
-
-        // Frozen now. Null would have meant "inherit", and inheriting is a decision this
-        // survey has already made.
-        survey.Settings.CredentialMode = credentialMode;
-
-        // Who answered is NOT asked. The 2026-10-12 ruling that put a name and email step on
-        // every new survey was superseded on 2026-10-13: there are three ways to answer -- a
-        // mass invite with a generated username and password, a climate QR that asks
-        // demographics and nothing else, and a microclimate link that asks nothing -- and
-        // "name and email are NEVER collected directly" holds in all three. So nothing is set
-        // here: the entity default (false) is now also the product's answer, and
-        // SurveyResponseEndpoints.AsksParticipantIdentity refuses the step for the surveys
-        // already carrying the column true.
-
-        // NO INVITATION EMAIL. Ruled 2026-10-19 by Federico, from the rehearsal's own mail:
-        // "we ONLY WANT THE ONE WITH THE CODE... it opens up the survey without them needing
-        // to log in. This should never happen."
-        //
-        // Three measurements make it the right default rather than a preference.
-        //
-        // It is a SECOND DOOR. The invitation mail's button is `/survey-invitations/{token}`,
-        // and `SurveyInvitationPage` renders the respond form with `publicEntry` set "even
-        // though this visitor is named" -- so the holder answers as that person without
-        // signing in. On a mass invite, where the platform generated a username and a
-        // password for everyone (ruled 2026-10-13), that is a third way in that nobody
-        // designed, and it travels with a forwarded email.
-        //
-        // It is a DUPLICATE. `CredentialsEmailComposer` already says "Tu organizacion te
-        // invita a responder una encuesta. Inicia sesion con el usuario y la contrasena de
-        // abajo" over a sign-in button. The same rehearsal's FIRST finding (2026-10-17) was
-        // that duplicated access instructions read as two different accounts: "Ingreso con
-        // los accesos de arriba o los de abajo?".
-        //
-        // And it COSTS NO TRACKING, which is the part that looks like it should block this.
-        // `SurveyInvitationStatuses.AnonymityCeiling` is `opened`, so on an anonymous survey
-        // -- every climate survey this product sends -- `started` and `completed` are never
-        // persisted and `AdvanceInvitationAsync` returns before it writes. The only state an
-        // invitation could record is `opened`, which happens when somebody opens the mail
-        // this removes. Participation is `surveys.response_count` against
-        // `target_audience_count`, an aggregate, which is the only shape of that number that
-        // names nobody.
-        //
-        // The entity default stays `true` for the same reason Anonymous's stays false: it is
-        // the legacy shape and changing it would re-read every row materialised without the
-        // flag. A tenant that wants the mail turns it on per survey -- `ApplySettings` still
-        // honours it, and `POST /invitations/{id}/resend` is still a deliberate act.
-        survey.Settings.NotificationSendInvitations = false;
-
-        // And no reminder mail, for the same sentence: "just one email, with the credentials
-        // to login". A reminder is a SECOND message to the same person, and on an ANONYMOUS
-        // survey it is one that cannot even be correct -- `InvitationReminderJob` selects on
-        // `completed_on IS NULL`, and `SurveyInvitationStatuses.AnonymityCeiling` forbids
-        // ever writing that column there, so every invitee stays a reminder candidate for the
-        // whole window however many of them have answered.
-        //
-        // Still a per-survey setting, not a removal: a three-week window with a nudge at day
-        // three is a reasonable thing for a tenant to ask for, and `ApplySettings` honours it.
-        // What changes is that nobody gets one by default.
-        survey.Settings.NotificationSendReminders = false;
+        // Anonymous, the company's credential mode frozen onto the row, no invitation or
+        // reminder mail -- the reasons are in NewSurveyDefaults, which the template path
+        // (`POST /survey-templates/{id}/use`) calls too, so the two cannot drift apart.
+        NewSurveyDefaults.Apply(survey.Settings, request.Settings?.CredentialMode, company.CredentialMode);
 
         if (request.Settings is not null)
         {
-            var settingsError = ApplySettings(survey.Settings, request.Settings, language);
+            var settingsError = ApplySettings(survey.Settings, request.Settings, language, credentialModeFrozen: false);
             if (settingsError is not null)
             {
                 return settingsError;
@@ -635,20 +572,36 @@ public static class SurveyEndpoints
         // answer already collected may be interpreted and re-identified, which is the
         // definition of invalidating a result -- the rest of the settings blob (reminder
         // cadence, progress bar, autosave) changes nothing about the data.
-        var touchesContent = request.Title is not null
-                             || request.Description is not null
-                             || request.Type is not null
-                             || request.Language is not null
-                             || request.Questions is not null
-                             || request.DepartmentIds is not null
-                             || request.Settings?.Anonymous is not null;
+        var touchesText = request.Title is not null || request.Description is not null;
+        var touchesStructure = request.Type is not null
+                               || request.Language is not null
+                               || request.Questions is not null
+                               || request.DepartmentIds is not null
+                               || request.Settings?.Anonymous is not null;
+        var touchesContent = touchesText || touchesStructure;
 
         var touchesSchedule = request.StartDate.HasValue
                               || request.EndDate.HasValue
                               || request.TargetAudienceCount.HasValue
                               || request.Settings is not null;
 
-        if (touchesContent)
+        // A TIMS operator editing a survey that has left draft (ruled 2026-11-11,
+        // `docs/decisions/operators-edit-a-live-survey.md`). Decided here, applied below: the
+        // question replacement is then serialised against the first answer, and the edit writes
+        // a version so the content a response resolves to stays the content it was given.
+        var operatorLiveEdit = false;
+        if (touchesContent && !SurveyStatuses.AllowsContentEdit(survey.Status) && currentUser.Role == Roles.SuperAdmin)
+        {
+            var refusal = await RefuseLiveEditAsync(db, survey, request, cancellationToken);
+            if (refusal is not null)
+            {
+                return refusal;
+            }
+
+            operatorLiveEdit = true;
+        }
+
+        if (touchesContent && !operatorLiveEdit)
         {
             if (!SurveyStatuses.AllowsContentEdit(survey.Status))
             {
@@ -659,6 +612,7 @@ public static class SurveyEndpoints
                                   + (SurveyStatuses.CanTransition(survey.Status, SurveyStatuses.Draft)
                                       ? "Return it to 'draft' first via PUT /surveys/{id}/status."
                                       : "Duplicate it instead -- the copy keeps every option's stable value, so its responses still aggregate with this one's."),
+                        code = AdminRefusals.SurveyContentLocked,
                     },
                     statusCode: 409);
             }
@@ -669,15 +623,35 @@ public static class SurveyEndpoints
             if (await HasResponsesAsync(db, survey, cancellationToken))
             {
                 return Results.Json(
-                    new { message = "This survey already has responses; its content can no longer be edited." },
+                    new { message = "This survey already has responses; its content can no longer be edited.", code = AdminRefusals.SurveyContentHasResponses },
                     statusCode: 409);
             }
+        }
+
+        // Who a survey was sent to, and which service it metered against, are facts about a
+        // run that has ENDED once it is closed or archived: rewriting either afterwards would
+        // re-label who was asked and which licence the answers spent. Neither is in
+        // touchesContent (a live survey may still gain a named person, and a draft its
+        // service), so without this a closed survey accepted both with a 200 (audit G14).
+        // A 400 with a stable code, not the 409 of the status rules: the request is one this
+        // survey can never accept, whatever state it moves to next -- `closed` leads only to
+        // `archived`.
+        if ((request.UserIds is not null || request.ServiceType is not null)
+            && !SurveyStatuses.AllowsScheduleEdit(survey.Status))
+        {
+            return Results.Json(
+                new
+                {
+                    code = "survey_ended_audience_frozen",
+                    message = $"A survey in status '{survey.Status}' has ended: its userIds and serviceType can no longer be changed. Duplicate it to run it again.",
+                },
+                statusCode: 400);
         }
 
         if (touchesSchedule && !SurveyStatuses.AllowsScheduleEdit(survey.Status))
         {
             return Results.Json(
-                new { message = $"A survey in status '{survey.Status}' can no longer be rescheduled." },
+                new { message = $"A survey in status '{survey.Status}' can no longer be rescheduled.", code = AdminRefusals.SurveyScheduleFrozen },
                 statusCode: 409);
         }
 
@@ -688,8 +662,32 @@ public static class SurveyEndpoints
             && SurveyStatuses.AcceptsResponses(survey.Status))
         {
             return Results.Json(
-                new { message = "StartDate cannot be changed once the survey is active." },
+                new { message = "StartDate cannot be changed once the survey is active.", code = AdminRefusals.SurveyStartFrozen },
                 statusCode: 409);
+        }
+
+        // An operator's live edit runs in one transaction that holds the survey row. Inserting a
+        // response takes FOR KEY SHARE on that row (responses.survey_id), which FOR UPDATE
+        // excludes. So a first answer either committed before this -- and the re-check below
+        // refuses -- or waits until this commits and then fails on its own, against questions
+        // that no longer exist (question_responses.question_id is RESTRICT). Never an answer
+        // quietly attached to a question that was taken away.
+        await using var liveTransaction = operatorLiveEdit
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        IReadOnlyList<MissingTranslation> missingBefore = [];
+        if (operatorLiveEdit)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT 1 FROM surveys WHERE \"Id\" = {survey.Id} FOR UPDATE", cancellationToken);
+            if (request.Questions is not null && await HasResponsesAsync(db, survey, cancellationToken))
+            {
+                return Results.Json(
+                    new { message = "This survey already has responses; its questions can no longer be edited.", code = AdminRefusals.SurveyContentHasResponses },
+                    statusCode: 409);
+            }
+
+            missingBefore = await MissingTranslationsAsync(db, survey, cancellationToken);
         }
 
         // Captured after every guard has passed and before the first mutation, so the audit
@@ -777,7 +775,7 @@ public static class SurveyEndpoints
         var endDate = (request.EndDate ?? survey.EndDate).ToUniversalTime();
         if (startDate >= endDate)
         {
-            return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
+            return Results.Json(new { message = "StartDate must be before EndDate", code = AdminRefusals.SurveyDatesOutOfOrder }, statusCode: 400);
         }
 
         survey.StartDate = startDate;
@@ -786,13 +784,14 @@ public static class SurveyEndpoints
 
         if (request.Settings is not null)
         {
-            var settingsError = ApplySettings(survey.Settings, request.Settings, survey.Language);
+            var settingsError = ApplySettings(survey.Settings, request.Settings, survey.Language, credentialModeFrozen: true);
             if (settingsError is not null)
             {
                 return settingsError;
             }
         }
 
+        var departmentTargetsChanged = false;
         if (request.DepartmentIds is not null)
         {
             var departmentIds = request.DepartmentIds.Distinct().ToList();
@@ -803,6 +802,7 @@ public static class SurveyEndpoints
             }
 
             var existing = await db.SurveyDepartmentTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
+            departmentTargetsChanged = !existing.Select(t => t.DepartmentId).ToHashSet().SetEquals(departmentIds);
             db.SurveyDepartmentTargets.RemoveRange(existing);
             foreach (var departmentId in departmentIds)
             {
@@ -810,6 +810,11 @@ public static class SurveyEndpoints
             }
         }
 
+        // The named people are not in the version snapshot (`SurveyVersioning.Capture` takes the
+        // departments only), so the content diff below cannot see them. Without this a live
+        // survey's audience could be rewritten from the detail page with no history entry at
+        // all -- who may answer is the change an audit trail most needs to hold.
+        var userTargetsChanged = false;
         if (request.UserIds is not null)
         {
             var userIds = request.UserIds.Distinct().ToList();
@@ -820,6 +825,7 @@ public static class SurveyEndpoints
             }
 
             var existingUsers = await db.SurveyUserTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
+            userTargetsChanged = !existingUsers.Select(t => t.UserId).ToHashSet().SetEquals(userIds);
             db.SurveyUserTargets.RemoveRange(existingUsers);
             foreach (var userId in userIds)
             {
@@ -853,10 +859,10 @@ public static class SurveyEndpoints
                 return sourceError;
             }
 
-            // Replace wholesale. Safe only because we have already established the survey
-            // is a draft with zero responses -- with responses in play this would orphan
-            // every question_responses row, which is precisely what the guard above exists
-            // to prevent.
+            // Replace wholesale. Safe only because we have already established the survey has
+            // zero responses -- a draft, or a live survey an operator is editing under the row
+            // lock above. With responses in play this would orphan every question_responses
+            // row, which is precisely what those guards exist to prevent.
             var existingQuestions = await db.Questions.Where(x => x.SurveyId == survey.Id).ToListAsync(cancellationToken);
             var existingIds = existingQuestions.Select(x => x.Id).ToList();
             var existingOptions = await db.QuestionOptions.Where(o => existingIds.Contains(o.QuestionId)).ToListAsync(cancellationToken);
@@ -878,13 +884,101 @@ public static class SurveyEndpoints
         // so the post-state only exists once it has been written. Hence the second save --
         // a cost paid on updates only, and only when something actually moved.
         var contentAfter = await SurveyAuditTrail.LoadContentAsync(db, survey, cancellationToken);
-        var changedFields = SurveyVersioning.Diff(contentBefore, contentAfter);
+        var changedFields = SurveyVersioning.Diff(contentBefore, contentAfter).ToList();
+
+        if (operatorLiveEdit)
+        {
+            // The publish gate (#195), held for the content respondents already see: an edit
+            // may not take a live survey's questions to zero, nor leave a text untranslated that
+            // was translated. Gaps that predate the edit stay its own business -- refusing a
+            // title fix over a question published before the gate existed protects nobody.
+            var liveQuestions = await db.Questions.Where(x => x.SurveyId == survey.Id).ToListAsync(cancellationToken);
+            if (liveQuestions.Count == 0)
+            {
+                return Results.Json(
+                    new { message = "A survey respondents can see must keep at least one question.", code = AdminRefusals.SurveyNoQuestions },
+                    statusCode: 400);
+            }
+
+            var liveOptions = await SurveyContent.LoadOptionsAsync(db, liveQuestions.Select(x => x.Id).ToList(), cancellationToken);
+            var newlyMissing = ContentPublishValidation
+                .FindMissing(survey.Language, SurveyContent.GateFields(survey, liveQuestions, liveOptions))
+                .Except(missingBefore)
+                .ToList();
+            if (newlyMissing.Count > 0)
+            {
+                return Results.Json(
+                    new { message = ContentPublishValidation.Describe(newlyMissing), missingTranslations = newlyMissing, code = AdminRefusals.SurveyMissingTranslations },
+                    statusCode: 400);
+            }
+
+            // A response resolves to its wording through survey.Version (CaptureVersionAsync).
+            // Publishing froze that snapshot because content could not move afterwards; now it
+            // can, so every effective live edit writes the next one. Questions only move while
+            // nobody has answered, so every answer still resolves to the questions it was given.
+            if (changedFields.Count > 0)
+            {
+                await SurveyAuditTrail.CaptureVersionAsync(db, survey, liveQuestions, liveOptions, actor, updatedAt, cancellationToken);
+            }
+        }
+
+        if (userTargetsChanged)
+        {
+            changedFields.Add("userIds");
+        }
+
+        // The audience moved, so the stored denominator is now about a different set of
+        // people. `TargetAudienceCount` is what every participation RATE divides by
+        // (`surveyListView.ts`, the dashboard, the public report), and until now only a
+        // caller that sent the number itself kept it true: "Editar audiencia" sends
+        // `userIds` alone, so taking six people off a 240-person survey from the screen
+        // left the rate dividing by 240 for ever. The October shell script compensated by
+        // posting `targetAudienceCount` alongside the ids by hand -- a correction the
+        // product should not need a human to remember.
+        //
+        // Recounted here and not before the save because the new targets only exist in the
+        // database once written, and recounted through `SurveyQueries.Audience` rather than
+        // from the request's own list because that method is the single expression of who an
+        // audience is -- a survey with no targets of either kind is company-wide, department
+        // and named targets union, and only ACTIVE people count. Counting the ids in the
+        // request would be a fifth copy of that rule, and the fourth had already drifted.
+        //
+        // An explicit `targetAudienceCount` still wins: an author who declares a figure
+        // (a roster they are mid-way through importing, a paper cohort) keeps it. And a
+        // request that does not touch the targets does not touch the count, which is why
+        // the narrow settings PUTs cannot disturb a declared number.
+        //
+        // A survey that never declared one keeps declaring none. `null` is not "unset
+        // pending a default" here, it is the stored meaning "there is nothing to measure
+        // against", which `surveyParticipationPercent` passes through as an em dash rather
+        // than substituting a zero -- "nobody has responded" and "there is no audience to
+        // measure against" are different statements. So this corrects a denominator that
+        // has become WRONG; it never invents one that was deliberately absent.
+        if ((userTargetsChanged || departmentTargetsChanged)
+            && survey.TargetAudienceCount.HasValue
+            && !request.TargetAudienceCount.HasValue)
+        {
+            var resolved = await SurveyQueries
+                .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+                .CountAsync(cancellationToken);
+            if (survey.TargetAudienceCount != resolved)
+            {
+                survey.TargetAudienceCount = resolved;
+                changedFields.Add("targetAudienceCount");
+            }
+        }
+
         if (changedFields.Count > 0)
         {
             SurveyAuditTrail.Record(
                 db, survey.Id, SurveyAuditActions.Updated, SurveyAuditEntityTypes.Survey, actor, updatedAt,
                 new SurveyAuditChangeSet(Fields: changedFields));
             await db.SaveChangesAsync(cancellationToken);
+        }
+
+        if (liveTransaction is not null)
+        {
+            await liveTransaction.CommitAsync(cancellationToken);
         }
 
         return Results.Ok(await ToDetailAsync(survey, db, lang, cancellationToken));
@@ -930,6 +1024,123 @@ public static class SurveyEndpoints
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(await ToDetailAsync(survey, db, lang, cancellationToken));
+    }
+
+    /// <summary>The soonest a reopened survey may close again, from now. The lifecycle sweep runs
+    /// every five minutes; a close closer than this could be swept before anyone used the reopen.</summary>
+    public static readonly TimeSpan ReopenMinimumWindow = TimeSpan.FromMinutes(30);
+
+    /// <summary>The reason a reopen must give, in characters. It is the only record of why.</summary>
+    public const int ReopenReasonMinLength = 5;
+
+    /// <summary>
+    /// <c>POST /surveys/{id}/reopen</c>: a closed survey takes answers again, until a new close.
+    /// Ruled 2026-11-08 (<c>docs/decisions/operators-reopen-exclude-delete.md</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a route of its own and not an edge in the transition map.</b>
+    /// <see cref="SurveyStatuses"/> leaves <c>closed -&gt; active</c> out on purpose: answers that
+    /// arrive after results were analysed, exported and benchmarked restate them. That stays true,
+    /// so <c>PUT /status</c> still refuses it, and a client administrator still cannot do it. What
+    /// changed is that TIMS may decide the cost is worth paying -- Eagle on 27 Oct 2026, done then
+    /// by SQL (<c>EAGLE-ABRIR-AL-30.sql</c>) -- and must say why, on the record.</para>
+    /// <para><b>What it writes.</b> Status and the close, in ONE save: with the status open and a
+    /// close already past, the lifecycle sweep would close it again within five minutes. That is
+    /// all a close ever wrote (status, updated_at, and an early close's end date), so nothing else
+    /// needs undoing: the link, the QR and every per-survey key keep working, and anybody who
+    /// already answered is still recognised as having answered.</para>
+    /// <para>The new status is <c>active</c> when the opening is past -- the usual case -- and
+    /// <c>scheduled</c> when a survey closed before it ever opened is reopened, so it opens on its
+    /// own date rather than early.</para>
+    /// </remarks>
+    private static async Task<IResult> ReopenAsync(
+        Guid id,
+        ReopenSurveyRequest request,
+        string? lang,
+        ClaimsPrincipal principal,
+        HttpContext http,
+        ClimateProjectDbContext db,
+        AuditEntry audit,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (currentUser.Role != Roles.SuperAdmin)
+        {
+            return Results.Forbid();
+        }
+
+        var survey = await db.Surveys.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+        if (survey is null)
+        {
+            return NotFound();
+        }
+
+        var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
+        if (actor is null)
+        {
+            return ActingUserRequired();
+        }
+
+        // A company-less super admin -- Federico's account -- resolves to no company, and the
+        // middleware would then write no row at all. File it under the survey's.
+        if (await ResolveActingUserIdAsync(currentUser, db, cancellationToken) is { } actorId)
+        {
+            audit.AttributeTo(actorId, survey.CompanyId);
+        }
+
+        if (!string.Equals(survey.Status, SurveyStatuses.Closed, StringComparison.Ordinal))
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"Only a closed survey can be reopened; this one is '{survey.Status}'.",
+                    code = AdminRefusals.SurveyNotClosed,
+                },
+                statusCode: 409);
+        }
+
+        var reason = request.Reason?.Trim() ?? string.Empty;
+        if (reason.Length < ReopenReasonMinLength || reason.Length > AuditEntry.MaxChangeValueLength)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"Say why the survey is being reopened, in {ReopenReasonMinLength} to {AuditEntry.MaxChangeValueLength} characters.",
+                    code = AdminRefusals.SurveyReopenReasonRequired,
+                },
+                statusCode: 400);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (request.EndDate is not { } newEnd || newEnd < now + ReopenMinimumWindow || newEnd <= survey.StartDate)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"The new close must be at least {ReopenMinimumWindow.TotalMinutes:0} minutes from now and after the survey's opening.",
+                    code = AdminRefusals.SurveyReopenEndTooSoon,
+                },
+                statusCode: 400);
+        }
+
+        // timestamptz takes UTC only (Npgsql refuses another offset), and a caller may send one.
+        newEnd = newEnd.ToUniversalTime();
+        var target = survey.StartDate <= now ? SurveyStatuses.Active : SurveyStatuses.Scheduled;
+        var previousEnd = survey.EndDate;
+        survey.Status = target;
+        survey.EndDate = newEnd;
+        survey.UpdatedAt = now;
+
+        SurveyAuditTrail.Record(
+            db, survey.Id, SurveyAuditActions.StatusChanged, SurveyAuditEntityTypes.Status, actor, now,
+            new SurveyAuditChangeSet(From: SurveyStatuses.Closed, To: target));
+        await db.SaveChangesAsync(cancellationToken);
+
+        audit.RecordChange("status", SurveyStatuses.Closed, target);
+        audit.RecordChange("endDate", previousEnd.ToString("O", System.Globalization.CultureInfo.InvariantCulture), newEnd.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        audit.RecordChange("reason", null, reason);
 
         return Results.Ok(await ToDetailAsync(survey, db, lang, cancellationToken));
     }
@@ -992,6 +1203,7 @@ public static class SurveyEndpoints
                               + "Duplicate it instead -- the copy keeps every option's stable value, so its responses still aggregate with this one's.",
                     from = survey.Status,
                     to = target,
+                    code = AdminRefusals.SurveyRevertHasResponses,
                 },
                 statusCode: 409);
         }
@@ -1002,7 +1214,7 @@ public static class SurveyEndpoints
             if (questions.Count == 0)
             {
                 return Results.Json(
-                    new { message = "Cannot publish a survey with no questions." },
+                    new { message = "Cannot publish a survey with no questions.", code = AdminRefusals.SurveyNoQuestions },
                     statusCode: 400);
             }
 
@@ -1021,7 +1233,7 @@ public static class SurveyEndpoints
             if (missing.Count > 0)
             {
                 return Results.Json(
-                    new { message = ContentPublishValidation.Describe(missing), missingTranslations = missing },
+                    new { message = ContentPublishValidation.Describe(missing), missingTranslations = missing, code = AdminRefusals.SurveyMissingTranslations },
                     statusCode: 400);
             }
 
@@ -1047,7 +1259,8 @@ public static class SurveyEndpoints
         // its EndDate, so a survey closed on 2 Oct kept saying "cerró el 29 de octubre" (TIMS
         // dry run). Only inside the window: a close after EndDate keeps the planned day it
         // really ended on, and one before StartDate would leave an end before the start.
-        // 'closed' leads only to 'archived', so no reopen can need the old date back.
+        // 'closed' leads only to 'archived' here; ReopenAsync sets a NEW close, so it never
+        // needs the old date back either.
         if (string.Equals(target, SurveyStatuses.Closed, StringComparison.Ordinal)
             && survey.StartDate <= changedAt && changedAt < survey.EndDate)
         {
@@ -1104,7 +1317,7 @@ public static class SurveyEndpoints
         if (await HasResponsesAsync(db, survey, cancellationToken))
         {
             return Results.Json(
-                new { message = "This survey has responses and cannot be deleted. Archive it instead." },
+                new { message = "This survey has responses and cannot be deleted. Archive it instead.", code = AdminRefusals.SurveyDeleteHasResponses },
                 statusCode: 409);
         }
 
@@ -1149,7 +1362,7 @@ public static class SurveyEndpoints
         var endDate = (request?.EndDate ?? survey.EndDate).ToUniversalTime();
         if (startDate >= endDate)
         {
-            return Results.Json(new { message = "StartDate must be before EndDate" }, statusCode: 400);
+            return Results.Json(new { message = "StartDate must be before EndDate", code = AdminRefusals.SurveyDatesOutOfOrder }, statusCode: 400);
         }
 
         var actor = await SurveyAuditTrail.ResolveActorAsync(currentUser, http, db, cancellationToken);
@@ -1164,8 +1377,12 @@ public static class SurveyEndpoints
         var emojiOptions = await db.QuestionEmojiOptions.Where(o => questionIds.Contains(o.QuestionId)).ToListAsync(cancellationToken);
         var conditionalLogic = await db.QuestionConditionalLogics.Where(c => questionIds.Contains(c.QuestionId)).ToListAsync(cancellationToken);
         var departmentTargets = await db.SurveyDepartmentTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
+        var userTargets = await db.SurveyUserTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
 
-        var source = new SurveyStructure(survey, questions, options, emojiOptions, conditionalLogic, departmentTargets);
+        var source = new SurveyStructure(survey, questions, options, emojiOptions, conditionalLogic, departmentTargets)
+        {
+            UserTargets = userTargets,
+        };
 
         // Detached from the change tracker before anything is added: the copy's rows are
         // brand-new instances, and the source's rows must not be marked modified by having
@@ -1181,6 +1398,7 @@ public static class SurveyEndpoints
 
         db.Surveys.Add(copy.Survey);
         db.SurveyDepartmentTargets.AddRange(copy.DepartmentTargets);
+        db.SurveyUserTargets.AddRange(copy.UserTargets);
         db.Questions.AddRange(copy.Questions);
         db.QuestionOptions.AddRange(copy.Options);
         db.QuestionEmojiOptions.AddRange(copy.EmojiOptions);
@@ -1295,7 +1513,68 @@ public static class SurveyEndpoints
         Survey survey,
         CancellationToken cancellationToken)
         => survey.ResponseCount > 0
-           || await db.Responses.AnyAsync(r => r.SurveyId == survey.Id, cancellationToken);
+           || await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).AnyAsync(r => r.SurveyId == survey.Id, cancellationToken);
+
+    /// <summary>
+    /// What a TIMS operator may NOT change once a survey has left draft (ruled 2026-11-11,
+    /// <c>docs/decisions/operators-edit-a-live-survey.md</c>). The title and the description
+    /// always, short of archived: they are words about the survey, not the instrument, and no
+    /// stored answer points at them. The questions only while the survey is scheduled or active
+    /// AND nothing has been stored against them -- not one row, complete, partial or excluded.
+    /// Everything else (type, language, anonymity, departments) stays a draft-only decision.
+    /// Null when the request is within that.
+    /// </summary>
+    private static async Task<IResult?> RefuseLiveEditAsync(
+        ClimateProjectDbContext db,
+        Survey survey,
+        UpdateSurveyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(survey.Status, SurveyStatuses.Archived, StringComparison.Ordinal))
+        {
+            return Results.Json(
+                new { message = "An archived survey cannot be edited.", code = AdminRefusals.SurveyContentLocked },
+                statusCode: 409);
+        }
+
+        var questionsOutOfWindow = request.Questions is not null
+                                   && !SurveyStatuses.RespondentVisible.Contains(survey.Status, StringComparer.Ordinal);
+        if (request.Type is not null
+            || request.Language is not null
+            || request.DepartmentIds is not null
+            || request.Settings?.Anonymous is not null
+            || questionsOutOfWindow)
+        {
+            return Results.Json(
+                new
+                {
+                    message = $"A survey in status '{survey.Status}' keeps its type, language, anonymity and departments. "
+                              + "Its title and description can change, and its questions only while it is scheduled or active and nobody has answered.",
+                    code = AdminRefusals.SurveyLiveEditOutOfScope,
+                },
+                statusCode: 409);
+        }
+
+        if (request.Questions is not null && await HasResponsesAsync(db, survey, cancellationToken))
+        {
+            return Results.Json(
+                new { message = "This survey already has responses; its questions can no longer be edited.", code = AdminRefusals.SurveyContentHasResponses },
+                statusCode: 409);
+        }
+
+        return null;
+    }
+
+    /// <summary>The publish gate's findings for the survey as stored right now.</summary>
+    private static async Task<IReadOnlyList<MissingTranslation>> MissingTranslationsAsync(
+        ClimateProjectDbContext db,
+        Survey survey,
+        CancellationToken cancellationToken)
+    {
+        var questions = await db.Questions.AsNoTracking().Where(x => x.SurveyId == survey.Id).ToListAsync(cancellationToken);
+        var options = await SurveyContent.LoadOptionsAsync(db, questions.Select(x => x.Id).ToList(), cancellationToken);
+        return ContentPublishValidation.FindMissing(survey.Language, SurveyContent.GateFields(survey, questions, options));
+    }
 
     /// <summary>
     /// Every targeted person must belong to the SURVEY's company and be active, for the same
@@ -1369,7 +1648,7 @@ public static class SurveyEndpoints
 
         if (question.Text is null)
         {
-            return (null, Results.Json(new { message = $"Question {question.Order} requires text" }, statusCode: 400));
+            return (null, Results.Json(new { message = $"Question {question.Order} requires text", code = AdminRefusals.QuestionTextRequired }, statusCode: 400));
         }
 
         if (!question.Text.TryResolve(language, $"{path}.text", out var textEn, out var textEs, out var textError))
@@ -1379,7 +1658,7 @@ public static class SurveyEndpoints
 
         if (string.IsNullOrWhiteSpace(textEn) && string.IsNullOrWhiteSpace(textEs))
         {
-            return (null, Results.Json(new { message = $"Question {question.Order} requires text" }, statusCode: 400));
+            return (null, Results.Json(new { message = $"Question {question.Order} requires text", code = AdminRefusals.QuestionTextRequired }, statusCode: 400));
         }
 
         string? scaleLabelMinEn = null;
@@ -1437,7 +1716,7 @@ public static class SurveyEndpoints
                 // option instead of an opaque DbUpdateException. Duplicate values make a
                 // stored answer ambiguous -- the exact failure the stable value prevents.
                 return (null, Results.Json(
-                    new { message = $"Question {question.Order} has duplicate option value '{value}'" },
+                    new { message = $"Question {question.Order} has duplicate option value '{value}'", code = AdminRefusals.QuestionOptionDuplicate },
                     statusCode: 400));
             }
 
@@ -1452,7 +1731,7 @@ public static class SurveyEndpoints
         if (question.Type == QuestionTypes.MultipleChoice && options.Count < 2)
         {
             return (null, Results.Json(
-                new { message = $"Question {question.Order}: multiple_choice questions require at least 2 options" },
+                new { message = $"Question {question.Order}: multiple_choice questions require at least 2 options", code = AdminRefusals.QuestionOptionsTooFew },
                 statusCode: 400));
         }
 
@@ -1555,8 +1834,23 @@ public static class SurveyEndpoints
         }
     }
 
-    private static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language)
+    internal static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language, bool credentialModeFrozen)
     {
+        // The create path resolves and freezes the mode itself, above. On update it used to
+        // be accepted and dropped -- a 200 that changed nothing, so a caller believed a
+        // survey had switched to one code per person while its roster stayed on one shared
+        // account. Refused before any other field is touched, so nothing is half-applied.
+        if (credentialModeFrozen && input.CredentialMode is not null)
+        {
+            return Results.Json(
+                new
+                {
+                    code = "credential_mode_frozen",
+                    message = "settings.credentialMode cannot be changed after a survey is created: it is fixed at create, because credentials may already have been issued under it. Create a new survey to use a different mode.",
+                },
+                statusCode: 400);
+        }
+
         if (input.Anonymous.HasValue) settings.Anonymous = input.Anonymous.Value;
         if (input.AllowPartialResponses.HasValue) settings.AllowPartialResponses = input.AllowPartialResponses.Value;
         if (input.RandomizeQuestions.HasValue) settings.RandomizeQuestions = input.RandomizeQuestions.Value;

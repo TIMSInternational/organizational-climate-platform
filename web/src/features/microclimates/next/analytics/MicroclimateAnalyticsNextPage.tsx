@@ -10,6 +10,7 @@ import { participationPercent } from '../../microclimatePrivacy'
 import { MicroclimateGate } from '../MicroclimateGate'
 import { FLOOR, barPosition, belowFloor, countTicks } from '../derive'
 import { dayRange, shortDay } from '../format'
+import { displayZone, zoneNote } from '../companyZone'
 import { sessionStatusLabel, sessionStatusTone } from '../vocabulary'
 import { useMicroclimateAnalyticsModel, type SessionRow } from './useMicroclimateAnalyticsModel'
 import { byCount } from '../../../../i18n/plural'
@@ -91,6 +92,8 @@ function AnalyticsScreen() {
   }
 
   const charted = state.rows.slice(0, CHARTED_SESSIONS)
+  // Every day on the company's clock, or the browser's when it could not be read.
+  const zone = displayZone(state.timeZone)
   return (
     <div>
       {header}
@@ -99,7 +102,7 @@ function AnalyticsScreen() {
           <CanvasCard title={t('microclimates.next.analytics.participationTitle')} aside={t('microclimates.next.analytics.participationAside')}>
             <div className="flex flex-col gap-5">
               {charted.map((row) => (
-                <ParticipationBar key={row.session.id} row={row} />
+                <ParticipationBar key={row.session.id} row={row} zone={zone} />
               ))}
             </div>
             <span className="text-sm text-fg-tertiary">{t('microclimates.next.analytics.participationNote')}</span>
@@ -112,7 +115,7 @@ function AnalyticsScreen() {
           >
             <ul className="m-0 flex list-none flex-col gap-2 p-0">
               {charted.map((row) => (
-                <PulsePoint key={row.session.id} row={row} />
+                <PulsePoint key={row.session.id} row={row} zone={zone} />
               ))}
             </ul>
             <span className="text-sm text-fg-tertiary">
@@ -128,7 +131,10 @@ function AnalyticsScreen() {
             count={state.rows.length}
             aside={t('microclimates.next.analytics.sessionsAside')}
           />
-          <SessionsTable rows={state.rows} />
+          <SessionsTable rows={state.rows} zone={zone} />
+          <p data-testid="microclimate-zone" className="m-0 text-sm text-fg-tertiary">
+            {zoneNote(t, state.timeZone)}
+          </p>
         </section>
 
         <NoteBand>{t('microclimates.next.analytics.note', { floor: FLOOR })}</NoteBand>
@@ -137,19 +143,24 @@ function AnalyticsScreen() {
   )
 }
 
-function sessionMeta(t: TranslateFn, row: SessionRow, locale: string): string {
+/** The session's first day: its opening when its detail was read, else the day it was created -- on `zone`'s clock. */
+function sessionDay(row: SessionRow, locale: string, zone: string): string {
+  return row.detail.status === 'ready' ? shortDay(row.detail.value.startTime, locale, zone) : shortDay(row.session.createdAt, locale, zone)
+}
+
+function sessionMeta(t: TranslateFn, row: SessionRow, locale: string, zone: string): string {
   const parts: string[] = []
   if (row.detail.status === 'ready') {
-    parts.push(dayRange(row.detail.value.startTime, row.detail.value.endTime, locale))
+    parts.push(dayRange(row.detail.value.startTime, row.detail.value.endTime, locale, zone))
     parts.push(row.detail.value.anonymousResponses ? t('microclimates.next.analytics.anonymous') : t('microclimates.next.analytics.identified'))
   } else {
-    parts.push(shortDay(row.session.createdAt, locale))
+    parts.push(shortDay(row.session.createdAt, locale, zone))
   }
   parts.push(sessionStatusLabel(t, row.session.status).toLocaleLowerCase(locale))
   return parts.join(' · ')
 }
 
-function ParticipationBar({ row }: { row: SessionRow }) {
+function ParticipationBar({ row, zone }: { row: SessionRow; zone: string }) {
   const { t, locale } = useTranslation()
   const { session } = row
   const title = session.title ?? t('microclimates.untitled')
@@ -162,7 +173,7 @@ function ParticipationBar({ row }: { row: SessionRow }) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-base font-medium text-fg-primary">{title}</span>
-      <span className="text-xs text-fg-tertiary">{sessionMeta(t, row, locale)}</span>
+      <span className="text-xs text-fg-tertiary">{sessionMeta(t, row, locale, zone)}</span>
       <figure
         role="img"
         aria-label={t(under ? 'microclimates.next.analytics.barAriaUnder' : 'microclimates.next.analytics.barAria', {
@@ -206,11 +217,11 @@ function ParticipationBar({ row }: { row: SessionRow }) {
   )
 }
 
-function PulsePoint({ row }: { row: SessionRow }) {
+function PulsePoint({ row, zone }: { row: SessionRow; zone: string }) {
   const { t, locale } = useTranslation()
   const { session } = row
   const under = belowFloor(session.responseCount)
-  const day = row.detail.status === 'ready' ? shortDay(row.detail.value.startTime, locale) : shortDay(session.createdAt, locale)
+  const day = sessionDay(row, locale, zone)
   const name = nameHead(session.title ?? t('microclimates.untitled'))
   return (
     <li className="flex items-center gap-3 rounded-xl border border-dashed border-line-default px-3.5 py-3">
@@ -245,7 +256,7 @@ const SESSION_COLUMNS = [102, 112, 162, 122, 122, 92, 134] as const
 const HEAD = 'pl-3 pr-0 pt-2 pb-2 text-left align-bottom text-2xs font-bold uppercase leading-normal tracking-label text-fg-label whitespace-nowrap border-b border-line-default'
 const CELL = 'pl-3 pr-0 py-3 align-middle border-b border-line-light'
 
-function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
+function SessionsTable({ rows, zone }: { rows: readonly SessionRow[]; zone: string }) {
   const { t, locale } = useTranslation()
   return (
     // `Table`, not a bare `<table>`: the primitive is the scroll container, so at 1024 the
@@ -354,7 +365,7 @@ function SessionsTable({ rows }: { rows: readonly SessionRow[] }) {
                   )}
                 </td>
                 <td className={cn(cell, 'whitespace-nowrap font-mono text-sm tabular-nums text-fg-secondary')}>
-                  {row.detail.status === 'ready' ? shortDay(row.detail.value.startTime, locale) : shortDay(session.createdAt, locale)}
+                  {sessionDay(row, locale, zone)}
                 </td>
                 <td className={cn(cell, 'pr-3 text-right')}>
                   <Button asChild variant="outline" size="canvas">

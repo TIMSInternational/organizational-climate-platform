@@ -100,6 +100,8 @@ export interface UseSurveyDraftOptions {
    * lost its `language` restores exactly as an empty wizard would start.
    */
   fallbackLanguage: ContentLanguage
+  /** The company the survey is for, sent when a draft is created (walkthrough B1). */
+  companyId?: string
   /** False until the page has a company scope; the hook reports `off` and does nothing. */
   enabled: boolean
   /** Distinct from the page's own counter, so restored React keys cannot collide. */
@@ -133,7 +135,7 @@ export interface UseSurveyDraftResult {
 const AUTOSAVE_DELAY_MS = 1500
 
 export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftResult {
-  const { baseUrl, locale, fallbackLanguage, enabled, keyPrefix, values, currentStep, onRestore } =
+  const { baseUrl, locale, fallbackLanguage, enabled, keyPrefix, values, currentStep, onRestore, companyId } =
     options
 
   const [state, setState] = useState<SurveyDraftState>({
@@ -196,7 +198,7 @@ export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftRe
         const id = draftIdRef.current
         const draft =
           id === null
-            ? await createSurveyDraft(baseUrl, { sessionId: surveyDraftSessionId(), ...body }, locale)
+            ? await createSurveyDraft(baseUrl, { sessionId: surveyDraftSessionId(), ...body, ...(companyId ? { companyId } : {}) }, locale)
             : await autosaveSurveyDraft(
                 baseUrl,
                 id,
@@ -231,7 +233,7 @@ export function useSurveyDraft(options: UseSurveyDraftOptions): UseSurveyDraftRe
         inFlightRef.current = false
       }
     },
-    [baseUrl, locale, publish],
+    [baseUrl, companyId, locale, publish],
   )
 
   // Recovery: ask once, before anything is written.

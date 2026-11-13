@@ -324,6 +324,26 @@ export async function updateSurveyStatus(
 }
 
 /**
+ * Reopens a CLOSED survey: `POST /surveys/{id}/reopen` (ruled 2026-11-08, super admins only).
+ * The new close is an instant in UTC -- the caller turns the company's wall clock into it -- and
+ * must be at least 30 minutes ahead; the reason is kept in the activity log. Throws the server's
+ * refusal (`survey_not_closed`, `survey_reopen_end_too_soon`, `survey_reopen_reason_required`)
+ * for the dialog to say in the reader's language.
+ */
+export async function reopenSurvey(
+  baseUrl: string,
+  id: string,
+  body: { endDate: string; reason: string },
+  lang?: string,
+): Promise<SurveyDetail> {
+  const response = await authFetch(withQuery(baseUrl, `/surveys/${id}/reopen`, { lang }), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  return response.json() as Promise<SurveyDetail>
+}
+
+/**
  * Duplicate a survey into a fresh draft.
  *
  * This is the supported way to run a survey again: `closed -> active` is not a legal
@@ -457,7 +477,20 @@ export interface SurveyParticipationView {
    * two states, `completed` and `not_completed`, and not three.
    */
   tracksCompletionOnly: boolean
+  /**
+   * How this survey's people sign in, frozen on the survey when it was created. `per_survey`
+   * means one key per person per survey: the account has no username, the person signs in with
+   * `surveyUsername`, and the key is reissued per row rather than by the account resend.
+   * Optional because a payload from before 2026-10-22 lacks it; absent reads as `shared`,
+   * which is what every survey was before the mode existed.
+   */
+  credentialMode?: SurveyCredentialMode
+  /** The survey's title, so a confirmation can name it. Either may be null on a one-language survey. */
+  surveyTitleEn?: string | null
+  surveyTitleEs?: string | null
 }
+
+export type SurveyCredentialMode = 'shared' | 'per_survey'
 
 /**
  * Where ONE invited person stands on this survey.
@@ -491,14 +524,343 @@ export interface SurveyRosterRow {
   /** A calendar day, never an instant (ruled 2026-10-12). */
   lastActivityOn: string | null
   demographics: SurveyRosterDemographic[]
+  /**
+   * This person's key for THIS survey, on a `per_survey` survey only: the username it signs in
+   * with, the day it was mailed and the day it was last used — company-zone days, never
+   * instants. All three null for somebody who holds no key, and always null on a shared survey.
+   * Optional for the same reason as `credentialMode`; absent reads as null.
+   */
+  surveyUsername?: string | null
+  credentialIssuedOn?: string | null
+  lastSignInOn?: string | null
+  /**
+   * This person's reminder history for THIS survey: the company-zone day of the most recent
+   * DELIVERED reminder, and how many have been delivered in all. `null`/`0` for somebody who
+   * has never been reminded, which is every key issued before 2026-10-31 — the route wrote
+   * nothing before then, so an older reminder cannot be recovered and reads as none.
+   *
+   * These are an administrator's history, not a respondent's. They record when WE wrote to
+   * somebody and never anything they did, so they join to no response and the 2026-10-12
+   * anonymity ruling does not reach them.
+   */
+  lastRemindedOn?: string | null
+  reminderCount?: number
+  /**
+   * What the mail service last reported going wrong with the mail of this person's CURRENT key,
+   * and on which day (company zone). Null when nothing was reported -- which, before the bounce
+   * webhook was connected on 3 Nov 2026, also covers mail nobody was listening for. A failure
+   * older than the key now in force is not shown: a reissue answers it.
+   */
+  deliveryProblem?: SurveyDeliveryProblem | null
+  deliveryProblemOn?: string | null
+  /**
+   * TIMS took this person's response out of the results (`responses.excluded_at`, ruled
+   * 2026-11-08). Sent true to SUPER ADMINS only: a client administrator who knew whose response
+   * left could work its answers out by subtracting results. Absent or false otherwise -- the
+   * person still finished, and `status` keeps saying so.
+   */
+  excludedFromResults?: boolean
 }
+
+/** `SurveyDeliveryProblems` on the server. */
+export type SurveyDeliveryProblem = 'bounced' | 'bounced_temporarily' | 'marked_spam' | 'rejected'
 
 export async function getSurveyParticipation(baseUrl: string, id: string): Promise<SurveyParticipationView> {
   const response = await authFetch(`${baseUrl}/surveys/${id}/participation`)
   return response.json() as Promise<SurveyParticipationView>
 }
 
-/** `DELETE /surveys/{id}` answers 204, so there is no body to parse. */
+/** Why `POST /surveys/{id}/credentials/{userId}/reissue` refused, as the API names it. */
+export type SurveyCredentialReissueRefusal =
+  | 'not_per_survey'
+  | 'survey_not_open'
+  | 'user_not_found'
+  | 'user_inactive'
+  | 'not_in_audience'
+  | 'no_credential'
+  | 'already_signed_in'
+  /** Handover, or replacing a used key, asked for by somebody who is not a super admin. */
+  | 'super_admin_only'
+  | 'unknown_delivery'
+
+/**
+ * Options a SUPER ADMIN may add; with none, the October behaviour exactly. `handover` returns the
+ * new password once, on screen, instead of mailing it. `replaceUsedKey` replaces a key its holder
+ * has already signed in with -- for somebody who lost it, not somebody holding it.
+ */
+export interface SurveyCredentialReissueOptions {
+  delivery?: 'email' | 'handover'
+  replaceUsedKey?: boolean
+}
+
+export type SurveyCredentialReissueOutcome =
+  /**
+   * A new password was mailed; the old one stopped working. `issuedOn` is today, company zone.
+   * `hadSignedIn`: the replaced key had been used, so a session opened with it stays open.
+   */
+  | { kind: 'sent'; issuedOn: string; hadSignedIn: boolean }
+  /**
+   * Nothing was mailed: the new password is HERE, once. Nothing stores it and nothing can read it
+   * back -- the screen shows it until it is dismissed, then it is gone.
+   */
+  | { kind: 'handed_over'; issuedOn: string; username: string; password: string; hadSignedIn: boolean }
+  /** The mail did not leave, so the server put the OLD key back: it still works. */
+  | { kind: 'send_failed' }
+  | { kind: 'refused'; code: SurveyCredentialReissueRefusal | 'unknown' }
+
+/**
+ * Sends ONE person a new password for ONE survey's key. The refusals (404/409) come back as
+ * a value with their code, not as a thrown English sentence, so the roster can say them in
+ * Spanish; `delivered: false` is a 200 because the server restored the old key.
+ */
+export async function reissueSurveyCredential(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+  options?: SurveyCredentialReissueOptions,
+): Promise<SurveyCredentialReissueOutcome> {
+  const response = await authFetch(
+    `${baseUrl}/surveys/${surveyId}/credentials/${userId}/reissue`,
+    options ? { method: 'POST', body: JSON.stringify(options) } : { method: 'POST' },
+    { allowStatus: [400, 403, 404, 409] },
+  )
+  const body = (await response.json().catch(() => null)) as
+    | {
+        delivered?: boolean
+        issuedOn?: string
+        code?: string
+        delivery?: string
+        username?: string
+        password?: string | null
+        hadSignedIn?: boolean
+      }
+    | null
+  if (!response.ok) {
+    return { kind: 'refused', code: (body?.code as SurveyCredentialReissueRefusal | undefined) ?? 'unknown' }
+  }
+  const hadSignedIn = body?.hadSignedIn === true
+  if (body?.delivery === 'handover' && body.password && body.username && body.issuedOn) {
+    return { kind: 'handed_over', issuedOn: body.issuedOn, username: body.username, password: body.password, hadSignedIn }
+  }
+  return body?.delivered && body.issuedOn ? { kind: 'sent', issuedOn: body.issuedOn, hadSignedIn } : { kind: 'send_failed' }
+}
+
+/** Why `POST /surveys/{id}/credentials/{userId}/remind` refused, as the API names it. */
+export type SurveyCredentialRemindRefusal =
+  | 'not_per_survey'
+  | 'survey_not_open'
+  | 'user_not_found'
+  | 'user_inactive'
+  | 'not_in_audience'
+  | 'no_credential'
+  /**
+   * They finished. Not in the reissue list, and the only one here that is NOT in it: a roster
+   * read minutes ago goes stale, and chasing somebody who already complied is the one outcome
+   * worth refusing loudly rather than skipping in silence.
+   */
+  | 'already_completed'
+
+export type SurveyCredentialRemindOutcome =
+  /**
+   * The reminder left. Nothing was minted and nothing changed; their key still works.
+   *
+   * `remindedOn` and `reminderCount` are the row's new reminder history, so the screen can say
+   * so without refetching a roster of eight hundred people.
+   */
+  | { kind: 'sent'; remindedOn: string | null; reminderCount: number }
+  /** The mail did not leave. There is nothing to restore -- a reminder writes nothing. */
+  | { kind: 'send_failed' }
+  | { kind: 'refused'; code: SurveyCredentialRemindRefusal | 'unknown' }
+
+/**
+ * Reminds ONE person to finish ONE survey, WITHOUT minting anything.
+ *
+ * <p>For the people `reissueSurveyCredential` refuses: somebody who has signed in is holding
+ * working details, and replacing them mid-survey is the harm `already_signed_in` exists to
+ * prevent. Asked for by the client on 2026-10-30 -- *"no otro usuario o contraseña solo
+ * recordatorio?"*.</p>
+ */
+export async function remindSurveyCredential(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+): Promise<SurveyCredentialRemindOutcome> {
+  const response = await authFetch(
+    `${baseUrl}/surveys/${surveyId}/credentials/${userId}/remind`,
+    { method: 'POST' },
+    { allowStatus: [404, 409] },
+  )
+  const body = (await response.json().catch(() => null)) as
+    | { delivered?: boolean; code?: string; remindedOn?: string | null; reminderCount?: number }
+    | null
+  if (!response.ok) {
+    return { kind: 'refused', code: (body?.code as SurveyCredentialRemindRefusal | undefined) ?? 'unknown' }
+  }
+  if (!body?.delivered) return { kind: 'send_failed' }
+  return {
+    kind: 'sent',
+    remindedOn: body.remindedOn ?? null,
+    // Defaulted rather than asserted: a reminder that arrived is the news, and an older API
+    // that answers without the count must not turn a delivered reminder into a screen error.
+    reminderCount: body.reminderCount ?? 1,
+  }
+}
+
+/** Why `DELETE /surveys/{id}/credentials/{userId}` refused, as the API names it. */
+export type SurveyCredentialRevokeRefusal =
+  | 'not_per_survey'
+  | 'user_not_found'
+  | 'no_credential'
+  | 'has_responses'
+
+export type SurveyCredentialRevokeOutcome =
+  /**
+   * The key is gone and no longer opens the survey. `hadSignedIn` is not a failure -- it is a
+   * warning to pass on: sessions are stamped per PERSON, not per key, so somebody who had
+   * already signed in with this one may keep the survey open until that session expires.
+   */
+  | { kind: 'revoked'; hadSignedIn: boolean }
+  | { kind: 'refused'; code: SurveyCredentialRevokeRefusal | 'unknown' }
+
+/**
+ * Withdraws ONE person's key for ONE survey -- the repair for a code that should never have
+ * been sent (ten ESPH people were mailed a Clima key by mistake on 2026-10-28).
+ *
+ * The server's rules, read from `SurveyCredentialEndpoints.RevokeAsync` rather than restated:
+ *
+ * - it refuses somebody who has already answered, in whole or in part (`has_responses`):
+ *   withdrawing the key does not withdraw the response, and what happens to a response that
+ *   should not exist is a results decision;
+ * - it does NOT refuse a key that has been used -- being locked out is the point here, which
+ *   is the one place it differs from `reissueSurveyCredential`;
+ * - it leaves the account, the audience and the invitation row alone, so the person keeps
+ *   signing in to their OTHER surveys with those keys;
+ * - any survey status is allowed, because a mis-send is often noticed after the close.
+ *
+ * Refusals (404/409) come back as a value carrying their code, not a thrown English sentence,
+ * so the roster can say them in Spanish.
+ */
+export async function revokeSurveyCredential(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+): Promise<SurveyCredentialRevokeOutcome> {
+  const response = await authFetch(
+    `${baseUrl}/surveys/${surveyId}/credentials/${userId}`,
+    { method: 'DELETE' },
+    { allowStatus: [404, 409] },
+  )
+  const body = (await response.json().catch(() => null)) as
+    | { hadSignedIn?: boolean; code?: string }
+    | null
+  if (!response.ok) {
+    return { kind: 'refused', code: (body?.code as SurveyCredentialRevokeRefusal | undefined) ?? 'unknown' }
+  }
+  return { kind: 'revoked', hadSignedIn: body?.hadSignedIn === true }
+}
+
+/** What `POST /surveys/{id}/response-exclusions[/restore]` answered. */
+export interface ResponseExclusionResult {
+  excluded: boolean
+  /** False when the response was already in the state asked for -- a retried click. */
+  changed: boolean
+  /** The survey's counted responses after the change. */
+  responseCount: number
+}
+
+/**
+ * Takes ONE person's finished response out of the survey's results, keeping it stored
+ * (`POST /surveys/{id}/response-exclusions`, ruled 2026-11-08, super admins only). The person
+ * travels in the body so the activity log, which records the path, never names them; the reason
+ * does go to the log, which the client's administrators can read. Throws the server's refusal
+ * (`exclusion_reason_required`, `exclusion_no_response`).
+ */
+export async function excludeSurveyResponse(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+  reason: string,
+): Promise<ResponseExclusionResult> {
+  const response = await authFetch(`${baseUrl}/surveys/${surveyId}/response-exclusions`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, reason }),
+  })
+  return response.json() as Promise<ResponseExclusionResult>
+}
+
+/** Puts an excluded response back into the results: `POST /surveys/{id}/response-exclusions/restore`. */
+export async function restoreSurveyResponse(
+  baseUrl: string,
+  surveyId: string,
+  userId: string,
+): Promise<ResponseExclusionResult> {
+  const response = await authFetch(`${baseUrl}/surveys/${surveyId}/response-exclusions/restore`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  })
+  return response.json() as Promise<ResponseExclusionResult>
+}
+
+/**
+ * Moves a survey's response window: `PUT /surveys/{id}` carrying only the two instants, so no
+ * other column is touched (every field of the payload is nullable and an omitted one is left
+ * alone).
+ *
+ * The server's rules, read from `SurveyEndpoints.UpdateAsync` rather than restated:
+ *
+ * - draft, scheduled and active only (`SurveyStatuses.AllowsScheduleEdit`); closed or archived
+ *   is a **409**;
+ * - an ACTIVE survey's start is a fact -- a different `startDate` is a **409** -- so for one the
+ *   caller sends `endDate` alone;
+ * - `startDate >= endDate` is a **400**.
+ *
+ * The instants are sent as ISO strings in UTC; the caller turns the company's wall clock into
+ * them (`zonedWindow.ts`). Respondents read the new close at once -- on a live survey this is the
+ * point.
+ */
+export async function updateSurveyWindow(
+  baseUrl: string,
+  id: string,
+  window: { startDate?: string; endDate: string },
+  lang?: string,
+): Promise<SurveyDetail> {
+  const response = await authFetch(withQuery(baseUrl, `/surveys/${id}`, { lang }), {
+    method: 'PUT',
+    body: JSON.stringify(window.startDate === undefined ? { endDate: window.endDate } : window),
+  })
+  return response.json() as Promise<SurveyDetail>
+}
+
+/**
+ * `PUT /surveys/{id}` with `title` and `description` only. Every other member is left out, so
+ * this can never clobber the dates, the audience or the questions of a survey being edited in
+ * another tab. Each is a `LocalizedInput` holding only the languages the survey is written in;
+ * an empty description is sent as `''`, which is how the server is told to clear it.
+ *
+ * Outside draft only a super admin is answered (ruled 2026-11-11): the server's 409 is thrown
+ * with its code, for the dialog to say in the reader's language.
+ */
+export async function updateSurveyText(
+  baseUrl: string,
+  id: string,
+  text: { title: Partial<Record<'en' | 'es', string>>; description: Partial<Record<'en' | 'es', string>> },
+  lang?: string,
+): Promise<SurveyDetail> {
+  const response = await authFetch(withQuery(baseUrl, `/surveys/${id}`, { lang }), {
+    method: 'PUT',
+    body: JSON.stringify({ title: text.title, description: text.description }),
+  })
+  return response.json() as Promise<SurveyDetail>
+}
+
+/**
+ * `DELETE /surveys/{id}` answers 204, so there is no body to parse.
+ *
+ * The server deletes a survey in ANY status as long as nobody has answered it
+ * (`DeleteSurveyAsync`: the response counter and the responses table are both checked), and
+ * answers **409** otherwise -- archiving is what keeps the answers. Questions, targets, the
+ * link, invitations and per-survey codes go with it (cascades).
+ */
 export async function deleteSurvey(baseUrl: string, id: string): Promise<void> {
   await authFetch(`${baseUrl}/surveys/${id}`, { method: 'DELETE' })
 }

@@ -1,5 +1,6 @@
 import type { CompanyScope } from '../../../../company-context'
 import { estimatedMinutes, isUnderAMinute } from '../../respondEstimate'
+import { instantCalendarDay } from '../../../../lib/calendarDay'
 import type { MySurveyListItem } from '../../api/surveys'
 
 /**
@@ -55,16 +56,23 @@ export const CLOSING_SOON_DAYS = 7
  * Whole calendar days from `now` until the survey's closing day, or `null` when the date
  * does not parse.
  *
- * Counted in **UTC calendar days**, not in elapsed milliseconds, for the reason
- * `lib/calendarDay.ts` gives at length: `EndDate` is a calendar day stored as a UTC
- * midnight, so `2026-09-12T00:00:00Z` means "the twelfth" and not an instant. Dividing the
- * raw difference by a day would make "closes today" flip to "1 day left" at any hour except
- * midnight, and would disagree with the date printed beside it.
+ * Counted in **calendar days in the reader's own zone**, not in elapsed milliseconds:
+ * dividing the raw difference by a day would make "closes today" flip to "1 day left" at any
+ * hour except midnight, and would disagree with the date printed beside it. The zone is the
+ * reader's because the date beside it is (`instantDay`): `EndDate` is the instant the server
+ * stops taking answers, and counted in UTC days a close at or after 18:00 in Costa Rica was
+ * a day further off than it is (audit 2026-10-22, R2).
+ *
+ * `timeZone` is injectable only so a test can pin the zone; callers omit it.
  */
-export function daysUntilClose(endDate: string, now: number): number | null {
+export function daysUntilClose(endDate: string, now: number, timeZone?: string): number | null {
   const end = Date.parse(endDate)
   if (Number.isNaN(end)) return null
-  return Math.floor(end / MS_PER_DAY) - Math.floor(now / MS_PER_DAY)
+  const closeDay = Date.parse(instantCalendarDay(end, timeZone))
+  const today = Date.parse(instantCalendarDay(now, timeZone))
+  // Both are UTC midnights of calendar days, so the difference is a whole number of days and
+  // rounding only absorbs floating error.
+  return Math.round((closeDay - today) / MS_PER_DAY)
 }
 
 function toRow(survey: MySurveyListItem, now: number): MySurveyRow {

@@ -60,7 +60,10 @@ export type ViewLoad =
 export interface EntryOutcome {
   /** A key in the `surveyRespond` namespace. */
   titleKey: string
-  /** A key in the `surveyRespond` namespace, or null meaning "the server's own message". */
+  /**
+   * A key in the `surveyRespond` namespace, or null meaning "no sentence for this status",
+   * which the card reads as `failure.load` — never the server's message (audit R1).
+   */
   bodyKey: string | null
   tone: 'warning' | 'success'
   /** Whether the card offers a way to sign in. */

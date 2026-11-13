@@ -36,10 +36,22 @@ public sealed record SentCredentials(
 /// unobservable.
 /// </para>
 /// </summary>
-public sealed class CapturingCredentialsFactory(string connectionString, ConcurrentQueue<SentCredentials> sent, ConcurrentBag<string> failFor)
+/// <summary>
+/// What the product handed to the no-password reminder, for one person. There is deliberately
+/// no password field: the sender has no parameter for one, and a capture record that could hold
+/// a password would make "no password was sent" unprovable in exactly the place it matters.
+/// </summary>
+public sealed record SentReminder(
+    string ToEmail, string Username, string? Language, string? RecipientName,
+    string? SurveyName = null, string? CompanyName = null);
+
+public sealed class CapturingCredentialsFactory(string connectionString, ConcurrentQueue<SentCredentials> sent, ConcurrentBag<string> failFor, ConcurrentQueue<SentReminder> reminders)
     : AuthWebApplicationFactory(connectionString)
 {
     public ConcurrentQueue<SentCredentials> Sent { get; } = sent;
+
+    /// <summary>Reminders this host recorded instead of sending. Separate queue, separate type.</summary>
+    public ConcurrentQueue<SentReminder> Reminders { get; } = reminders;
 
     /// <summary>Recipients this host refuses, so a row can be shown failing while its account stands.</summary>
     public ConcurrentBag<string> FailFor { get; } = failFor;
@@ -51,7 +63,27 @@ public sealed class CapturingCredentialsFactory(string connectionString, Concurr
         {
             services.RemoveAll<ICredentialsEmailSender>();
             services.AddScoped<ICredentialsEmailSender>(_ => new CapturingCredentialsSender(Sent, FailFor));
+            services.RemoveAll<ISurveyReminderEmailSender>();
+            services.AddScoped<ISurveyReminderEmailSender>(_ => new CapturingSurveyReminderSender(Reminders, FailFor));
         });
+    }
+}
+
+internal sealed class CapturingSurveyReminderSender(ConcurrentQueue<SentReminder> reminders, ConcurrentBag<string> failFor)
+    : ISurveyReminderEmailSender
+{
+    public Task<EmailSendOutcome> SendAsync(
+        string toEmail, string? recipientName, string username, string? companyLanguage,
+        EmailBrand? brand, string? surveyName, CancellationToken cancellationToken)
+    {
+        if (failFor.Contains(toEmail))
+        {
+            return Task.FromResult(EmailSendOutcome.PermanentFailure("refused for the test"));
+        }
+
+        reminders.Enqueue(new SentReminder(
+            toEmail, username, companyLanguage, recipientName, surveyName, brand?.CompanyName));
+        return Task.FromResult(EmailSendOutcome.Success());
     }
 }
 
@@ -95,6 +127,7 @@ public sealed class CapturingCredentialsHostFixture : IDisposable
 {
     private static readonly Lock Gate = new();
     private static readonly ConcurrentQueue<SentCredentials> SharedSent = new();
+    private static readonly ConcurrentQueue<SentReminder> SharedReminders = new();
     private static readonly ConcurrentBag<string> SharedFailFor = [];
     private static CapturingCredentialsFactory? _factory;
 
@@ -102,7 +135,7 @@ public sealed class CapturingCredentialsHostFixture : IDisposable
     {
         lock (Gate)
         {
-            return _factory ??= new CapturingCredentialsFactory(connectionString, SharedSent, SharedFailFor);
+            return _factory ??= new CapturingCredentialsFactory(connectionString, SharedSent, SharedFailFor, SharedReminders);
         }
     }
 

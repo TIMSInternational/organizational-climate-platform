@@ -110,6 +110,18 @@ public sealed class EmailOptions
     /// </summary>
     public string? SesConfigurationSet { get; set; }
 
+    /// <summary>
+    /// The SNS topic the configuration set publishes bounces, complaints and rejections to, e.g.
+    /// <c>arn:aws:sns:us-east-1:747814092517:tims-ses-transactional-events</c>.
+    /// <para>
+    /// <c>POST /webhooks/ses</c> accepts messages from THIS topic and no other, and answers 404 to
+    /// everything while it is unset — so a deployment that has not been subscribed exposes nothing,
+    /// and one that has can be told apart from a forged message by the topic as well as the
+    /// signature. Optional: blank turns the webhook off, it does not stop the boot.
+    /// </para>
+    /// </summary>
+    public string? SesEventsTopicArn { get; set; }
+
     public int MaxSendsPerSecond { get; set; } = DefaultMaxSendsPerSecond;
 
     public int TimeoutSeconds { get; set; } = DefaultTimeoutSeconds;

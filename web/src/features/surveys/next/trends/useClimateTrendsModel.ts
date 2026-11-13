@@ -15,6 +15,7 @@ import { waveCode } from '../../../dashboard/next/compose'
 import { useResultBands } from '../../../result-bands/useResultBands'
 import { orderByLatest, withoutArchived } from './derive'
 import type { ClimateTrendsNextModel, OpenWave, TrendDimension, TrendGroup, TrendWave } from './model'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export type ClimateTrendsStatus = 'loading' | 'ready' | 'error'
 
@@ -94,12 +95,12 @@ export function useClimateTrendsModel(enabled: boolean): ClimateTrendsModelState
         }
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : '')
+        if (!cancelled) setError(describeApiError(err, t))
       })
     return () => {
       cancelled = true
     }
-  }, [baseUrl, attempt, enabled, scope.companyId, scope.status, locale])
+  }, [baseUrl, attempt, enabled, scope.companyId, scope.status, locale, t])
 
   const retry = useCallback(() => setAttempt((previous) => previous + 1), [])
 

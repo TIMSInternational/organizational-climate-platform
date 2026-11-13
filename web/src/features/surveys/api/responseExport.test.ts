@@ -42,6 +42,26 @@ describe('the response workbook download', () => {
     await expect(getAllResponsesWorkbook('https://api.example.test')).rejects.toThrow('surveys.next.super.exportFailed')
   })
 
+  it('asks for the demographics-only list only when told to, and never by default', async () => {
+    vi.mocked(authFetch).mockImplementation(() => Promise.resolve(reply('xlsx', WORKBOOK)))
+
+    await getAllResponsesWorkbook('https://api.example.test', 's1', { answers: false })
+    await getAllResponsesWorkbook('https://api.example.test', 's1', { answers: true })
+    await getAllResponsesWorkbook('https://api.example.test', undefined, { answers: false })
+
+    expect(vi.mocked(authFetch).mock.calls[0][0])
+      .toBe('https://api.example.test/admin/exports/responses?surveyId=s1&answers=false')
+    expect(vi.mocked(authFetch).mock.calls[1][0]).toBe('https://api.example.test/admin/exports/responses?surveyId=s1')
+    expect(vi.mocked(authFetch).mock.calls[2][0]).toBe('https://api.example.test/admin/exports/responses?answers=false')
+  })
+
+  it('names the list without answers so it is never taken for the one with them', () => {
+    const day = new Date('2026-11-02T16:00:00Z')
+
+    expect(allResponsesFileName(day, 'Clima Organizacional Eagle 2026', 'demograficos'))
+      .toBe('demograficos-clima-organizacional-eagle-2026-2026-11-02.xlsx')
+  })
+
   it('names the file for the climate and the day, so two pulls are tellable apart', () => {
     const day = new Date('2026-10-16T04:00:00Z')
 

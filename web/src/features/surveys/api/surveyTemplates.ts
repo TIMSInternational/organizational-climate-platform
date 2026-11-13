@@ -1,5 +1,5 @@
 import { authFetch } from '../../../api/authFetch'
-import type { LocalizedInput } from './surveyCreate'
+import type { CreateSurveySettingsInput, LocalizedInput } from './surveyCreate'
 import type { SurveyDetail } from './surveys'
 
 /**
@@ -81,6 +81,12 @@ export interface SurveyTemplateListItem {
   questionCount: number
   lastUsed: string | null
   createdAt: string
+  /**
+   * The owning company's name; null for a global template. A super administrator's list holds
+   * every client's copy of an instrument, and without it the wizard read the same name three
+   * times (walkthrough 2026-11-08). Absent from an API older than it.
+   */
+  companyName?: string | null
 }
 
 /** `GET /survey-templates/{id}`. */
@@ -151,6 +157,14 @@ export interface InstantiateSurveyTemplateInput {
   endDate?: string
   departmentIds?: string[]
   targetAudienceCount?: number
+  /** `UseSurveyTemplateRequest.ServiceType` — validated as `POST /surveys` validates it; omitted = no service. */
+  serviceType?: string
+  /**
+   * `UseSurveyTemplateRequest.Settings`, applied over the same new-survey defaults a blank
+   * survey gets (`NewSurveyDefaults`): anonymous, the company's credential mode, no invitation or
+   * reminder mail. Omitted fields keep those defaults.
+   */
+  settings?: CreateSurveySettingsInput
 }
 
 function withQuery(baseUrl: string, path: string, params: Record<string, string | undefined>): string {
@@ -277,6 +291,41 @@ export async function createSurveyTemplate(
 ): Promise<SurveyTemplateDetail> {
   const response = await authFetch(withQuery(baseUrl, '/survey-templates', { lang }), {
     method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return response.json() as Promise<SurveyTemplateDetail>
+}
+
+/**
+ * The body of `PUT /survey-templates/{id}` — `UpdateSurveyTemplateRequest`. Every member is
+ * optional and means "leave this alone". There is no `companyId`: re-scoping a template is
+ * delete-and-recreate. A locale-keyed `name`/`description` replaces exactly the halves it names;
+ * a blank `category` is refused with 400, as on create.
+ *
+ * The edit only ever reaches the template: a survey already made from it holds its own copy of
+ * every question (`SurveyTemplateEndpoints.UpdateAsync`), and keeps it.
+ */
+export interface UpdateSurveyTemplateInput {
+  name?: LocalizedInput
+  description?: LocalizedInput
+  category?: string
+  industry?: string
+  companySize?: string
+  isPublic?: boolean
+  tags?: string[]
+  questions?: CreateSurveyTemplateQuestionInput[]
+  language?: string
+}
+
+/** `PUT /survey-templates/{id}` answers 200 with the template's detail. */
+export async function updateSurveyTemplate(
+  baseUrl: string,
+  id: string,
+  input: UpdateSurveyTemplateInput,
+  lang?: string,
+): Promise<SurveyTemplateDetail> {
+  const response = await authFetch(withQuery(baseUrl, `/survey-templates/${id}`, { lang }), {
+    method: 'PUT',
     body: JSON.stringify(input),
   })
   return response.json() as Promise<SurveyTemplateDetail>

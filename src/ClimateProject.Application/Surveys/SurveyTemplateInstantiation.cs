@@ -69,7 +69,10 @@ public sealed record SurveyInstantiationOptions(
     DateTimeOffset StartDate,
     DateTimeOffset EndDate,
     int? TargetAudienceCount = null,
-    IReadOnlyList<Guid>? DepartmentIds = null);
+    IReadOnlyList<Guid>? DepartmentIds = null,
+    string? CompanyCredentialMode = null,
+    string? ServiceType = null,
+    string? RequestedCredentialMode = null);
 
 /// <summary>
 /// Template -> survey, as a pure function over entities.
@@ -104,6 +107,7 @@ public static class SurveyTemplateInstantiation
             DescriptionEs = options.DescriptionEs,
             Language = options.Language,
             Type = options.Type,
+            ServiceType = options.ServiceType,
             StartDate = options.StartDate,
             EndDate = options.EndDate,
 
@@ -117,6 +121,12 @@ public static class SurveyTemplateInstantiation
             CreatedAt = now,
             UpdatedAt = now,
         };
+
+        // The same defaults a blank survey gets, from the same function: anonymous, the
+        // credential mode (the caller's, else the company's) frozen onto the row, no invitation
+        // or reminder mail. Before this line a template-built survey was NOT anonymous, and a signed-out
+        // respondent -- which is every respondent -- could not answer it (audit gap G15).
+        NewSurveyDefaults.Apply(survey.Settings, options.RequestedCredentialMode, options.CompanyCredentialMode);
 
         var questionIdMap = new Dictionary<Guid, Guid>();
         var questions = new List<Question>(source.Questions.Count);

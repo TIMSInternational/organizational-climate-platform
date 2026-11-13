@@ -4,6 +4,7 @@ import type {
   EmployeeLastOutcome,
 } from '../../api/dashboard'
 import { estimatedMinutes } from '../../../surveys/respondEstimate'
+import { instantCalendarDay } from '../../../../lib/calendarDay'
 import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
 
 const DAY_MS = 86_400_000
@@ -35,6 +36,29 @@ export function daysUntil(closesAt: string, asOf: string): number | null {
   return Math.max(0, Math.round((closeDay - todayDay) / DAY_MS))
 }
 
+/**
+ * `daysUntil` for the employee Home, whose close is printed on the reader's own clock.
+ *
+ * The close is the instant the server stops taking answers, and Home prints it in the
+ * reader's zone (`formatDayMonth`, `instantDay`), so its count is taken in that zone too.
+ * Counted to the UTC close day, a close at or after 18:00 in Costa Rica was a day further
+ * off than it is, beside a date that was a day late (audit 2026-10-22, R2).
+ *
+ * A separate function rather than a change to `daysUntil`, because `daysUntil` also counts
+ * the supervisor and leader dashboards (`team/compose.ts`), which still print the close
+ * through `calendarDay` in UTC — and the count must agree with the date beside it there too.
+ * `timeZone` is injectable only so a test can pin it; callers omit it.
+ */
+export function daysUntilOnReadersClock(closesAt: string, asOf: string, timeZone?: string): number | null {
+  const at = Date.parse(closesAt)
+  const now = Date.parse(asOf)
+  if (Number.isNaN(at) || Number.isNaN(now)) return null
+  const closeDay = Date.parse(instantCalendarDay(at, timeZone))
+  const todayDay = Date.parse(instantCalendarDay(now, timeZone))
+  // Both are UTC midnights of calendar days, so rounding only absorbs floating error.
+  return Math.max(0, Math.round((closeDay - todayDay) / DAY_MS))
+}
+
 function toSurvey(survey: DashboardPendingSurvey, asOf: string): HomeSurvey {
   return {
     id: survey.id,
@@ -42,7 +66,7 @@ function toSurvey(survey: DashboardPendingSurvey, asOf: string): HomeSurvey {
     questionCount: survey.questionCount,
     minutes: estimatedMinutes(survey.questionCount),
     closesAt: survey.endDate,
-    daysLeft: daysUntil(survey.endDate, asOf),
+    daysLeft: daysUntilOnReadersClock(survey.endDate, asOf),
     // A literal `true`, never a truthiness test: a field gone missing — an older server,
     // a cached body — must read as no claim at all.
     anonymous: survey.anonymous === true,

@@ -972,6 +972,59 @@ namespace ClimateProject.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.BenchmarkGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CompanySize")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("company_size");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("country");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Industry")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("industry");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ServiceType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("service_type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_groups_name");
+
+                    b.ToTable("benchmark_groups", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_benchmark_groups_service_type", "service_type IN ('general_climate', 'organizational_culture', 'microclimate')");
+                        });
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.BenchmarkMetric", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1069,6 +1122,38 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasFilter("email_domain IS NOT NULL");
 
                     b.ToTable("companies", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.CompanyLogo", b =>
+                {
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("CompanyId");
+
+                    b.ToTable("company_logos", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.CompanyServiceLicense", b =>
@@ -1472,6 +1557,73 @@ namespace ClimateProject.Infrastructure.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.ToTable("departments", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.EmailDeliveryEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BounceSubType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("bounce_sub_type");
+
+                    b.Property<string>("BounceType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("bounce_type");
+
+                    b.Property<string>("Diagnostic")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("diagnostic");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("SesMessageId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("ses_message_id");
+
+                    b.Property<string>("SnsMessageId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("sns_message_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "OccurredAt");
+
+                    b.HasIndex("SnsMessageId", "Email", "EventType")
+                        .IsUnique();
+
+                    b.ToTable("email_delivery_events", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.Microclimate", b =>
@@ -3288,6 +3440,10 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("department_id");
 
+                    b.Property<DateTimeOffset?>("ExcludedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("excluded_at");
+
                     b.Property<string>("IpAddress")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -3590,6 +3746,10 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<DateTimeOffset?>("LastRemindedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_reminded_at");
+
                     b.Property<DateTimeOffset?>("LastSignInAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_sign_in_at");
@@ -3599,6 +3759,12 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("password_hash");
+
+                    b.Property<int>("ReminderCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("reminder_count");
 
                     b.Property<string>("Username")
                         .IsRequired()
@@ -4793,20 +4959,6 @@ namespace ClimateProject.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ClimateProject.Domain.Entities.AuditLog", b =>
-                {
-                    b.HasOne("ClimateProject.Domain.Entities.Company", null)
-                        .WithMany()
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ClimateProject.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-                });
-
             modelBuilder.Entity("ClimateProject.Domain.Entities.Benchmark", b =>
                 {
                     b.HasOne("ClimateProject.Domain.Entities.Company", null)
@@ -4996,6 +5148,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.CompanyLogo", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.Company", null)
+                        .WithOne()
+                        .HasForeignKey("ClimateProject.Domain.Entities.CompanyLogo", "CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.CompanyServiceLicense", b =>
                 {
                     b.HasOne("ClimateProject.Domain.Entities.Company", null)
@@ -5180,6 +5341,15 @@ namespace ClimateProject.Infrastructure.Migrations
                         });
 
                     b.Navigation("Settings")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.EmailDeliveryEvent", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

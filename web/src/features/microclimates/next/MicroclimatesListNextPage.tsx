@@ -37,6 +37,7 @@ import {
 import type { FlowStep, InProgressSession, MicroclimatesListNextModel } from './model'
 import { useCopyLink, type CopyOutcome } from './useCopyLink'
 import { useMicroclimatesListModel } from './useMicroclimatesListModel'
+import { displayZone, zoneNote } from './companyZone'
 
 /** The flow card's four steps, as the artboard numbers and words them. */
 const STEPS: readonly { step: FlowStep; titleKey: string; hintKey: string }[] = [
@@ -114,15 +115,17 @@ export default function MicroclimatesListNextPage() {
         />
       ) : (
         <LoadingRegion loading={state.status === 'loading'} label={t('common.loading')}>
-          {state.status === 'loading' ? <SkeletonText lines={6} /> : <ListBody model={state.model} />}
+          {state.status === 'loading' ? <SkeletonText lines={6} /> : <ListBody model={state.model} timeZone={state.timeZone} />}
         </LoadingRegion>
       )}
     </div>
   )
 }
 
-function ListBody({ model }: { model: MicroclimatesListNextModel }) {
+function ListBody({ model, timeZone }: { model: MicroclimatesListNextModel; timeZone: string | null }) {
   const { t, locale } = useTranslation()
+  // Every date and time here on the company's clock, or the browser's when it could not be read.
+  const zone = displayZone(timeZone)
   const { outcome, copy } = useCopyLink()
   const current = model.current
   const reference = current ? sessionReference(current.row.title ?? t('microclimates.untitled'), locale) : null
@@ -131,7 +134,7 @@ function ListBody({ model }: { model: MicroclimatesListNextModel }) {
   // readable close date can be named; otherwise the note says it of any microclimate.
   const closing =
     current && current.row.status === 'active' && current.detail
-      ? dayMonthLong(current.detail.endTime, locale)
+      ? dayMonthLong(current.detail.endTime, locale, zone)
       : null
 
   return (
@@ -156,8 +159,14 @@ function ListBody({ model }: { model: MicroclimatesListNextModel }) {
           />
         ) : (
           model.inProgress.map((session) => (
-            <InProgressRow key={session.row.id} session={session} outcome={outcome} onCopy={copy} />
+            <InProgressRow key={session.row.id} session={session} zone={zone} outcome={outcome} onCopy={copy} />
           ))
+        )}
+        {/* Said once, under the rows, wherever a row prints an hour. */}
+        {model.inProgress.some((session) => session.detail !== null) && (
+          <p data-testid="microclimate-zone" className="m-0 text-sm text-fg-tertiary">
+            {zoneNote(t, timeZone)}
+          </p>
         )}
       </section>
 
@@ -188,7 +197,7 @@ function ListBody({ model }: { model: MicroclimatesListNextModel }) {
             }
           />
         ) : (
-          model.past.map((row) => <PastRow key={row.id} row={row} locale={locale} />)
+          model.past.map((row) => <PastRow key={row.id} row={row} locale={locale} zone={zone} />)
         )}
       </section>
     </div>
@@ -329,10 +338,12 @@ const ROW = cn(
 
 function InProgressRow({
   session,
+  zone,
   outcome,
   onCopy,
 }: {
   session: InProgressSession
+  zone: string
   outcome: CopyOutcome | null
   onCopy: (key: string, text: string) => Promise<void>
 }) {
@@ -372,7 +383,7 @@ function InProgressRow({
             label={isOpen ? t('microclimates.next.chipLive') : statusLabel(t, row.status)}
           />
         </div>
-        <SessionMeta session={session} locale={locale} />
+        <SessionMeta session={session} locale={locale} zone={zone} />
         {fill !== null && (
           <Progress
             value={Math.round(fill)}
@@ -411,7 +422,7 @@ function InProgressRow({
  * palabras protegidas hasta 5". The counts are readings, so mono; the rest is prose. The
  * three facts from the detail read are left off when that read failed.
  */
-function SessionMeta({ session, locale }: { session: InProgressSession; locale: string }) {
+function SessionMeta({ session, locale, zone }: { session: InProgressSession; locale: string; zone: string }) {
   const { t } = useTranslation()
   const { row, detail } = session
   const pieces: ReactNode[] = [
@@ -436,8 +447,8 @@ function SessionMeta({ session, locale }: { session: InProgressSession; locale: 
 
   if (detail) {
     const instant = row.status === 'active' ? detail.endTime : detail.startTime
-    const date = dayMonth(instant, locale)
-    const time = clock(instant, locale)
+    const date = dayMonth(instant, locale, zone)
+    const time = clock(instant, locale, zone)
     if (date && time) {
       pieces.push(
         row.status === 'active'
@@ -475,10 +486,10 @@ function SessionMeta({ session, locale }: { session: InProgressSession; locale: 
  * the link would be — the same predicate and arguments `ProtectedCell` consults, so the
  * link and the hatch can never both appear.
  */
-function PastRow({ row, locale }: { row: Microclimate; locale: string }) {
+function PastRow({ row, locale, zone }: { row: Microclimate; locale: string; zone: string }) {
   const { t } = useTranslation()
   const title = row.title ?? t('microclimates.untitled')
-  const created = dayMonth(row.createdAt, locale)
+  const created = dayMonth(row.createdAt, locale, zone)
 
   return (
     <div data-slot="past-row" className={ROW}>

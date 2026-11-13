@@ -55,7 +55,10 @@ public static class SurveyStatuses
     /// <item><c>closed -&gt; active</c> is absent. Reopening a closed survey means
     /// responses arriving after its results were analysed, exported and benchmarked. The
     /// supported way to run it again is <c>POST /surveys/{id}/duplicate</c>, which yields
-    /// a fresh draft whose option values still aggregate with the original.</item>
+    /// a fresh draft whose option values still aggregate with the original. Since 2026-11-08
+    /// a super admin may still reopen one through <c>POST /surveys/{id}/reopen</c>, with a new
+    /// close and a reason on the record; it stays out of THIS map so <c>PUT /status</c>, and
+    /// every client administrator, keeps refusing it.</item>
     /// <item><c>scheduled -&gt; draft</c> IS present, and is the only way back. A
     /// scheduled survey has no responses yet, so returning it to draft to fix a typo is
     /// safe -- and having one sanctioned route back is what makes freezing everything
@@ -122,6 +125,13 @@ public static class SurveyStatuses
     /// <summary>
     /// True when the survey's *content* -- title, description, language, type, questions,
     /// options, department targeting -- may still be rewritten. Draft only.
+    ///
+    /// That is the rule for the survey's administrators. Since 2026-11-11 a TIMS operator (super
+    /// admin) has a narrower exception past draft: the title and description until archived, the
+    /// questions while scheduled or active and nobody has answered
+    /// (<c>SurveyEndpoints.RefuseLiveEditAsync</c>, <c>docs/decisions/operators-edit-a-live-survey.md</c>).
+    /// Deliberately not folded into this predicate, which also gates the audience editor and the
+    /// <c>IsContentEditable</c> every client reads.
     ///
     /// Note this is the structural half of the rule; the endpoint additionally refuses a
     /// content edit whenever any response exists, so a row that somehow reached draft with

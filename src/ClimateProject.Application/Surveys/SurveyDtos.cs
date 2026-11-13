@@ -275,6 +275,12 @@ public sealed record UpdateSurveyRequest(
 
 public sealed record UpdateSurveyStatusRequest(string Status);
 
+/// <summary>
+/// Body of <c>POST /surveys/{id}/reopen</c> (ruled 2026-11-08): the new close, which must be in
+/// the future, and why -- the reason is kept in the audit trail.
+/// </summary>
+public sealed record ReopenSurveyRequest(DateTimeOffset? EndDate, string? Reason);
+
 public sealed record DuplicateSurveyRequest(
     LocalizedInput? Title = null,
     DateTimeOffset? StartDate = null,

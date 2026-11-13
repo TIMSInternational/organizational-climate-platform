@@ -142,12 +142,16 @@ function supervisor(
 
 describe('the floor', () => {
   it('holds a count to the server floor and never below the platform floor', () => {
-    expect(countFloor(null)).toBe(SINGLE_SEGMENT_FLOOR)
-    // A server floor BELOW the platform's is raised to it, derived so the two still
+    // No closed survey yet, so no server floor on the payload: the team floor of 3 (ruled
+    // 2026-10-21), never the administrators' single-segment 1 -- "menos de 1 respuestas".
+    expect(countFloor(null)).toBe(ANONYMITY_FLOOR)
+    expect(countFloor(null)).toBe(3)
+    // A server floor BELOW the team floor is raised to it, derived so the two still
     // straddle when the platform floor moves.
-    expect(countFloor(climate([], { minimumGroupSize: 0 }))).toBe(SINGLE_SEGMENT_FLOOR)
+    expect(countFloor(climate([], { minimumGroupSize: 0 }))).toBe(ANONYMITY_FLOOR)
+    expect(countFloor(climate([], { minimumGroupSize: SINGLE_SEGMENT_FLOOR }))).toBe(ANONYMITY_FLOOR)
     expect(countFloor(climate([], { minimumGroupSize: ANONYMITY_FLOOR + 4 }))).toBe(ANONYMITY_FLOOR + 4)
-    expect(countFloor(climate([], { minimumGroupSize: 1 }))).toBe(1)
+    expect(countFloor(climate([], { minimumGroupSize: 3 }))).toBe(3)
     expect(flooredCount(1, 1)).toBe(1)
     expect(flooredCount(4, 5)).toBeNull()
     expect(flooredCount(5, 5)).toBe(5)

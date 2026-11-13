@@ -72,6 +72,24 @@ public class SesConfigurationSetTests
     }
 
     /// <summary>
+    /// 2026-11-02. The set is shared with five other products, so its bounce events arrive
+    /// mixed; this tag is the only thing that comes back in <c>mail.tags</c> and says "ours".
+    /// Without it the bounce webhook would keep nothing at all -- it drops untagged events by
+    /// design, rather than store other products' recipients.
+    /// </summary>
+    [Fact]
+    public async Task The_app_tag_travels_with_the_set()
+    {
+        using var server = new CapturingSmtpServer();
+
+        var outcome = await Transport(server.Port, "tims-transactional").SendAsync(Message(), CancellationToken.None);
+
+        Assert.True(outcome.Delivered, outcome.FailureReason);
+        var data = await server.CapturedDataAsync();
+        Assert.Contains("X-SES-MESSAGE-TAGS: app=climate", data, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// The other half of "optional", and the half that keeps local development working: with
     /// no configuration set there is no header at all, rather than an empty or placeholder
     /// one. MailHog, CI and the integration suite send to destinations where a configuration
@@ -91,6 +109,7 @@ public class SesConfigurationSetTests
 
         var data = await server.CapturedDataAsync();
         Assert.DoesNotContain("X-SES-CONFIGURATION-SET", data, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("X-SES-MESSAGE-TAGS", data, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

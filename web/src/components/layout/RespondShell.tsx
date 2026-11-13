@@ -4,6 +4,7 @@ import { OccLogo } from './OccLogo'
 import { SkipLink } from '../ui'
 import { ThemeSwitcher } from './ShellControls'
 import { CompanyLogo } from './CompanyLogo'
+import { PoweredByNexadev } from './PoweredByNexadev'
 import { useOwnCompanyBrand } from '../../company-context/useCompanyName'
 
 /**
@@ -198,6 +199,12 @@ export function RespondShell({
       >
         {children}
       </main>
+
+      {/* The builder's credit, under the column and outside `<main>`: page chrome, not part
+          of the survey, so a screen reader reaches it after the questions, never before. */}
+      <footer className="mx-auto flex w-full max-w-field justify-center px-4 pb-6 md:max-w-respond">
+        <PoweredByNexadev />
+      </footer>
     </div>
   )
 }

@@ -262,6 +262,58 @@ export async function updateMicroclimate(
   return response.json() as Promise<MicroclimateDetail>
 }
 
+/**
+ * `PUT /microclimates/{id}/content` (G23): a DRAFT's whole authored content, replaced under the
+ * same validation as create. The fields of `CreateMicroclimateInput` minus `companyId` and
+ * `templateId`, which a draft does not change. `questions` replaces; it is not a patch. The
+ * server refuses anything that is not an untouched draft with a 409.
+ */
+export type ReplaceMicroclimateContentInput = Omit<CreateMicroclimateInput, 'companyId' | 'templateId'>
+
+export async function replaceMicroclimateContent(
+  baseUrl: string,
+  id: string,
+  input: ReplaceMicroclimateContentInput,
+  lang?: string,
+): Promise<MicroclimateDetail> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const response = await authFetch(`${baseUrl}/microclimates/${encodeURIComponent(id)}/content${query}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      ...input,
+      startTime: toUtcIso(input.startTime),
+      endTime: toUtcIso(input.endTime),
+      timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
+  })
+  return response.json() as Promise<MicroclimateDetail>
+}
+
+/**
+ * `DELETE /microclimates/{id}` (G23): discards a draft. Refused (409) once the session has been
+ * launched, has counted a response or has an invitation.
+ */
+export async function deleteMicroclimate(baseUrl: string, id: string): Promise<void> {
+  await authFetch(`${baseUrl}/microclimates/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/**
+ * `GET /microclimates/seats` (G23): the company's `microclimate` licence, read-only.
+ * `licensed: false` means no licence row exists and nothing is metered.
+ */
+export interface MicroclimateSeats {
+  licensed: boolean
+  status: 'active' | 'suspended' | string
+  seatsTotal: number
+  seatsUsed: number
+  seatsRemaining: number
+}
+
+export async function getMicroclimateSeats(baseUrl: string, companyId: string): Promise<MicroclimateSeats> {
+  const response = await authFetch(`${baseUrl}/microclimates/seats?companyId=${encodeURIComponent(companyId)}`)
+  return response.json() as Promise<MicroclimateSeats>
+}
+
 export async function getLiveResults(baseUrl: string, id: string): Promise<LiveResults> {
   const response = await authFetch(`${baseUrl}/microclimates/${id}/live-results`)
   return response.json() as Promise<LiveResults>

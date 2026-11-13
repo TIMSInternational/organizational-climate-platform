@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useTranslation } from '../../../../i18n'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import { useCompanyScope } from '../../../../company-context'
+import { describeApiError } from '../../../../api/describeApiError'
+import { administersSurvey, readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { listUsers, type User } from '../../../org-structure/api/users'
-import { duplicateSurvey, getSurvey, updateSurveyStatus, type SurveyDetail } from '../../api/surveys'
+import { getCompanySettings } from '../../../org-structure/api/companySettings'
+import {
+  deleteSurvey,
+  duplicateSurvey,
+  getSurvey,
+  reopenSurvey,
+  updateSurveyStatus,
+  updateSurveyText,
+  updateSurveyWindow,
+  type SurveyDetail,
+} from '../../api/surveys'
+import { updateSurveyAudience } from '../../api/surveyAudience'
 import {
   getSurveyDistribution,
   listSurveyInvitations,
@@ -27,6 +38,11 @@ export interface SurveyDetailModel {
    * survey's company), so the two pages resolve the same audience for the same viewer.
    */
   users: User[] | null
+  /**
+   * The company's IANA zone (`GET /admin/companies/{id}/settings` → `settings.timezone`), the
+   * clock the window editor reads and writes in, or null when unread.
+   */
+  timeZone?: string | null
 }
 
 export type SurveyDetailState =
@@ -46,30 +62,30 @@ export type SurveyDetailState =
  */
 export function useSurveyDetailModel(id: string | undefined) {
   const { t, locale } = useTranslation()
-  const caps = useViewerCapabilities()
-  const scope = useCompanyScope()
   const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [state, setState] = useState<SurveyDetailState>({ status: 'loading' })
   const [pending, setPending] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const readsContext = caps.canAuthorSurveys
 
   const load = useCallback(async () => {
     if (!id) return
     setState({ status: 'loading' })
     try {
       const survey = await getSurvey(baseUrl, id, locale)
-      if (!readsContext) {
-        setState({ status: 'ready', model: { survey, departments: null, distribution: undefined, invitations: null, users: null } })
+      // The survey's own company, never the header (A1 of the 2026-11-08 walkthrough): a super
+      // administrator reads every survey's context, a company administrator their tenant's.
+      const administers = administersSurvey(readViewerClaims(), survey)
+      if (!administers) {
+        setState({ status: 'ready', model: { survey, departments: null, distribution: undefined, invitations: null, users: null, timeZone: null } })
         return
       }
-      const scoped = scope.status === 'ready' && scope.companyId === survey.companyId
-      const [distribution, invitations, departments, users] = await Promise.allSettled([
+      const [distribution, invitations, departments, users, settings] = await Promise.allSettled([
         getSurveyDistribution(baseUrl, id),
         listSurveyInvitations(baseUrl, id, {}, locale),
         listDepartments(baseUrl, survey.companyId),
-        scoped ? listUsers(baseUrl, survey.companyId) : Promise.resolve(null),
+        listUsers(baseUrl, survey.companyId),
+        getCompanySettings(baseUrl, survey.companyId),
       ])
       setState({
         status: 'ready',
@@ -79,12 +95,13 @@ export function useSurveyDetailModel(id: string | undefined) {
           invitations: invitations.status === 'fulfilled' ? invitations.value : null,
           departments: departments.status === 'fulfilled' && Array.isArray(departments.value) ? departments.value : null,
           users: users.status === 'fulfilled' && Array.isArray(users.value) ? users.value : null,
+          timeZone: settings.status === 'fulfilled' ? (settings.value?.settings?.timezone ?? null) : null,
         },
       })
     } catch (error) {
       setState({ status: 'error', message: error instanceof Error ? error.message : t('errors.generic') })
     }
-  }, [baseUrl, id, locale, readsContext, scope.companyId, scope.status, t])
+  }, [baseUrl, id, locale, t])
 
   useEffect(() => {
     void load()
@@ -99,7 +116,7 @@ export function useSurveyDetailModel(id: string | undefined) {
         const survey = await updateSurveyStatus(baseUrl, id, status, locale)
         setState({ status: 'ready', model: { ...state.model, survey } })
       } catch (error) {
-        setActionError(error instanceof Error ? error.message : t('errors.generic'))
+        setActionError(describeApiError(error, t))
       } finally {
         setPending(null)
       }
@@ -115,11 +132,74 @@ export function useSurveyDetailModel(id: string | undefined) {
       const copy = await duplicateSurvey(baseUrl, id, locale)
       navigate(`/surveys/${copy.id}`)
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('errors.generic'))
+      setActionError(describeApiError(error, t))
     } finally {
       setPending(null)
     }
   }, [baseUrl, id, locale, navigate, t])
 
-  return { state, reload: load, transition, duplicate, pending, actionError }
+  /**
+   * `PUT /surveys/{id}` with the new window. Throws so the editor can say why, in its own words;
+   * on success the page reads the detail the server answered with, so every tile -- the close,
+   * "Activar" enabled or not -- moves with it.
+   */
+  const saveWindow = useCallback(
+    async (window: { startDate?: string; endDate: string }) => {
+      if (!id || state.status !== 'ready') return
+      const survey = await updateSurveyWindow(baseUrl, id, window, locale)
+      setState({ status: 'ready', model: { ...state.model, survey } })
+    },
+    [baseUrl, id, locale, state],
+  )
+
+  /**
+   * `PUT /surveys/{id}` with the survey's new targets ("Editar audiencia"). `departmentIds` is
+   * sent only when the dialog passes it, which it does only on a draft nobody has answered.
+   * Throws so the dialog can say why; on success the page reads the detail the server answered
+   * with, so the audience tile and card move with it.
+   */
+  const saveAudience = useCallback(
+    async (targets: { departmentIds?: string[]; userIds: string[] }) => {
+      if (!id || state.status !== 'ready') return
+      const survey = await updateSurveyAudience(baseUrl, id, targets, locale)
+      setState({ status: 'ready', model: { ...state.model, survey } })
+    },
+    [baseUrl, id, locale, state],
+  )
+
+  /**
+   * `POST /surveys/{id}/reopen` (super admins only). Throws so the dialog can say why; on success
+   * the page reads the detail the server answered with -- status, close and transitions move.
+   */
+  const reopen = useCallback(
+    async (body: { endDate: string; reason: string }) => {
+      if (!id || state.status !== 'ready') return
+      const survey = await reopenSurvey(baseUrl, id, body, locale)
+      setState({ status: 'ready', model: { ...state.model, survey } })
+    },
+    [baseUrl, id, locale, state],
+  )
+
+  /**
+   * `PUT /surveys/{id}` with the name and description only («Editar nombre»). Throws so the
+   * dialog can say why; on success the page reads the detail the server answered with, so the
+   * header and the breadcrumb carry the new name.
+   */
+  const saveText = useCallback(
+    async (text: { title: Partial<Record<'en' | 'es', string>>; description: Partial<Record<'en' | 'es', string>> }) => {
+      if (!id || state.status !== 'ready') return
+      const survey = await updateSurveyText(baseUrl, id, text, locale)
+      setState({ status: 'ready', model: { ...state.model, survey } })
+    },
+    [baseUrl, id, locale, state],
+  )
+
+  /** `DELETE /surveys/{id}`, then back to the list. Throws so the confirmation can say why. */
+  const remove = useCallback(async () => {
+    if (!id) return
+    await deleteSurvey(baseUrl, id)
+    navigate('/surveys')
+  }, [baseUrl, id, navigate])
+
+  return { state, reload: load, transition, duplicate, saveWindow, saveAudience, saveText, reopen, remove, pending, actionError }
 }

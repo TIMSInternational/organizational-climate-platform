@@ -5,6 +5,7 @@ import { Alert, AlertDescription, Button } from '../../../components/ui'
 import { cn } from '../../../lib/cn'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import {
+  getIntakeCredentialMode,
   getIntakeTemplate,
   IMPORT_CHUNK_ROWS,
   IntakeRequestError,
@@ -16,6 +17,7 @@ import {
   type IntakeUnderstanding,
 } from '../api/intake'
 import type { BulkImportResponse } from '../api/bulkImport'
+import type { CredentialMode } from '../api/companySettings'
 import { UploadStep } from './intake/UploadStep'
 import { UnderstandingProgress } from './intake/UnderstandingProgress'
 import { UnderstandStep } from './intake/UnderstandStep'
@@ -49,6 +51,9 @@ import {
  */
 
 type Step = 'upload' | 'reading' | 'understand' | 'review' | 'done'
+
+/** `BulkImportEndpoints`' refusal of `withCredentials` for a company in `per_survey` mode. */
+const PER_SURVEY_REFUSAL = 'credentials_not_available_per_survey'
 
 /** The four steps the header names; "reading" is step 2 in progress. */
 const HEADER_STEPS = [
@@ -90,6 +95,13 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
    * that is not something an admin should trigger by not noticing a control.
    */
   const [accessMode, setAccessMode] = useState<'invitation' | 'credentials'>('invitation')
+  /**
+   * The company's credential mode (`GET /admin/companies/{id}/settings`). A `per_survey`
+   * company refuses `withCredentials`, so the review step does not offer it there and says
+   * what the remaining choice really does: accounts, and no mail now. `null` while unread or
+   * unreadable — both choices are then offered, as before, and a refusal is still translated.
+   */
+  const [credentialMode, setCredentialMode] = useState<CredentialMode | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [understanding, setUnderstanding] = useState<IntakeUnderstanding | null>(null)
@@ -117,6 +129,18 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
     [understanding, fixes],
   )
 
+  useEffect(() => {
+    let cancelled = false
+    void getIntakeCredentialMode(baseUrl, companyId).then((mode) => {
+      if (cancelled) return
+      setCredentialMode(mode)
+      if (mode === 'per_survey') setAccessMode('invitation')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [baseUrl, companyId])
+
   // The finished checklist is held for a beat, then the answer replaces it.
   useEffect(() => {
     if (step !== 'reading' || !progress?.outcome) return
@@ -134,6 +158,14 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
   function messageFor(err: unknown) {
     // Never the server's English at a Spanish reader: a code this screen knows is said in the
     // reader's language, and anything else is the generic sentence.
+    if (err instanceof IntakeRequestError && err.code === PER_SURVEY_REFUSAL) {
+      // The settings read failed or the mode changed under us: the server has now said which
+      // mode the company is in, so the screen corrects itself to the one choice that works.
+      setCredentialMode('per_survey')
+      setAccessMode('invitation')
+      setVerdict(null)
+      return t(`users.intake.error.${PER_SURVEY_REFUSAL}`)
+    }
     if (err instanceof IntakeRequestError && err.code !== null && REQUEST_ERROR_CODES.has(err.code)) {
       return err.code === 'not_a_workbook' ? t('users.intake.notAWorkbook') : t(`users.intake.error.${err.code}`)
     }
@@ -283,7 +315,9 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
    * the accounts and mails nobody — the codes go out one per survey, when the survey is
    * distributed. Falling back to the radio keeps the old copy against an API without the field.
    */
-  const delivered = result?.delivery ?? (accessMode === 'credentials' ? 'credentials' : 'invitation')
+  const delivered =
+    result?.delivery ??
+    (accessMode === 'credentials' ? 'credentials' : credentialMode === 'per_survey' ? 'none' : 'invitation')
 
   function chooseAccessMode(mode: 'invitation' | 'credentials') {
     setAccessMode(mode)
@@ -391,6 +425,7 @@ export default function IntakeWizard({ baseUrl, companyId, onImported, revealDel
           onPatch={patchRow}
           onRemove={removeRow}
           accessMode={accessMode}
+          credentialMode={credentialMode}
           onAccessModeChange={chooseAccessMode}
           onValidate={handleValidate}
           onApprove={handleApprove}

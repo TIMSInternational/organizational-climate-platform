@@ -80,6 +80,7 @@ export const ERASURE_MAP_DIVERGENCES = [
  * plus `survey_audit_logs` — see `ERASURE_MAP_DIVERGENCES`.
  */
 export const ERASURE_DELETED_TABLES = [
+  'email_delivery_events',
   'notifications',
   'survey_audit_logs',
   'survey_credentials',
@@ -106,6 +107,7 @@ export const ERASURE_REDACTED_TABLES = [
 
 /** Catalogue paths for the deleted tables, keyed by the table's own name. */
 export const DELETED_LABEL_PATH: Record<string, string> = {
+  email_delivery_events: 'privacy.erasureDeletedEmailDeliveryEvents',
   notifications: 'privacy.erasureDeletedNotifications',
   survey_audit_logs: 'privacy.erasureDeletedSurveyAuditLogs',
   survey_credentials: 'privacy.erasureDeletedSurveyCredentials',

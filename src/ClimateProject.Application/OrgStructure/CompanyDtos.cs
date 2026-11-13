@@ -8,7 +8,11 @@ public sealed record CompanyListItem(
     string? Size,
     string? Country,
     string? SubscriptionTier,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // The company's language setting ('es' | 'en'), which every new survey, invitation and
+    // report inherits. The list used to say "en el detalle" for every row (walkthrough
+    // 2026-11-08), so checking a new client's language meant opening each company.
+    string? Language = null);
 
 public sealed record CompanyListResponse(IReadOnlyList<CompanyListItem> Companies);
 

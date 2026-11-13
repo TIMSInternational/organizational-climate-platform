@@ -23,6 +23,7 @@ import { categoryTree, flattenTree, libraryTypeLabel, matchesSearch, parseOption
 import { useQuestionLibraryModel } from './useQuestionModels'
 import { SELECT_CLASS } from './QuestionBankNextPage'
 import SuperQuestionLibraryView from './super/SuperQuestionLibraryView'
+import { describeApiError } from '../../../api/describeApiError'
 
 /**
  * Biblioteca de preguntas, redesigned (canvas board "QuestionLibrary"): a browsable
@@ -203,7 +204,7 @@ function QuestionLibraryForCompany() {
       setDrawer({ mode: 'closed' })
       await reload()
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : t('errors.generic'))
+      setFormError(describeApiError(error, t))
     } finally {
       setSaving(false)
     }
@@ -227,7 +228,7 @@ function QuestionLibraryForCompany() {
       setDrawer({ mode: 'closed' })
       await reload()
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : t('errors.generic'))
+      setFormError(describeApiError(error, t))
     } finally {
       setSaving(false)
     }

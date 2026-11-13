@@ -1,0 +1,150 @@
+{
+  "GET /admin/companies/*/result-bands": {
+    "opportunityMin": 3,
+    "strengthMin": 4,
+    "criticalName": null,
+    "opportunityName": null,
+    "strengthName": null
+  },
+  "_comment": "G25 lane: plans-tracking-leader.json (leader luis.mora@meridiano.test, nodo Ingeniería, captured read-only from the local stack on 2026-09-10) with the two picker 403s replaced by what TrackingPickerEndpoints.ScopeFor now answers a leader: their one nodo, its active people (Luis Mora and Adriana Solano, the responsable already on PA-2026-00002, plus one more member), and the nodo's findings from one closed survey, without a score. Every other body is unchanged.",
+  "GET /notifications/mine": {
+    "notifications": []
+  },
+  "GET /profile": {
+    "id": "64fa2a68-3cef-4644-a7b0-ee3a7315c671",
+    "companyId": "16c97c29-07f8-4522-86fc-e6cc56298829",
+    "companyName": "Grupo Meridiano S.A.",
+    "companyLogoUrl": null,
+    "email": "luis.mora@meridiano.test",
+    "name": "Luis Mora",
+    "role": "leader",
+    "departmentId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "departmentName": "Ingeniería",
+    "managerId": null,
+    "isActive": true,
+    "hasPassword": true,
+    "lastLoginAt": "2026-09-11T00:31:48.171895+00:00",
+    "createdAt": "2026-09-10T01:58:55.206569+00:00",
+    "demographics": {}
+  },
+  "GET /api/tablero-seguimiento": {
+    "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "conteos": {
+      "rojo": 0,
+      "amarillo": 0,
+      "verde": 1
+    },
+    "planes": [
+      {
+        "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+        "planCode": "PA-2026-00002",
+        "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "liderExternalId": "",
+        "hallazgoExternalId": null,
+        "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+        "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+        "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+        "fechaCreacion": "2026-09-10",
+        "fechaCompromiso": "2026-09-15",
+        "porcentajeAvance": 0.0,
+        "estadoSemaforo": "Verde",
+        "cicloEncuestaExternalId": null,
+        "fechaUltimaActualizacion": "2026-09-10",
+        "cumplido": false,
+        "involucradosExternalIds": [
+          "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+        ]
+      }
+    ]
+  },
+  "GET /api/planes-accion": [
+    {
+      "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+      "planCode": "PA-2026-00002",
+      "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+      "liderExternalId": "",
+      "hallazgoExternalId": null,
+      "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+      "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+      "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+      "fechaCreacion": "2026-09-10",
+      "fechaCompromiso": "2026-09-15",
+      "porcentajeAvance": 0.0,
+      "estadoSemaforo": "Verde",
+      "cicloEncuestaExternalId": null,
+      "fechaUltimaActualizacion": "2026-09-10",
+      "cumplido": false,
+      "involucradosExternalIds": [
+        "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+      ]
+    }
+  ],
+  "GET /api/planes-accion/*": {
+    "id": "01a08b9e-63d1-7f20-8a5d-62a31ac71d53",
+    "planCode": "PA-2026-00002",
+    "nodoExternalId": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+    "liderExternalId": "",
+    "hallazgoExternalId": null,
+    "descripcionQue": "Publicar el rol de fines de semana con dos semanas de antelación",
+    "metodologiaComo": "Calendario compartido, actualizado los lunes por la jefatura del nodo.",
+    "responsableEjecucionExternalId": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+    "fechaCreacion": "2026-09-10",
+    "fechaCompromiso": "2026-09-15",
+    "porcentajeAvance": 0.0,
+    "estadoSemaforo": "Verde",
+    "cicloEncuestaExternalId": null,
+    "fechaUltimaActualizacion": "2026-09-10",
+    "cumplido": false,
+    "involucradosExternalIds": [
+      "1553edb1-e100-4bb1-a397-90882b3a3e9e"
+    ]
+  },
+  "GET /api/mis-tareas": [],
+  "GET /action-plans 403": {},
+  "GET /api/consolidado 403": {},
+  "GET /tracking/picker/nodos": {
+    "nodos": [
+      {
+        "id": "5bfdb04e-8847-4baa-89c8-d4411654a129",
+        "name": "Ingeniería"
+      }
+    ]
+  },
+  "GET /tracking/picker/personas": {
+    "personas": [
+      {
+        "id": "1553edb1-e100-4bb1-a397-90882b3a3e9e",
+        "name": "Adriana Solano",
+        "email": "adriana.solano@meridiano.test"
+      },
+      {
+        "id": "64fa2a68-3cef-4644-a7b0-ee3a7315c671",
+        "name": "Luis Mora",
+        "email": "luis.mora@meridiano.test"
+      },
+      {
+        "id": "9a3d6c1e-2b7f-4e10-8c55-1f2e3d4c5b6a",
+        "name": "Marco Vindas",
+        "email": "marco.vindas@meridiano.test"
+      }
+    ]
+  },
+  "GET /tracking/picker/hallazgos": {
+    "hallazgos": [
+      {
+        "id": "hal-3f2a9c1d0b8e7f6a5d4c3b2a1f0e9d8c",
+        "surveyId": "7c1e5b2a-9d3f-4a6e-8b0c-2d4f6a8c0e1b",
+        "surveyTitle": "Clima organizacional 2026",
+        "surveyClosedOn": "2026-08-29T23:59:00Z",
+        "dimension": "Comunicación"
+      },
+      {
+        "id": "hal-8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a",
+        "surveyId": "7c1e5b2a-9d3f-4a6e-8b0c-2d4f6a8c0e1b",
+        "surveyTitle": "Clima organizacional 2026",
+        "surveyClosedOn": "2026-08-29T23:59:00Z",
+        "dimension": "Reconocimiento"
+      }
+    ]
+  }
+}

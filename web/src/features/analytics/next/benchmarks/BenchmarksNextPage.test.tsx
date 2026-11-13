@@ -111,11 +111,11 @@ function requested(fragment: string): URL[] {
     .filter((url) => `${url.pathname}${url.search}`.includes(fragment))
 }
 
-function renderAs(claims: Record<string, unknown>) {
+function renderAs(claims: Record<string, unknown>, entry = '/analytics/benchmarks') {
   setToken(tokenFor({ sub: 'u1', nodoId: '', ...claims }))
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={['/analytics/benchmarks']}>
+      <MemoryRouter initialEntries={[entry]}>
         <CompanyContextProvider>
           <BenchmarksNextPage />
         </CompanyContextProvider>
@@ -385,7 +385,7 @@ describe('BenchmarksNextPage — one test per role that matters', () => {
 
   it('super_admin with no company chosen: the references, a global create, and a sentence where the index would be', async () => {
     routeFetch()
-    renderAs({ role: 'super_admin', companyId: '' })
+    renderAs({ role: 'super_admin', companyId: '' }, '/analytics/benchmarks?vista=referencias')
 
     expect(await screen.findByText('Elige una empresa para leerla frente a su grupo')).toBeTruthy()
     expect(document.querySelector('[data-slot="cohort-readout"]')).toBeNull()
@@ -398,9 +398,24 @@ describe('BenchmarksNextPage — one test per role that matters', () => {
   it('super_admin with a company chosen: that company is read against the cohort', async () => {
     window.localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, CID)
     routeFetch()
-    renderAs({ role: 'super_admin', companyId: '' })
+    renderAs({ role: 'super_admin', companyId: '' }, '/analytics/benchmarks?vista=referencias')
     await readout()
     expect(requested('/surveys?')[0].searchParams.get('companyId')).toBe(CID)
+  })
+
+  it('super_admin without ?vista=referencias: the computed reference groups, and no hand-entered reference is asked for', async () => {
+    routeFetch()
+    renderAs({ role: 'super_admin', companyId: '' })
+    expect(await screen.findByRole('tab', { name: /Grupos de referencia/ })).toBeTruthy()
+    expect(vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes('/admin/benchmark-groups'))).toBe(true)
+    expect(vi.mocked(fetch).mock.calls.filter((call) => /\/admin\/benchmarks(\?|$)/.test(String(call[0])))).toHaveLength(0)
+  })
+
+  it('company_admin never reaches the computed groups, whatever the address says', async () => {
+    routeFetch()
+    renderAs({ role: 'company_admin', companyId: CID }, '/analytics/benchmarks?tab=grupos')
+    await readout()
+    expect(vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes('/admin/benchmark-groups'))).toHaveLength(0)
   })
 
   it.each(['leader', 'supervisor', 'employee'])('%s: no request the server would refuse, and a sentence saying whose screen it is', async (role) => {

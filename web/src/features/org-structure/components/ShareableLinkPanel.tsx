@@ -4,6 +4,7 @@ import RoleSelector from './RoleSelector'
 import type { Invitation } from '../api/invitations'
 import { useTranslation } from '../../../i18n'
 import { Button, SectionLabel, Separator } from '../../../components/ui'
+import { describeApiError } from '../../../api/describeApiError'
 
 interface ShareableLinkPanelProps {
   onCreate: (role: string) => Promise<Invitation>
@@ -31,7 +32,7 @@ export default function ShareableLinkPanel({ onCreate }: ShareableLinkPanelProps
       const invitation = await onCreate(role)
       setLink(`${window.location.origin}/accept-invitation/${invitation.token}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'))
+      setError(describeApiError(err, t))
     } finally {
       setCreating(false)
     }

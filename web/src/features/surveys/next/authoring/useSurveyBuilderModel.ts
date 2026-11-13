@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from '../../../../i18n'
+import { describeApiError } from '../../../../api/describeApiError'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
-import { createSurvey } from '../../api/surveyCreate'
+import { credentialModeOf, getCompanySettings, type CredentialMode } from '../../../org-structure/api/companySettings'
+import { listUsers, type User } from '../../../org-structure/api/users'
+import { createSurvey, setSurveyUserTargets } from '../../api/surveyCreate'
 import { getSurveyQuestionAuthoring, replaceSurveyQuestions } from '../../api/surveyQuestionAuthoring'
-import { listSurveyDimensions } from '../../api/surveys'
+import { deleteSurvey, listSurveyDimensions } from '../../api/surveys'
 import {
   getSurveyTemplate,
   instantiateSurveyTemplate,
@@ -15,7 +18,9 @@ import {
 import { useSurveyDraft } from '../../useSurveyDraft'
 import {
   CONTENT_LANGUAGES,
-  SURVEY_WIZARD_STEPS,
+  builderIndexOfDraftStep,
+  draftStepOfBuilderIndex,
+  audienceTargets,
   buildCreateInput,
   buildInstantiateInput,
   defaultContentLanguage,
@@ -23,8 +28,11 @@ import {
   type ContentLanguage,
   type SurveyQuestionValues,
   type SurveyWizardValues,
+  builderAudienceEstimate,
 } from '../../wizardValues'
 import { arrangedQuestions, arrangementChanged, materialiseTemplate, templateCovers } from './templateRows'
+import { choosablePeople } from './peopleTargets'
+import { isKnownTimeZone } from './zonedWindow'
 
 /**
  * The model behind `/surveys/new` — THE wiring seam of Nueva encuesta, redesigned as a two-pane
@@ -58,6 +66,24 @@ export function useSurveyBuilderModel(companyId: string) {
   })
   const [stepIndex, setStepIndex] = useState(0)
   const [departments, setDepartments] = useState<Department[] | null>(null)
+  /** Every department's name, retired ones too: a person's row names the department they are in. */
+  const [departmentNames, setDepartmentNames] = useState<ReadonlyMap<string, string>>(new Map())
+  /**
+   * The company's directory for "Personas específicas" (G14), inactive accounts included so a
+   * pasted address can say why it missed. `undefined` while unread, `null` when it could not be.
+   */
+  const [users, setUsers] = useState<User[] | null | undefined>(undefined)
+  /**
+   * The company's IANA zone (`settings.timezone`): the schedule's wall clocks are read on it
+   * (G16). `null` while unread or unreadable -- the builder then uses the browser's, and says so.
+   */
+  const [timeZone, setTimeZone] = useState<string | null>(null)
+  /**
+   * The mode a survey created here inherits when the author leaves it alone — read only to NAME
+   * it beside "Como la empresa". `null` while unread, or for a viewer who may not read the
+   * company's settings; the option then says "Como la empresa" without a mode.
+   */
+  const [companyCredentialMode, setCompanyCredentialMode] = useState<CredentialMode | null>(null)
   const [templates, setTemplates] = useState<SurveyTemplateListItem[]>([])
   const [template, setTemplate] = useState<SurveyTemplateDetail | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
@@ -65,7 +91,7 @@ export function useSurveyBuilderModel(companyId: string) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   /** The survey exists but the rows' arrangement could not be written onto its copy. */
-  const [unsaved, setUnsaved] = useState<{ id: string; message: string } | null>(null)
+  const [unsaved, setUnsaved] = useState<{ id: string; kind: 'questions' | 'people'; message: string } | null>(null)
   const [nextKey, setNextKey] = useState(0)
   /** The template whose questions the rows already hold — a restored draft's, or one copied here. */
   const materialisedFor = useRef<string | null>(null)
@@ -75,11 +101,27 @@ export function useSurveyBuilderModel(companyId: string) {
     let cancelled = false
     // A failed directory is not a reason to block the flow: no departments means everyone.
     listDepartments(baseUrl, companyId)
-      .then((result) => !cancelled && setDepartments(Array.isArray(result) ? result.filter((d) => d.isActive !== false) : []))
+      .then((result) => {
+        if (cancelled) return
+        const all = Array.isArray(result) ? result : []
+        setDepartments(all.filter((d) => d.isActive !== false))
+        setDepartmentNames(new Map(all.map((d) => [d.id, d.name])))
+      })
       .catch(() => !cancelled && setDepartments(null))
+    listUsers(baseUrl, companyId)
+      .then((result) => !cancelled && setUsers(Array.isArray(result) ? result : []))
+      .catch(() => !cancelled && setUsers(null))
     listSurveyDimensions(baseUrl, companyId)
       .then((result) => !cancelled && setHistory(Array.isArray(result) ? result : []))
       .catch(() => undefined)
+    getCompanySettings(baseUrl, companyId)
+      .then((result) => {
+        if (cancelled) return
+        setCompanyCredentialMode(result?.settings ? credentialModeOf(result.settings) : null)
+        const zone = result?.settings?.timezone
+        setTimeZone(isKnownTimeZone(zone) ? zone : null)
+      })
+      .catch(() => !cancelled && setCompanyCredentialMode(null))
     return () => {
       cancelled = true
     }
@@ -162,17 +204,19 @@ export function useSurveyBuilderModel(companyId: string) {
     // draft from before template rows existed holds none, and gets them copied in.
     materialisedFor.current = restored.questions.length > 0 ? restored.templateId : null
     setValues(restored)
-    setStepIndex(Math.min(Math.max(restoredStep - 1, 0), SURVEY_WIZARD_STEPS.length - 1))
+    setStepIndex(builderIndexOfDraftStep(restoredStep))
   }, [])
 
   const draft = useSurveyDraft({
     baseUrl,
     locale,
     fallbackLanguage,
+    companyId,
     enabled: true,
     keyPrefix,
     values,
-    currentStep: stepIndex + 1,
+    // The five-step numbering every stored draft already uses (`draftStepOfBuilderIndex`).
+    currentStep: draftStepOfBuilderIndex(stepIndex),
     onRestore: applyRestored,
   })
 
@@ -192,17 +236,44 @@ export function useSurveyBuilderModel(companyId: string) {
     [],
   )
 
+  const people = useMemo(() => (users ? choosablePeople(users, departmentNames) : users === null ? null : undefined), [departmentNames, users])
+  const activePeople = useMemo(() => (people ? new Set(people.map((person) => person.id)) : null), [people])
+  // What a blank "Participantes previstos" stands for: the audience step's choice, counted.
+  const audienceEstimate = useMemo(() => builderAudienceEstimate(values, users), [values, users])
+
   const submit = useCallback(async () => {
     setSubmitting(true)
     setSubmitError(null)
     try {
       if (!startsFromTemplate(values)) {
-        const created = await createSurvey(baseUrl, buildCreateInput(values, companyId), locale)
+        const created = await createSurvey(baseUrl, buildCreateInput(values, companyId, timeZone, audienceEstimate), locale)
         await draft.discardAfterCreate()
         navigate(`/surveys/${created.id}`)
         return
       }
-      const created = await instantiateSurveyTemplate(baseUrl, values.templateId, buildInstantiateInput(values, companyId), locale)
+      const created = await instantiateSurveyTemplate(baseUrl, values.templateId, buildInstantiateInput(values, companyId, timeZone, audienceEstimate), locale)
+      const named = audienceTargets(values).userIds
+      if (named.length > 0) {
+        // `/use` takes no people, so the copy exists aimed at the whole company until this lands.
+        // If it cannot land, the copy is deleted (a draft with no responses) rather than left
+        // behind company-wide, and the author's draft is kept to try again.
+        try {
+          await setSurveyUserTargets(baseUrl, created.id, named)
+        } catch (error) {
+          const message = describeApiError(error, t)
+          const removed = await deleteSurvey(baseUrl, created.id).then(
+            () => true,
+            () => false,
+          )
+          if (removed) {
+            setSubmitError(t('surveys.next.builder.audience.peopleNotSavedRemoved', { message }))
+          } else {
+            await draft.discardAfterCreate()
+            setUnsaved({ id: created.id, kind: 'people', message })
+          }
+          return
+        }
+      }
       if (template !== null && arrangementChanged(values.questions, template)) {
         try {
           const copied = await getSurveyQuestionAuthoring(baseUrl, created.id)
@@ -212,18 +283,18 @@ export function useSurveyBuilderModel(companyId: string) {
           // again would create a second survey — and the author is sent to the editor that
           // can still make the changes.
           await draft.discardAfterCreate()
-          setUnsaved({ id: created.id, message: error instanceof Error ? error.message : t('errors.generic') })
+          setUnsaved({ id: created.id, kind: 'questions', message: describeApiError(error, t) })
           return
         }
       }
       await draft.discardAfterCreate()
       navigate(`/surveys/${created.id}`)
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : t('surveys.createFailed'))
+      setSubmitError(describeApiError(error, t, 'surveys.createFailed'))
     } finally {
       setSubmitting(false)
     }
-  }, [baseUrl, companyId, draft, locale, navigate, t, template, values])
+  }, [audienceEstimate, baseUrl, companyId, draft, locale, navigate, t, template, timeZone, values])
 
   return {
     values,
@@ -233,6 +304,12 @@ export function useSurveyBuilderModel(companyId: string) {
     stepIndex,
     setStepIndex,
     departments,
+    users: users ?? [],
+    people,
+    activePeople,
+    audienceEstimate,
+    timeZone,
+    companyCredentialMode,
     templates,
     template,
     templateError,
@@ -261,10 +338,19 @@ function emptyValues(language: ContentLanguage): SurveyWizardValues {
     startDate: '',
     endDate: '',
     departmentIds: [],
+    // No `audienceMode`: unset reads from the lists (`audienceChoiceOf`), as every caller before G14 meant.
+    userIds: [],
     targetAudienceCount: '',
     anonymous: true,
     allowPartialResponses: true,
     showProgress: true,
+    // Inherit the company's: departing from it is a choice somebody makes, never a default.
+    credentialMode: '',
+    // The settings step (G16): the entity's own defaults, so an untouched step sends nothing.
+    randomizeQuestions: false,
+    autoSave: true,
+    timeLimitMinutes: '',
+    responseLimit: '',
     questions: [],
   }
 }

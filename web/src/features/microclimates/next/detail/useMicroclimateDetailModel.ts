@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useLocation } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { useTranslation } from '../../../../i18n'
-import { getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../../api/microclimates'
+import { deleteMicroclimate, getMicroclimate, updateMicroclimate, type MicroclimateDetail } from '../../api/microclimates'
 import {
   createMicroclimateInvitations,
-  listMicroclimateInvitations,
+  listAllMicroclimateInvitations,
   type CreateMicroclimateInvitationsInput,
   type MicroclimateInvitationBatchResult,
   type MicroclimateInvitationList,
 } from '../../api/microclimateInvitations'
+import { describeApiError } from '../../../../api/describeApiError'
+import { companyZone } from '../companyZone'
 
 export type Settled<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'failed' }
 
@@ -16,6 +18,11 @@ export interface MicroclimateDetailState {
   status: 'loading' | 'ready' | 'error'
   error: string | null
   detail: MicroclimateDetail | null
+  /**
+   * The session's company's IANA zone the page prints dates and times on (`companyZone.ts`),
+   * or `null` when its settings could not be read -- the browser's is used, and the page says so.
+   */
+  timeZone: string | null
   invitations: Settled<MicroclimateInvitationList>
   reload: () => void
   /** A launch or a close is in flight. */
@@ -27,6 +34,8 @@ export interface MicroclimateDetailState {
   launch: () => void
   close: () => Promise<void>
   invite: (input: CreateMicroclimateInvitationsInput) => Promise<MicroclimateInvitationBatchResult>
+  /** Discards a draft (`DELETE /microclimates/{id}`, G23) and returns to the list. */
+  discard: () => Promise<void>
 }
 
 /**
@@ -41,8 +50,10 @@ export interface MicroclimateDetailState {
 export function useMicroclimateDetailModel(id: string | undefined): MicroclimateDetailState {
   const { t, locale } = useTranslation()
   const location = useLocation()
+  const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [detail, setDetail] = useState<MicroclimateDetail | null>(null)
+  const [timeZone, setTimeZone] = useState<string | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [invitations, setInvitations] = useState<Settled<MicroclimateInvitationList>>({ status: 'loading' })
@@ -58,15 +69,20 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     let cancelled = false
     setStatus('loading')
     setError(null)
+    // The session's own company's zone (a super administrator reads whichever tenant it is
+    // in), read before the page is drawn so no time is ever printed on the wrong clock first.
+    // `companyZone` never throws: an unreadable zone is `null`, not an error.
     getMicroclimate(baseUrl, id, locale)
-      .then((loaded) => {
+      .then(async (loaded) => ({ loaded, zone: await companyZone(baseUrl, loaded.companyId) }))
+      .then(({ loaded, zone }) => {
         if (cancelled) return
         setDetail(loaded)
+        setTimeZone(zone)
         setStatus('ready')
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       })
     return () => {
@@ -78,7 +94,8 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     if (!id) return
     let cancelled = false
     setInvitations({ status: 'loading' })
-    listMicroclimateInvitations(baseUrl, id)
+    // Every page, not the first 500 (G23): the card lists the whole set.
+    listAllMicroclimateInvitations(baseUrl, id)
       .then((list) => {
         if (!cancelled) setInvitations({ status: 'ready', value: list })
       })
@@ -100,7 +117,7 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
         setDetail(await updateMicroclimate(baseUrl, id, { status: next }))
       } catch (err) {
         // The server's own sentence: a bilingual session names the untranslated fields.
-        setActionError(err instanceof Error ? err.message : t('errors.generic'))
+        setActionError(describeApiError(err, t))
       } finally {
         setPending(null)
       }
@@ -118,10 +135,22 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     [baseUrl, id, t],
   )
 
+  const discard = useCallback(async () => {
+    if (!id) return
+    setActionError(null)
+    try {
+      await deleteMicroclimate(baseUrl, id)
+      navigate('/microclimates')
+    } catch (err) {
+      setActionError(describeApiError(err, t))
+    }
+  }, [baseUrl, id, navigate, t])
+
   return {
     status,
     error,
     detail,
+    timeZone,
     invitations,
     reload: () => {
       setGeneration((value) => value + 1)
@@ -133,5 +162,6 @@ export function useMicroclimateDetailModel(id: string | undefined): Microclimate
     launch: () => void transition('active'),
     close: () => transition('closed'),
     invite,
+    discard,
   }
 }

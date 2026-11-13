@@ -7,6 +7,7 @@ import { listUsers, type User } from '../../api/users'
 import { listActionPlans, type ActionPlan } from '../../../action-plans/api/actionPlans'
 import { DEPARTMENT_GROUP, getClimateTrends, type ClimateTrendsResponse } from '../../../surveys/api/climateTrends'
 import { latestClosedWave, rowsOf, summaryOf, type DepartmentRow, type DepartmentsSummary, type Wave } from './derive'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface DepartmentsModel {
   departments: Department[]
@@ -57,7 +58,7 @@ export function useDepartmentsModel(companyId: string | null, scopeCompanyId?: s
     ])
     if (departments.status === 'rejected') {
       const reason: unknown = departments.reason
-      setState({ status: 'error', model: null, error: reason instanceof Error ? reason.message : t('errors.generic') })
+      setState({ status: 'error', model: null, error: describeApiError(reason, t) })
       return
     }
     const today = todayCalendarDay()

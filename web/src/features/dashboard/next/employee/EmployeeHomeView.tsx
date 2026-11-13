@@ -4,7 +4,7 @@ import { ArrowRight, Check, Clock, EyeOff, FileText, Inbox, Target } from 'lucid
 import { PageTopBar } from '../../../../components/layout'
 import { Button, Chip } from '../../../../components/ui'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { calendarDay } from '../../../../lib/calendarDay'
+import { instantDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import DashboardState from '../../components/DashboardState'
 import { AnonymityNotice } from '../../../surveys/components/AnonymityNotice'
@@ -274,7 +274,7 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
         <dl className="m-0 flex max-w-120 flex-wrap gap-2 sm:gap-2.5">
           <Reading label={t('employee.taskQuestions')} value={survey.questionCount.toLocaleString(locale)} />
           <Reading label={t('employee.taskAbout')} value={t('employee.taskMinutes', { minutes: survey.minutes })} />
-          <Reading label={t('employee.taskCloses')} value={calendarDay(Date.parse(survey.closesAt), locale)} />
+          <Reading label={t('employee.taskCloses')} value={instantDay(Date.parse(survey.closesAt), locale)} />
         </dl>
 
         <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -504,7 +504,7 @@ function Reading({ label, value }: { label: string; value: string }) {
  */
 function AlsoOpenRow({ survey }: { survey: HomeSurvey }) {
   const { t, locale } = useTranslation()
-  const date = calendarDay(Date.parse(survey.closesAt), locale)
+  const date = instantDay(Date.parse(survey.closesAt), locale)
 
   return (
     // The way in sits beside its text while the text keeps 180px (`basis-45`), and drops under
@@ -623,7 +623,7 @@ function OutcomeCard({ outcome }: { outcome: HomeOutcome }) {
           title={t('employee.cameOfItClosedTitle', { survey })}
           body={closedBody}
           aside={
-            <time dateTime={outcome.closedOn}>{calendarDay(Date.parse(outcome.closedOn), locale)}</time>
+            <time dateTime={outcome.closedOn}>{instantDay(Date.parse(outcome.closedOn), locale)}</time>
           }
         />
         <OutcomeRow
@@ -634,7 +634,7 @@ function OutcomeCard({ outcome }: { outcome: HomeOutcome }) {
           aside={
             outcome.firstPlanOpenedOn === null ? null : (
               <time dateTime={outcome.firstPlanOpenedOn}>
-                {calendarDay(Date.parse(outcome.firstPlanOpenedOn), locale)}
+                {instantDay(Date.parse(outcome.firstPlanOpenedOn), locale)}
               </time>
             )
           }

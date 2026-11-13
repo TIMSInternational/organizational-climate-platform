@@ -372,6 +372,16 @@ builder.Services.AddOptions<EmailOptions>()
 // WebApplicationFactory's in-memory overrides are still honoured.
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<EmailOptions>>().Value);
 
+// The SES bounce webhook's two outbound calls: the SNS signing certificate and the subscription
+// confirmation. A named client with a short timeout -- SNS retries a slow endpoint, and a request
+// left waiting on AWS ties up a worker for nothing.
+builder.Services.AddHttpClient(ClimateProject.Api.Infrastructure.HttpSnsCertificateSource.HttpClientName,
+    client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddSingleton<ClimateProject.Application.Email.ISnsCertificateSource,
+    ClimateProject.Api.Infrastructure.HttpSnsCertificateSource>();
+builder.Services.AddSingleton<ClimateProject.Application.Email.ISnsSubscriptionConfirmer,
+    ClimateProject.Api.Infrastructure.HttpSnsSubscriptionConfirmer>();
+
 // Singleton, and that is load-bearing: the rate limiter paces sends process-wide, so a
 // per-request instance would pace nothing. See EmailSendRateLimiter.
 builder.Services.AddSingleton(sp => new EmailSendRateLimiter(sp.GetRequiredService<EmailOptions>().MaxSendsPerSecond));
@@ -402,6 +412,12 @@ builder.Services.AddScoped<IInvitationEmailSender>(sp => sp.GetRequiredService<E
 builder.Services.AddScoped<ICredentialsEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
     ? ActivatorUtilities.CreateInstance<EmailCredentialsEmailSender>(sp)
     : ActivatorUtilities.CreateInstance<LoggingCredentialsEmailSender>(sp));
+
+// A reminder that mints NOTHING -- asked for by ESPH on 2026-10-30: "hay forma de enviar
+// recordatorio? no otro usuario o contraseña solo recordatorio?". Same selection rule again.
+builder.Services.AddScoped<ISurveyReminderEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
+    ? ActivatorUtilities.CreateInstance<EmailSurveyReminderEmailSender>(sp)
+    : ActivatorUtilities.CreateInstance<LoggingSurveyReminderEmailSender>(sp));
 
 // What turns a queued survey invitation into a link the recipient can follow. Registered
 // unconditionally rather than inside the selection rule below: it reads a token, it does not
@@ -654,6 +670,8 @@ app.MapDemographicFieldEndpoints();
 app.MapBulkImportEndpoints();
 app.MapClimateWorkbookEndpoints();
 app.MapResponseExportEndpoints();
+app.MapSesWebhookEndpoints();
+app.MapDeliveryAuditEndpoints();
 app.MapMassInviteEndpoints();
 app.MapActionPlanEndpoints();
 app.MapActionPlanTemplateEndpoints();
@@ -664,6 +682,9 @@ app.MapSurveyEndpoints();
 app.MapSurveyResponseEndpoints();
 app.MapSurveyDistributionEndpoints();
 app.MapSurveyParticipationEndpoints();
+app.MapSurveyCredentialEndpoints();
+app.MapSurveyResponseExclusionEndpoints();
+app.MapCompanyDeletionEndpoints();
 app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
 app.MapSurveyExportEndpoints();
@@ -677,6 +698,7 @@ app.MapMicroclimateTemplateEndpoints();
 app.MapReportEndpoints();
 app.MapReportShareEndpoints();
 app.MapBenchmarkEndpoints();
+app.MapBenchmarkGroupEndpoints();
 app.MapQuestionLibraryEndpoints();
 app.MapQuestionBankEndpoints();
 app.MapAnalyticsInsightEndpoints();

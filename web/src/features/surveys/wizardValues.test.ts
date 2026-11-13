@@ -14,6 +14,7 @@ import {
   surveyQuestionCount,
   wizardStepErrors,
   type SurveyWizardValues,
+  builderAudienceEstimate,
 } from './wizardValues'
 import { CATALOGUES } from '../../i18n/locale'
 import { createTranslator } from '../../i18n/translate'
@@ -162,6 +163,13 @@ describe('buildCreateInput', () => {
       'showProgress',
     ])
     expect(input.settings?.anonymous).toBe(false)
+  })
+
+  it('inherits the company’s credential mode by omitting it, and sends a chosen one in settings', () => {
+    expect(buildCreateInput(complete(), COMPANY).settings).not.toHaveProperty('credentialMode')
+    expect(buildCreateInput(complete({ credentialMode: '' }), COMPANY).settings).not.toHaveProperty('credentialMode')
+    expect(buildCreateInput(complete({ credentialMode: 'per_survey' }), COMPANY).settings?.credentialMode).toBe('per_survey')
+    expect(buildCreateInput(complete({ credentialMode: 'shared' }), COMPANY).settings?.credentialMode).toBe('shared')
   })
 
   /**
@@ -421,5 +429,46 @@ describe('defaultContentLanguage', () => {
     // the wire as one of those, not as a content language the server answers 400 to.
     expect(defaultContentLanguage('fr')).toBe('en')
     expect(defaultContentLanguage('')).toBe('en')
+  })
+})
+
+/**
+ * Walkthrough B6 (docs/audits/2026-11-08-operator-ui-walkthrough.md): a blank "Participantes
+ * previstos" stored no count, and no count means no participation rate anywhere. Blank now stands
+ * for the audience the step chose -- and only that; a typed number still wins, and a choice that
+ * reaches nobody (or an unread directory) stays undeclared.
+ */
+describe('a blank expected-participants count stands for the chosen audience', () => {
+  const users = [
+    { id: 'u1', departmentId: 'fin', isActive: true },
+    { id: 'u2', departmentId: 'fin', isActive: true },
+    { id: 'u3', departmentId: 'ops', isActive: true },
+    { id: 'u4', departmentId: 'ops', isActive: false },
+    { id: 'u5', departmentId: null, isActive: true },
+  ]
+  const base = () => ({ ...emptyWizardValues('es'), titleEs: 'Clima', startDate: '2026-11-10T08:00', endDate: '2026-11-20T18:00' })
+
+  it('counts the whole active company when nothing is targeted', () => {
+    expect(builderAudienceEstimate({ ...base(), audienceMode: 'company', departmentIds: [], userIds: [] }, users)).toBe(4)
+  })
+
+  it('counts what the chosen mode sends: the targeted departments, active only', () => {
+    // `audienceTargets` sends only what the mode says, so a leftover name is not counted.
+    expect(builderAudienceEstimate({ ...base(), audienceMode: 'departments', departmentIds: ['ops'], userIds: ['u5'] }, users)).toBe(1)
+  })
+
+  it('counts the named people, active only', () => {
+    expect(builderAudienceEstimate({ ...base(), audienceMode: 'people', departmentIds: [], userIds: ['u1', 'u4', 'u5'] }, users)).toBe(2)
+  })
+
+  it('is unknown before the directory is read, and when the choice reaches nobody', () => {
+    expect(builderAudienceEstimate(base(), undefined)).toBeNull()
+    expect(builderAudienceEstimate({ ...base(), audienceMode: 'people', departmentIds: [], userIds: ['nobody'] }, users)).toBeNull()
+  })
+
+  it('sends the estimate for a blank count, and a typed count over it', () => {
+    expect(buildCreateInput(base(), 'c1', 'America/Costa_Rica', 4).targetAudienceCount).toBe(4)
+    expect(buildCreateInput({ ...base(), targetAudienceCount: '619' }, 'c1', 'America/Costa_Rica', 633).targetAudienceCount).toBe(619)
+    expect(buildCreateInput(base(), 'c1', 'America/Costa_Rica', null)).not.toHaveProperty('targetAudienceCount')
   })
 })

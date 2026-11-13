@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowRight, ChevronRight, Clock, Copy, Ellipsis, EyeOff, Link2, Mail, Plus, Send } from 'lucide-react'
+import { ArrowRight, ChevronRight, Clock, Copy, Ellipsis, EyeOff, Link2, Mail, Pencil, Plus, Send } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { CanvasCard, FactList, IconBox, NoteBand, PageMeta, PageMetaSentences } from '../../../../components/canvas'
@@ -29,10 +29,13 @@ import { JourneyRail } from '../JourneyRail'
 import { MicroclimateGate } from '../MicroclimateGate'
 import { FLOOR, invitationLadder, journeyStates, type JourneyKey, type JourneyState } from '../derive'
 import { clock, longDay, shortDay, shortDayYear } from '../format'
+import { displayZone, zoneNote } from '../companyZone'
 import { canvasTypeLabel, rungLabel, sessionStatusLabel, sessionStatusTone } from '../vocabulary'
 import { InviteDialog } from './InviteDialog'
 import { SessionQr } from './SessionQr'
 import { useMicroclimateDetailModel, type MicroclimateDetailState, type Settled } from './useMicroclimateDetailModel'
+import { MicroclimateSeatsNote } from '../seats/MicroclimateSeats'
+import { useMicroclimateSeats } from '../seats/useMicroclimateSeats'
 
 /**
  * `/microclimates/:id` — the redesigned Detalle de microclima, drawn as the MicroclimateDetail
@@ -76,12 +79,12 @@ function DetailScreen() {
   return <DetailView state={state} detail={state.detail} />
 }
 
-/** "9 sept 2026, 21:06". */
-function instant(t: TranslateFn, iso: string, locale: string): string {
-  return t('microclimates.next.sheet.instant', { date: shortDayYear(iso, locale), time: clock(iso, locale) })
+/** "9 sept 2026, 21:06" on `zone`'s clock. */
+function instant(t: TranslateFn, iso: string, locale: string, zone: string): string {
+  return t('microclimates.next.sheet.instant', { date: shortDayYear(iso, locale, zone), time: clock(iso, locale, zone) })
 }
 
-function journeyNotes(t: TranslateFn, detail: MicroclimateDetail, locale: string): Record<JourneyKey, string> {
+function journeyNotes(t: TranslateFn, detail: MicroclimateDetail, locale: string, zone: string): Record<JourneyKey, string> {
   const states: Record<JourneyKey, JourneyState> = journeyStates(detail.status)
   const count = detail.responseCount
   const target = detail.targetParticipantCount
@@ -92,7 +95,7 @@ function journeyNotes(t: TranslateFn, detail: MicroclimateDetail, locale: string
   return {
     create:
       states.create === 'done'
-        ? t('microclimates.next.journey.createdAt', { date: shortDay(detail.startTime, locale), time: clock(detail.startTime, locale) })
+        ? t('microclimates.next.journey.createdAt', { date: shortDay(detail.startTime, locale, zone), time: clock(detail.startTime, locale, zone) })
         : states.create === 'current'
           ? t('microclimates.next.journey.createDraft')
           : t('microclimates.next.journey.createNote'),
@@ -111,7 +114,7 @@ function journeyNotes(t: TranslateFn, detail: MicroclimateDetail, locale: string
     read:
       states.read === 'current'
         ? t('microclimates.next.journey.readNow')
-        : t('microclimates.next.journey.readOn', { date: shortDay(detail.endTime, locale) }),
+        : t('microclimates.next.journey.readOn', { date: shortDay(detail.endTime, locale, zone) }),
   }
 }
 
@@ -121,12 +124,18 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
   const manages = capabilities.canManageMicroclimate(detail)
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [confirmClose, setConfirmClose] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
 
   const title = detail.title ?? t('microclimates.untitled')
   const isDraft = detail.status === 'draft'
   const isLive = detail.status === 'active'
   const isClosed = detail.status === 'closed'
+  // A draft is editable and discardable while nothing has been counted against it (G23); the
+  // server refuses both otherwise.
+  const editableDraft = isDraft && manages && detail.responseCount === 0
+  // Seats matter before launch and while live; a closed session spends none.
+  const seats = useMicroclimateSeats(manages && !isClosed ? detail.companyId : null)
   const path = `/microclimates/${detail.id}/respond`
   const origin = typeof window === 'undefined' ? '' : window.location.origin
   const host = typeof window === 'undefined' ? '' : window.location.host
@@ -141,12 +150,15 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
     }
   }
 
+  // Every date and time on the company's clock, or the browser's when it could not be read.
+  const zone = displayZone(state.timeZone)
+  const closes = { date: longDay(detail.endTime, locale, zone), time: clock(detail.endTime, locale, zone) }
   const when =
     isLive
-      ? t('microclimates.next.detail.metaActive', { date: longDay(detail.endTime, locale), time: clock(detail.endTime, locale) })
+      ? t('microclimates.next.detail.metaActive', closes)
       : isClosed
-        ? t('microclimates.next.detail.metaClosed', { date: longDay(detail.endTime, locale), time: clock(detail.endTime, locale) })
-        : t('microclimates.next.detail.metaDraft', { date: longDay(detail.endTime, locale), time: clock(detail.endTime, locale) })
+        ? t('microclimates.next.detail.metaClosed', closes)
+        : t('microclimates.next.detail.metaDraft', closes)
   const tally =
     detail.targetParticipantCount > 0
       ? t('microclimates.next.detail.metaTally', { count: detail.responseCount, target: detail.targetParticipantCount })
@@ -167,12 +179,21 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
               sentences={[
                 { id: 'when', text: when },
                 { id: 'tally', text: tally, muted: true },
+                { id: 'zone', text: zoneNote(t, state.timeZone), muted: true },
               ]}
             />
           </PageMeta>
         }
         actions={
           <>
+            {editableDraft && (
+              <Button asChild variant="outline" size="canvas">
+                <Link to={`/microclimates/${detail.id}/edit`}>
+                  <Pencil aria-hidden="true" />
+                  {t('microclimates.next.detail.editDraft')}
+                </Link>
+              </Button>
+            )}
             {isDraft && manages && (
               <Button variant="primary" size="canvas" disabled={state.pending !== null} onClick={state.launch}>
                 <Send aria-hidden="true" />
@@ -204,6 +225,11 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                 {isLive && manages && (
                   <DropdownMenuItem onSelect={() => setConfirmClose(true)}>{t('microclimates.next.detail.closeNow')}</DropdownMenuItem>
                 )}
+                {editableDraft && (
+                  <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDiscard(true)}>
+                    {t('microclimates.next.detail.discardDraft')}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </>
@@ -222,7 +248,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
           </Alert>
         )}
 
-        <JourneyRail states={journeyStates(detail.status)} notes={journeyNotes(t, detail, locale)} />
+        <JourneyRail states={journeyStates(detail.status)} notes={journeyNotes(t, detail, locale, zone)} />
 
         <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_350px]">
           <div className="flex min-w-0 flex-col gap-4">
@@ -266,6 +292,11 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
           </div>
 
           <div className="flex min-w-0 flex-col gap-4">
+            {manages && !isClosed && (
+              <CanvasCard title={t('microclimates.next.seats.title')} inset="side">
+                <MicroclimateSeatsNote state={seats} />
+              </CanvasCard>
+            )}
             <CanvasCard title={t('microclimates.next.sheet.title')} inset="side">
               <FactList
                 facts={[
@@ -277,12 +308,12 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   {
                     id: 'opens',
                     term: t('microclimates.next.sheet.opens'),
-                    value: <span className="font-mono tabular-nums">{instant(t, detail.startTime, locale)}</span>,
+                    value: <span className="font-mono tabular-nums">{instant(t, detail.startTime, locale, zone)}</span>,
                   },
                   {
                     id: 'closes',
                     term: t('microclimates.next.sheet.closes'),
-                    value: <span className="font-mono tabular-nums">{instant(t, detail.endTime, locale)}</span>,
+                    value: <span className="font-mono tabular-nums">{instant(t, detail.endTime, locale, zone)}</span>,
                   },
                   {
                     id: 'answer',
@@ -350,7 +381,7 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
                   note={
                     isClosed
                       ? t('microclimates.next.detail.afterResultsClosed')
-                      : t('microclimates.next.detail.afterResults', { date: shortDay(detail.endTime, locale) })
+                      : t('microclimates.next.detail.afterResults', { date: shortDay(detail.endTime, locale, zone) })
                   }
                 />
               </ul>
@@ -383,6 +414,19 @@ function DetailView({ state, detail }: { state: MicroclimateDetailState; detail:
             onConfirm={async () => {
               await state.close()
               setConfirmClose(false)
+            }}
+          />
+          <ConfirmationDialog
+            open={confirmDiscard}
+            onOpenChange={setConfirmDiscard}
+            title={t('microclimates.next.detail.discardConfirmTitle')}
+            description={t('microclimates.next.detail.discardConfirmBody', { title })}
+            confirmText={t('microclimates.next.detail.discardDraft')}
+            cancelText={t('common.cancel')}
+            variant="destructive"
+            onConfirm={async () => {
+              await state.discard()
+              setConfirmDiscard(false)
             }}
           />
           <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} companyId={detail.companyId} onInvite={state.invite} />
@@ -452,17 +496,26 @@ function InvitationsCard({
       )}
       {list && list.invitations.length > 0 && (
         <>
-          <ul className="m-0 flex list-none flex-col p-0">
-            {list.invitations.slice(0, 8).map((invitation) => (
-              <li key={invitation.id} className="flex items-center justify-between gap-3 border-t border-line-light py-2">
-                <span className="truncate text-base text-fg-primary">{invitation.email}</span>
-                <Chip label={rungLabel(t, invitation.status)} />
-              </li>
-            ))}
-          </ul>
-          {list.invitations.length > 8 && (
-            <span className="text-sm text-fg-tertiary">{t('microclimates.next.detail.invitationsMore', { count: list.invitations.length - 8 })}</span>
-          )}
+          {/* The whole list (G23), scrolled inside the card rather than cut at eight rows. A
+              region with a name and a tab stop, so a keyboard can scroll it too. */}
+          <div
+            role="region"
+            aria-label={t('microclimates.next.detail.invitationsListLabel', { count: list.invitations.length })}
+            tabIndex={0}
+            className="max-h-96 overflow-y-auto rounded-md"
+          >
+            <ul className="m-0 flex list-none flex-col p-0">
+              {list.invitations.map((invitation) => (
+                <li key={invitation.id} className="flex items-center justify-between gap-3 border-t border-line-light py-2">
+                  <span className="min-w-0 truncate text-base text-fg-primary">{invitation.email}</span>
+                  <Chip label={rungLabel(t, invitation.status)} />
+                </li>
+              ))}
+            </ul>
+          </div>
+          <span className="text-sm text-fg-tertiary">
+            {t('microclimates.next.detail.invitationsShowing', { shown: list.invitations.length, total: list.summary.total })}
+          </span>
           {canInvite && (
             <span className="self-start">
               <Button variant="outline" size="canvas" onClick={onInvite}>

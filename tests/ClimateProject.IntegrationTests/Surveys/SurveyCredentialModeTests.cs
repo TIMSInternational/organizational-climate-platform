@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -172,13 +173,52 @@ public class SurveyCredentialModeTests : IAsyncLifetime
         var client = await AdminAsync();
         await SetCompanyModeAsync(client, CredentialModes.PerSurvey);
 
-        // An empty PUT is how this product reads company settings -- there is no GET.
-        var response = await client.PutAsJsonAsync(
-            $"/admin/companies/{_companyId}/settings",
-            new UpdateCompanySettingsRequest(null, null, null, null, null, null, null, null, null, null, null, null));
+        // Read through the GET, which every screen now uses instead of an empty PUT.
+        var response = await client.GetAsync($"/admin/companies/{_companyId}/settings");
         response.EnsureSuccessStatusCode();
 
         var settings = await response.Content.ReadFromJsonAsync<CompanySettingsResponse>();
         Assert.Equal(CredentialModes.PerSurvey, settings!.Settings.CredentialMode);
+    }
+
+    /// <summary>
+    /// The mode is frozen at create. An update that names it used to answer 200 and change
+    /// nothing, so a caller could believe a survey had moved to one code per person while its
+    /// roster stayed on one shared account. Now it is refused, and nothing else in the same
+    /// request is applied.
+    /// </summary>
+    [Theory]
+    [InlineData(CredentialModes.PerSurvey)]
+    [InlineData(CredentialModes.Shared)]
+    public async Task An_update_that_names_the_credential_mode_is_refused_and_changes_nothing(string mode)
+    {
+        var client = await AdminAsync();
+        var created = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(_companyId));
+        Assert.Equal(CredentialModes.Shared, created.Settings.CredentialMode);
+
+        var response = await client.PutAsJsonAsync($"/surveys/{created.Id}", new UpdateSurveyRequest(
+            Description: LocalizedInput.FromBare("Should not be saved"),
+            Settings: new SurveySettingsInput(CredentialMode: mode)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("credential_mode_frozen", body, StringComparison.Ordinal);
+        Assert.Contains("credentialMode", body, StringComparison.Ordinal);
+        Assert.Equal(CredentialModes.Shared, await StoredModeAsync(created.Id));
+        var reread = await client.GetFromJsonAsync<SurveyDetail>($"/surveys/{created.Id}");
+        Assert.NotEqual("Should not be saved", reread!.Description);
+    }
+
+    [Fact]
+    public async Task An_update_that_does_not_name_the_mode_still_succeeds()
+    {
+        var client = await AdminAsync();
+        var created = await SurveyTestHarness.CreateSurveyAsync(client, SurveyTestHarness.MinimalRequest(_companyId));
+
+        var response = await client.PutAsJsonAsync($"/surveys/{created.Id}", new UpdateSurveyRequest(
+            Settings: new SurveySettingsInput(ShowProgress: false)));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(CredentialModes.Shared, await StoredModeAsync(created.Id));
     }
 }

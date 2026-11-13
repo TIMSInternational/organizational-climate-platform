@@ -16,6 +16,7 @@ import {
   MobileNav,
   SearchTrigger,
   ShellControls,
+  PoweredByNexadev,
   SidebarBrand,
   SidebarUserMenu,
 } from '../components/layout'
@@ -145,6 +146,9 @@ function AdminShell() {
               collapsed={collapsed}
               onExpand={() => setCollapsed(false)}
             />
+            {/* The builder's credit, under the account. Expanded only: the collapsed rail is
+                52px, too narrow for the sentence, and the mark alone would be unexplained. */}
+            {collapsed ? null : <PoweredByNexadev className="px-4 pb-3 pt-1" />}
           </div>
         </aside>
         )}
@@ -373,7 +377,15 @@ function AdminShell() {
           390px screen, all of them this page. Most of a mass-invited workforce answers
           on a phone, so this is the copy of the chrome that matters most. */}
       {perUserOnly ? null : (
-        <MobileNav sections={sections} footer={<ShellControls onSignOut={handleSignOut} />} />
+        <MobileNav
+          sections={sections}
+          footer={
+            <>
+              <ShellControls onSignOut={handleSignOut} />
+              <PoweredByNexadev className="pt-2" />
+            </>
+          }
+        />
       )}
 
       {/* Last in the shell, outside every column, because it portals to the body

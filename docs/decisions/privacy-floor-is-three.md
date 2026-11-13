@@ -1,5 +1,11 @@
 # Decision: the privacy floor is 3 respondents, not 5
 
+> **Two later rulings moved where the floor applies, not the number.** 2026-10-15 (client): a
+> single department or single demographic value is shown to administrators from **1**
+> respondent. 2026-10-21 (Federico): a leader or supervisor reading their own team is held to
+> **3** again. Both are recorded at the end of this file; the current map is
+> [Where the floor of 3 applies today](#where-the-floor-of-3-applies-today).
+
 Ruled by Federico 2026-10-13: *"the umbral de privacidad number is actually 3 — change it
 platform-wide."* Scope confirmed the same day: segments, the dashboard, exports, microclimates
 and the whole-survey minimum. Recorded with the code that implements it.
@@ -9,8 +15,10 @@ and the whole-survey minimum. Recorded with the code that implements it.
 Two constants carry it on the API side and everything else derives from them:
 
 - `DemographicSnapshotPrivacy.MinimumGroupSize` — feeds `SurveyResponsePrivacy.MinimumCohortSize`
-  (write-time cohort floor), `SurveyResultsPrivacy.MinimumSegmentRespondents` (read-time segments
-  and the complement rule) and `DashboardEndpoints.DepartmentCountFloor`.
+  (write-time cohort floor), `SurveyResultsPrivacy.MinimumSegmentRespondents` (read-time crosses
+  and the complement rule) and `DashboardEndpoints.DepartmentCountFloor` (the leader's and
+  supervisor's team view — see "Where the floor of 3 applies today" below; between 2026-10-15
+  and 2026-10-21 it derived from the single-segment floor of 1 instead).
 - `SurveyResultsPrivacy.MinimumRespondents` — the whole-survey floor.
 
 Two on the web side: `ANONYMITY_FLOOR` (`components/charts/suppression.ts`) and
@@ -61,3 +69,57 @@ Three screens deliberately do **not** read the platform constant. `ClimateTrends
 (`minimumGroupSize`), because a company may be held to a HIGHER floor than the platform minimum.
 Their tests use a server floor above the minimum, not the constant — binding them to the constant
 would pass for a screen that ignored the payload entirely, deleting half the rule.
+
+## 2026-10-15 — a single department or demographic value is shown from 1 respondent
+
+**Ruled by the client** (ESPH call), in these words, quoted in code at
+`SurveyResultsPrivacy.MinimumSingleSegmentRespondents`
+(`src/ClimateProject.Application/Surveys/SurveyResultsPrivacy.cs`): *"siempre deberían enseñar los
+resultados de los climas de los departamentos, aunque sea una persona… El demográfico en general
+le tiene que entregar un resultado, así sea una persona… Esa condicionante de 3 es para los cruces
+de variables de demográficos, no para los resultados individuales de los demográficos. No debería
+bloquearse nunca."*
+
+`MinimumSingleSegmentRespondents = 1` governs one dimension at a time on the administrators'
+results, climate-map, trends and report surfaces. The floor of 3 stayed on crosses
+(`SurveyResultsFilter.MayDisclose`), the whole survey (`MinimumRespondents`) and public links
+(`PublicReportDocument`, re-floored to at least `MinimumSegmentRespondents`). The cost is
+recorded beside the constant: a department where one of twenty answered prints that person's
+answers, and the roster of who finished can identify them.
+
+## 2026-10-21 — a leader's or supervisor's own team is held to 3
+
+**Ruled by Federico. Owner: Federico.** The 2026-10-15 ruling is about **administrators** reading
+results. A leader or supervisor reading their **own** team is a different reader: they know the
+people on it by name, so a reading of one or two is those people's answers, and they cannot open
+the results screens (`SurveyEndpoints.CanAdminister`) where the 10-15 ruling is exercised.
+Recorded in full in [`who-may-see-an-individual-answer.md`](who-may-see-an-individual-answer.md) §7.
+
+`DashboardEndpoints.DepartmentCountFloor` is `SurveyResultsPrivacy.MinimumSegmentRespondents`
+again and governs, on `GET /dashboard/department-admin` and `/department-admin/export`: the team's
+and the company's response count per open survey (null under 3, zero included), the running total
+(sums only surveys the team answered at 3 or more), the team's climate reading (withheld under 3,
+identical to a team that did not answer), the rest-of-company guard (the organisation side is
+withheld when 1 or 2 people answered outside the team, so its mean cannot be differenced into
+theirs), and the `minimumGroupSize` the payload reports (3; it used to say 1 while 3 withheld).
+The export's own second lock, `DashboardExport.TeamCountFloor`, is raised to match. So is the
+screen's, `countFloor` in `web/src/features/dashboard/next/team/compose.ts`: with no closed survey
+yet (no `minimumGroupSize` on the payload — ESPH's state in October 2026) both had fallen back to 1
+and printed "menos de 1 respuestas" beside a count withheld at 3.
+
+**An administrator calling the team view gets the same floor of 3.** One floor per page, so the
+screen and its export cannot differ by caller; an administrator reads a small department under the
+10-15 ruling on the administrator's own screens. No web route sends an administrator to the team
+view. Tests: `DepartmentDashboardFloorTests`.
+
+## Where the floor of 3 applies today
+
+| Surface | Floor | Constant |
+|---|---|---|
+| Whole survey, any reader | 3 | `SurveyResultsPrivacy.MinimumRespondents` |
+| Cross of 2+ selectors, administrators | 3, with complement withholding | `MinimumSegmentRespondents`, `SurveyResultsFilter.MayDisclose` |
+| Public share link | 3, with complement withholding | `PublicReportDocument` (`Math.Max(MinimumSegmentRespondents, storedFloor)`) |
+| Leader / supervisor team view and export (every caller) | 3 | `DashboardEndpoints.DepartmentCountFloor` |
+| Employee's last outcome | 3 | `MinimumSegmentRespondents` (`DashboardEndpoints.EmployeeLastOutcomeAsync`) |
+| Single department / single demographic value, administrators | **1** | `MinimumSingleSegmentRespondents` (2026-10-15) |
+| Word in a word cloud | 2 | `MinimumWordRespondents` |

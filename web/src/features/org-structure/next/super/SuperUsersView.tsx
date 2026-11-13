@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
-import { ArrowRight, Check, Link2, Mail, Search, Shield, Upload, UserPlus } from 'lucide-react'
+import { ArrowRight, Check, Link2, Mail, Plus, Search, Shield, Upload, UserPlus } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageTopBar } from '../../../../components/layout'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
@@ -25,10 +25,16 @@ import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import { createInvitation, createShareableLink, resendInvitation, type Invitation } from '../../api/invitations'
-import { updateUser, updateUserRole, type User } from '../../api/users'
+import { updateUser, updateUserRole, type User, type UserEmailChange } from '../../api/users'
+import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
+import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
+import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { ErasePerson } from '../../components/ErasePerson'
+import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
+import AddPersonForm from '../admin/AddPersonForm'
 import InvitationForm, { type InvitationFormValues } from '../../components/InvitationForm'
 import InvitationList from '../../components/InvitationList'
 import ShareableLinkPanel from '../../components/ShareableLinkPanel'
@@ -57,7 +63,7 @@ const FACET_KEY: Readonly<Record<string, string>> = {
   employee: 'superadmin.next.users.roleEmployee',
 }
 
-type OpenPanel = 'none' | 'invite' | 'import'
+type OpenPanel = 'none' | 'invite' | 'import' | 'add'
 
 /**
  * `/admin/companies/:companyId/users` for a super administrator — the canvas's *Usuarios
@@ -156,6 +162,13 @@ export default function SuperUsersView() {
                 <Upload aria-hidden="true" />
                 {t('superadmin.next.users.bulkImport')}
               </Button>
+              {/* One person, typed, mailing nothing. A super administrator — every TIMS operator —
+                  had only the bulk import for a single new hire: the form lived in the company
+                  admin's view alone (docs/audits/2026-11-08-operator-ui-walkthrough.md, A2). */}
+              <Button type="button" variant="outline" onClick={() => setOpen(open === 'add' ? 'none' : 'add')}>
+                <Plus aria-hidden="true" />
+                {t('users.next.add.action')}
+              </Button>
               <Button type="button" variant="primary" onClick={() => setOpen(open === 'invite' ? 'none' : 'invite')}>
                 <UserPlus aria-hidden="true" />
                 {t('superadmin.next.users.invite')}
@@ -177,6 +190,20 @@ export default function SuperUsersView() {
               <InvitationForm allowCompanyAdminSetup onSubmit={handleCreateInvitation} />
               <ShareableLinkPanel onCreate={handleCreateShareableLink} />
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* The importer's own single-row route commits it, so the account is shaped exactly as an
+          imported one: the company's language, and keyless in a per-survey company. */}
+      <Dialog open={open === 'add'} onOpenChange={(next) => setOpen(next ? 'add' : 'none')}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto" closeLabel={t('superadmin.next.users.invitations.close')}>
+          <DialogHeader>
+            <DialogTitle>{t('users.next.add.action')}</DialogTitle>
+            <DialogDescription>{t('users.next.add.meta')}</DialogDescription>
+          </DialogHeader>
+          {companyId && (
+            <AddPersonForm baseUrl={baseUrl} companyId={companyId} departments={state.departments} onAdded={state.reload} />
           )}
         </DialogContent>
       </Dialog>
@@ -249,6 +276,8 @@ export default function SuperUsersView() {
         <EditPerson
           key={editing.id}
           user={editing}
+          people={state.users}
+          companyId={companyId}
           departments={state.departments}
           canAssignRoles={capabilities.canAssignRoles}
           onClose={() => setEditing(null)}
@@ -267,6 +296,9 @@ export default function SuperUsersView() {
         <LoadingRegion loading={state.status === 'loading'} label={t('common.loading')}>
           {state.status === 'loading' ? (
             <SkeletonText lines={6} />
+          ) : state.users.length === 0 ? (
+            // A company with nobody in it is not a filter that matched nothing.
+            <EmptyState title={t('superadmin.next.users.emptyCompany')} description={t('superadmin.next.users.emptyCompanyHint')} />
           ) : visible.length === 0 ? (
             <EmptyState title={t('superadmin.next.users.empty')} />
           ) : (
@@ -483,12 +515,16 @@ function RosterFooter({
 
 function EditPerson({
   user,
+  people,
+  companyId,
   departments,
   canAssignRoles,
   onClose,
   onReload,
 }: {
   user: User
+  people: readonly User[]
+  companyId: string | undefined
   departments: readonly Department[]
   canAssignRoles: boolean
   onClose: () => void
@@ -500,28 +536,56 @@ function EditPerson({
   const [role, setRole] = useState(user.role)
   const [departmentId, setDepartmentId] = useState(user.departmentId ?? '')
   const [isActive, setIsActive] = useState(user.isActive)
+  const [email, setEmail] = useState(user.email)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Set when a save changed the address; the panel stays open to say what that did and did not do.
+  const [emailChange, setEmailChange] = useState<{ change: UserEmailChange; current: string } | null>(null)
+  const [confirmingDeactivation, setConfirmingDeactivation] = useState(false)
+  const details = usePersonDetails(baseUrl, user, companyId)
   const ids = { name: useId(), email: useId(), role: useId(), department: useId(), active: useId() }
-  // The API can move a person to a department but not out of one (`UpdateUserRequest`
-  // carries a department only when set), so "none" is offered only to someone who has none.
+  // "Sin departamento" is offered to everyone: choosing it on someone who has one sends
+  // `clearDepartment` (`UpdateUserRequest.ClearDepartment`), the explicit unset a null cannot say.
   const options = departments.filter((unit) => unit.isActive || unit.id === user.departmentId)
 
+  // Deactivating is confirmed first, in a dialog that says what happens to their codes (G5).
+  function requestSave() {
+    if (user.isActive && !isActive) setConfirmingDeactivation(true)
+    else void save()
+  }
+
   async function save() {
+    const extra = details.changes()
+    if (extra.missing) {
+      setError(t('users.next.edit.demographicRequired', { field: extra.missing }))
+      return
+    }
+    if (extra.invalid) {
+      setError(t('users.next.edit.demographicNumber', { field: extra.invalid }))
+      return
+    }
     setSaving(true)
     setError(null)
     try {
       // Same sequence as `UsersListPage.handleUpdate`: the profile, then the role — two
       // requests with no transaction between them, so the roster reloads whatever happened.
-      await updateUser(baseUrl, user.id, {
+      const nextEmail = email.trim()
+      const updated = await updateUser(baseUrl, user.id, {
         name: name.trim(),
         isActive,
-        ...(departmentId && departmentId !== user.departmentId ? { departmentId } : {}),
+        ...departmentChange(user, departmentId),
+        ...(nextEmail.toLowerCase() !== user.email.toLowerCase() ? { email: nextEmail } : {}),
+        ...extra.input,
       })
       if (canAssignRoles && role !== user.role) await updateUserRole(baseUrl, user.id, role)
-      onClose()
+      if (updated.emailChange) {
+        setEmailChange({ change: updated.emailChange, current: updated.email })
+        setEmail(updated.email)
+      } else {
+        onClose()
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('superadmin.next.users.saveFailed'))
+      setError(updateErrorText(t, err, 'superadmin.next.users.saveFailed'))
     } finally {
       setSaving(false)
       onReload()
@@ -550,17 +614,28 @@ function EditPerson({
           </AlertDescription>
         </Alert>
       )}
+      {emailChange && <EmailChangeOutcome change={emailChange.change} current={emailChange.current} />}
       <div className="grid grid-cols-1 items-start gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
         <Field fieldLabel={t('superadmin.next.users.name')} htmlFor={ids.name}>
           <Input id={ids.name} value={name} onChange={(event) => setName(event.target.value)} className="w-full" />
         </Field>
-        <Field fieldLabel={t('superadmin.next.users.email')} htmlFor={ids.email} helper={t('superadmin.next.users.emailHelper')}>
+        <Field
+          fieldLabel={t('superadmin.next.users.email')}
+          htmlFor={ids.email}
+          helper={t('users.next.edit.emailHelper')}
+          // Two columns on the wide grid: editable now, and one column cut a corrected address
+          // (`luis.mora@meridiano-correo.cr`) mid-domain.
+          className="xl:col-span-2"
+        >
           <div data-slot="email-field" className="flex h-control-lg items-center gap-2 rounded-md border border-line-default bg-surface-input px-2.5">
             <Mail aria-hidden="true" className="size-3.5 shrink-0 text-fg-tertiary" />
             <input
               id={ids.email}
-              readOnly
-              value={user.email}
+              type="email"
+              autoComplete="off"
+              spellCheck={false}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               className="h-auto w-full min-w-0 border-0 bg-transparent p-0 font-mono text-fg-primary"
             />
           </div>
@@ -584,7 +659,7 @@ function EditPerson({
           helper={t('superadmin.next.users.departmentHelper', { floor: ANONYMITY_FLOOR })}
         >
           <CanvasSelect id={ids.department} className="w-full" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-            {!user.departmentId && <option value="">{t('superadmin.next.users.noDepartment')}</option>}
+            <option value="">{t('superadmin.next.users.noDepartment')}</option>
             {options.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
@@ -593,7 +668,22 @@ function EditPerson({
           </CanvasSelect>
         </Field>
       </div>
+      <PersonDetailsFields user={user} people={people} state={details} />
       <ResendCredentials user={user} baseUrl={baseUrl} />
+      <ResetPassword user={user} baseUrl={baseUrl} allowed details={details} />
+      <DeactivationConfirm
+        open={confirmingDeactivation}
+        name={user.name}
+        onOpenChange={setConfirmingDeactivation}
+        onConfirm={save}
+      />
+      <ErasePerson
+        user={user}
+        onErased={() => {
+          onReload()
+          onClose()
+        }}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-light pt-2.5">
         <label htmlFor={ids.active} className="m-0 inline-flex items-center gap-2 text-xs text-fg-secondary">
           <Switch id={ids.active} checked={isActive} onCheckedChange={setIsActive} className="data-[state=checked]:bg-accent-green" />
@@ -603,9 +693,9 @@ function EditPerson({
         </label>
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-            {t('common.cancel')}
+            {emailChange ? t('users.next.edit.done') : t('common.cancel')}
           </Button>
-          <Button type="button" variant="outline" onClick={() => void save()} disabled={saving || !name.trim()}>
+          <Button type="button" variant="outline" onClick={requestSave} disabled={saving || !name.trim() || !email.trim()}>
             <Check aria-hidden="true" />
             {t('superadmin.next.users.save')}
           </Button>

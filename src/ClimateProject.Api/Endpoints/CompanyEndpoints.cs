@@ -17,7 +17,15 @@ public static class CompanyEndpoints
         group.MapPost("", CreateAsync);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
+        group.MapGet("/{id:guid}/settings", GetSettingsAsync);
         group.MapPut("/{id:guid}/settings", UpdateSettingsAsync);
+        // An uploaded logo (walkthrough B4, 2026-11-08): until this, every new client's logo was a
+        // file a developer committed under web/public/brand/ and deployed.
+        group.MapPut("/{id:guid}/logo", UploadLogoAsync);
+
+        // Unauthenticated on purpose: respondents' screens and the access emails show the logo. The
+        // web reaches it same-origin through a rewrite of /logos/{id}, which is what LogoUrl stores.
+        app.MapGet("/public/company-logos/{id:guid}", ServeLogoAsync).AllowAnonymous();
         group.MapGet("/{id:guid}/result-bands", GetResultBandsAsync);
     }
 
@@ -34,7 +42,7 @@ public static class CompanyEndpoints
 
         var companies = await db.Companies
             .OrderByDescending(c => c.CreatedAt)
-            .Select(c => new CompanyListItem(c.Id, c.Name, c.EmailDomain, c.Industry, c.Size, c.Country, c.SubscriptionTier, c.CreatedAt))
+            .Select(c => new CompanyListItem(c.Id, c.Name, c.EmailDomain, c.Industry, c.Size, c.Country, c.SubscriptionTier, c.CreatedAt, c.Settings.Language))
             .ToListAsync(cancellationToken);
 
         return Results.Ok(new CompanyListResponse(companies));
@@ -64,7 +72,7 @@ public static class CompanyEndpoints
         var domain = request.EmailDomain.Trim().ToLowerInvariant();
         if (!CompanyValidation.IsValidDomain(domain))
         {
-            return Results.Json(new { message = $"Invalid domain format: {domain}" }, statusCode: 400);
+            return Results.Json(new { message = $"Invalid domain format: {domain}", code = AdminRefusals.CompanyDomainInvalid }, statusCode: 400);
         }
 
         if (!CompanyValidation.ValidSizes.Contains(request.Size))
@@ -81,7 +89,7 @@ public static class CompanyEndpoints
         var existing = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain, cancellationToken);
         if (existing is not null)
         {
-            return Results.Json(new { message = $"Domain already exists: {domain}" }, statusCode: 409);
+            return Results.Json(new { message = $"Domain already exists: {domain}", code = AdminRefusals.CompanyDomainTaken }, statusCode: 409);
         }
 
         var company = new Company
@@ -153,13 +161,13 @@ public static class CompanyEndpoints
             {
                 if (!CompanyValidation.IsValidDomain(domain))
                 {
-                    return Results.Json(new { message = $"Invalid domain format: {domain}" }, statusCode: 400);
+                    return Results.Json(new { message = $"Invalid domain format: {domain}", code = AdminRefusals.CompanyDomainInvalid }, statusCode: 400);
                 }
 
                 var existing = await db.Companies.FirstOrDefaultAsync(c => c.EmailDomain == domain && c.Id != id, cancellationToken);
                 if (existing is not null)
                 {
-                    return Results.Json(new { message = "Domain already exists" }, statusCode: 409);
+                    return Results.Json(new { message = "Domain already exists", code = AdminRefusals.CompanyDomainTaken }, statusCode: 409);
                 }
 
                 company.EmailDomain = domain;
@@ -216,7 +224,7 @@ public static class CompanyEndpoints
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
-        if (!Roles.Admin.Contains(currentUser.Role) || (currentUser.Role != Roles.SuperAdmin && currentUser.CompanyId != id.ToString()))
+        if (!CanManageSettings(currentUser.Role, currentUser.CompanyId, id))
         {
             return Results.Forbid();
         }
@@ -287,12 +295,125 @@ public static class CompanyEndpoints
 
         await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(new CompanySettingsResponse(
-            company.Id,
-            new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language, company.Settings.CredentialMode),
-            new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss),
-            ResultBandsDto.From(company.Settings)));
+        return Results.Ok(ToSettingsResponse(company));
     }
+
+    /// <summary>
+    /// The company's settings, read without writing. Every screen that shows them used to
+    /// read them by sending an empty <c>PUT</c>, so each page view was a write. Same rule as
+    /// the PUT: a super admin reads any company, a company admin only their own, nobody else.
+    /// </summary>
+    private static async Task<IResult> GetSettingsAsync(
+        Guid id,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!CanManageSettings(currentUser.Role, currentUser.CompanyId, id))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (company is null)
+        {
+            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+        }
+
+        return Results.Ok(ToSettingsResponse(company));
+    }
+
+    /// <summary>
+    /// <c>PUT /admin/companies/{id}/logo</c>: the request body IS the image (PNG, JPEG or WebP, at
+    /// most <see cref="CompanyLogoValidation.MaxBytes"/>). Stores it, and points the company's
+    /// branding at its versioned same-origin path. Who may: whoever may change the settings.
+    /// </summary>
+    private static async Task<IResult> UploadLogoAsync(
+        Guid id,
+        HttpRequest request,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        if (!CanManageSettings(currentUser.Role, currentUser.CompanyId, id))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (company is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (request.ContentLength is > CompanyLogoValidation.MaxBytes)
+        {
+            return Results.Json(new { message = "The logo is larger than 512 KB.", code = "logo_too_large" }, statusCode: 400);
+        }
+
+        using var buffer = new MemoryStream();
+        await request.Body.CopyToAsync(buffer, cancellationToken);
+        if (buffer.Length > CompanyLogoValidation.MaxBytes)
+        {
+            return Results.Json(new { message = "The logo is larger than 512 KB.", code = "logo_too_large" }, statusCode: 400);
+        }
+
+        var content = buffer.ToArray();
+        var contentType = CompanyLogoValidation.ContentTypeOf(content);
+        if (contentType is null)
+        {
+            return Results.Json(
+                new { message = "The logo must be a PNG, JPEG or WebP image.", code = "logo_not_an_image" },
+                statusCode: 400);
+        }
+
+        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(content));
+        var logo = await db.CompanyLogos.FirstOrDefaultAsync(l => l.CompanyId == id, cancellationToken);
+        if (logo is null)
+        {
+            logo = new CompanyLogo { CompanyId = id };
+            db.CompanyLogos.Add(logo);
+        }
+
+        logo.Content = content;
+        logo.ContentType = contentType;
+        logo.Sha256 = sha;
+        logo.UpdatedAt = DateTimeOffset.UtcNow;
+        company.Branding.LogoUrl = CompanyLogoValidation.PathFor(id, sha);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new { logoUrl = company.Branding.LogoUrl, contentType, bytes = content.Length });
+    }
+
+    /// <summary>
+    /// <c>GET /public/company-logos/{id}</c>: the stored image. Versioned by <c>?v=</c>, so it may be
+    /// cached for a year; served so that the bytes can never be read as a page.
+    /// </summary>
+    private static async Task<IResult> ServeLogoAsync(Guid id, HttpContext context, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    {
+        var logo = await db.CompanyLogos.AsNoTracking().FirstOrDefaultAsync(l => l.CompanyId == id, cancellationToken);
+        if (logo is null)
+        {
+            return Results.NotFound();
+        }
+
+        context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        context.Response.Headers.ETag = $"\"{logo.Sha256}\"";
+        context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
+        return Results.File(logo.Content, logo.ContentType);
+    }
+
+    private static bool CanManageSettings(string role, string? companyId, Guid id) =>
+        Roles.Admin.Contains(role) && (role == Roles.SuperAdmin || companyId == id.ToString());
+
+    private static CompanySettingsResponse ToSettingsResponse(Company company) => new(
+        company.Id,
+        new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language, company.Settings.CredentialMode),
+        new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss),
+        ResultBandsDto.From(company.Settings));
 
     /// <summary>
     /// The company's result bands, for every screen that colours a mean — so every member of

@@ -47,15 +47,18 @@ interface Call {
 }
 let calls: Call[] = []
 
-function serve({ invitations = 'ok' as 'ok' | 'fail' } = {}) {
+function serve({ invitations = 'ok' as 'ok' | 'fail', saved = {} as object, people = PEOPLE as object[] } = {}) {
   calls = []
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
     calls.push({ method, url, body: typeof init?.body === 'string' ? init.body : undefined })
     const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
-    if (method === 'PUT' && url.includes('/admin/users/')) return ok({ ...PEOPLE[1], companyId: C, managerId: null })
-    if (url.includes('/admin/users')) return ok({ users: PEOPLE })
+    if (method === 'PUT' && url.includes('/admin/users/')) return ok({ ...PEOPLE[1], companyId: C, managerId: null, ...saved })
+    if (method === 'POST' && url.includes('/admin/users/bulk-import/rows')) {
+      return ok({ rows: [{ rowNumber: 1, errors: [], issues: [] }], successCount: 1, errorCount: 0, delivery: 'none' })
+    }
+    if (url.includes('/admin/users')) return ok({ users: people })
     if (url.includes('/admin/invitations')) {
       return invitations === 'ok' ? ok({ invitations: [] }) : Promise.resolve(new Response(null, { status: 500 }))
     }
@@ -144,16 +147,66 @@ describe('SuperUsersView', () => {
     expect(JSON.parse(roleChange.body ?? '')).toEqual({ role: 'company_admin' })
   })
 
-  it('offers "no department" only to someone without one — the API cannot take a department away', async () => {
+  it('corrects an address and says what that did: nothing sent, no codes left, an old invitation cancelled', async () => {
+    serve({
+      saved: {
+        email: 'luis.mora@correo-real.cr',
+        emailChange: { previousEmail: 'luis@meridiano.test', unusedSurveyCodes: 0, pendingInvitationsExpired: 1 },
+      },
+    })
+    renderPage(`/admin/companies/${C}/users?editar=luis`)
+    await screen.findByDisplayValue('Luis Mora')
+    const email = screen.getByLabelText(copy.email)
+    await userEvent.clear(email)
+    await userEvent.type(email, 'luis.mora@correo-real.cr')
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+
+    const edit = en.users.next.edit
+    expect(
+      await screen.findByText(edit.emailChanged.replace('{previous}', 'luis@meridiano.test').replace('{current}', 'luis.mora@correo-real.cr')),
+    ).toBeTruthy()
+    expect(screen.getByText(edit.emailCodesNone)).toBeTruthy()
+    expect(screen.getByText(edit.emailInvitationsExpiredOne)).toBeTruthy()
+    const profile = calls.find((call) => call.method === 'PUT')!
+    expect(JSON.parse(profile.body ?? '')).toMatchObject({ email: 'luis.mora@correo-real.cr' })
+  })
+
+  it('offers "no department" to everyone, and taking a department away sends an explicit clear', async () => {
     serve()
     renderPage()
-    await userEvent.click(await screen.findByRole('button', { name: copy.editNamed.replace('{name}', 'Ana Rojas') }))
-    const options = () =>
-      [...(screen.getByLabelText(new RegExp(`^${copy.department}`)) as HTMLSelectElement).options].map((option) => option.textContent)
-    expect(options()).toContain(copy.noDepartment)
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    await userEvent.click(screen.getByRole('button', { name: copy.editNamed.replace('{name}', 'Luis Mora') }))
-    expect(options()).not.toContain(copy.noDepartment)
+    await userEvent.click(await screen.findByRole('button', { name: copy.editNamed.replace('{name}', 'Luis Mora') }))
+    const department = screen.getByLabelText(new RegExp(`^${copy.department}`)) as HTMLSelectElement
+    expect([...department.options].map((option) => option.textContent)).toContain(copy.noDepartment)
+    await userEvent.selectOptions(department, '')
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+    await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+    const profile = calls.find((call) => call.method === 'PUT')!
+    const body = JSON.parse(profile.body ?? '') as Record<string, unknown>
+    expect(body).toMatchObject({ clearDepartment: true })
+    expect(body).not.toHaveProperty('departmentId')
+  })
+
+  it('asks before deactivating and names what happens to their survey codes', async () => {
+    serve()
+    renderPage(`/admin/companies/${C}/users?editar=luis`)
+    await screen.findByDisplayValue('Luis Mora')
+    await userEvent.click(screen.getByRole('switch'))
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText(en.users.next.edit.deactivateBody)).toBeTruthy()
+    expect(calls.some((call) => call.method === 'PUT')).toBe(false)
+    await userEvent.click(within(dialog).getByRole('button', { name: en.users.next.edit.deactivateConfirm }))
+    await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+    expect(JSON.parse(calls.find((call) => call.method === 'PUT')!.body ?? '')).toMatchObject({ isActive: false })
+  })
+
+  it('offers a super administrator the password reset on an administrator too', async () => {
+    serve()
+    renderPage(`/admin/companies/${C}/users?editar=ana`)
+    await screen.findByDisplayValue('Ana Rojas')
+    // Drawn only once the person's detail read settles (`ResetPassword`), a second request
+    // that can land after the name does.
+    expect(await screen.findByRole('button', { name: en.users.next.edit.resetPassword })).toBeTruthy()
   })
 
   it('writes "never signed in" in words rather than leaving a blank date', async () => {
@@ -171,7 +224,7 @@ describe('SuperUsersView', () => {
     expect(screen.queryByText(copy.invitations.noneMeta)).toBeNull()
   })
 
-  it('draws the read-only email as an input like the name beside it, with its mail glyph and the reason it cannot change', async () => {
+  it('draws the email as an editable input like the name beside it, with its mail glyph and what changing it does', async () => {
     serve()
     renderPage(`/admin/companies/${C}/users?editar=luis`)
     await screen.findByDisplayValue('Luis Mora')
@@ -179,7 +232,8 @@ describe('SuperUsersView', () => {
     expect(field.className.split(/\s+/)).toContain('bg-surface-input')
     expect(field.className.split(/\s+/)).not.toContain('bg-surface-icon-box')
     expect(field.querySelector('.lucide-mail')).not.toBeNull()
-    expect(screen.getByText(en.superadmin.next.users.emailHelper)).toBeTruthy()
+    expect((field.querySelector('input') as HTMLInputElement).readOnly).toBe(false)
+    expect(screen.getByText(en.users.next.edit.emailHelper)).toBeTruthy()
   })
 
   it('opens the edit panel on the person the link names (?editar=), and on nobody for an id outside the tenant', async () => {
@@ -191,5 +245,45 @@ describe('SuperUsersView', () => {
     renderPage(`/admin/companies/${C}/users?editar=nobody`)
     await screen.findAllByRole('row')
     expect(screen.queryByDisplayValue('Luis Mora')).toBeNull()
+  })
+
+  /**
+   * The walkthrough's A2 (docs/audits/2026-11-08-operator-ui-walkthrough.md): a super
+   * administrator — every TIMS operator — had no way to add one person; the form lived in the
+   * company administrator's view alone.
+   */
+  it('lets a super administrator add one person through the single-row importer, mailing nothing', async () => {
+    serve()
+    renderPage()
+    await screen.findByText('Ana Rojas')
+    await userEvent.click(screen.getByRole('button', { name: en.users.next.add.action }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText(new RegExp(`^${en.users.next.add.name}`)), 'Nueva Persona')
+    await userEvent.type(within(dialog).getByLabelText(new RegExp(`^${en.users.next.add.email}`)), 'nueva@meridiano.test')
+    const before = calls.filter((call) => call.method === 'GET' && /\/admin\/users(\?|$)/.test(call.url)).length
+    await userEvent.click(within(dialog).getByRole('button', { name: en.users.next.add.submit }))
+    expect(await within(dialog).findByText(en.users.next.add.added.replace('{name}', 'Nueva Persona'))).toBeTruthy()
+    const posts = calls.filter((call) => call.method === 'POST' && call.url.includes('/admin/users/bulk-import/rows'))
+    // A preview, then the commit — both for THIS company, one row, and never with credentials.
+    expect(posts.map((call) => JSON.parse(call.body ?? '{}').preview)).toEqual([true, false])
+    for (const post of posts) {
+      const body = JSON.parse(post.body ?? '{}')
+      expect(body.companyId).toBe(C)
+      expect(body.withCredentials).toBe(false)
+      expect(body.rows).toHaveLength(1)
+      expect(body.rows[0]).toMatchObject({ name: 'Nueva Persona', email: 'nueva@meridiano.test' })
+    }
+    // The roster is read again, so the new person appears without a reload.
+    await waitFor(() =>
+      expect(calls.filter((call) => call.method === 'GET' && /\/admin\/users(\?|$)/.test(call.url)).length).toBeGreaterThan(before),
+    )
+  })
+
+  it('says a company with nobody in it has nobody yet, not that a filter matched nothing', async () => {
+    serve({ people: [] })
+    renderPage()
+    expect(await screen.findByText(copy.emptyCompany)).toBeTruthy()
+    expect(screen.getByText(copy.emptyCompanyHint)).toBeTruthy()
+    expect(screen.queryByText(copy.empty)).toBeNull()
   })
 })

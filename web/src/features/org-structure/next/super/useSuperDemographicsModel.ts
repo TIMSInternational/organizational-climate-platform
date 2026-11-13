@@ -4,6 +4,7 @@ import { getCompanyAdminDashboard } from '../../../dashboard/api/dashboard'
 import { getCompany, type CompanyDetail } from '../../api/companies'
 import { listDemographicFields, type DemographicField } from '../../api/demographicFields'
 import { listDepartments } from '../../api/departments'
+import { describeApiError } from '../../../../api/describeApiError'
 
 export interface SuperDemographicsState {
   status: 'loading' | 'ready' | 'error'
@@ -70,7 +71,7 @@ export function useSuperDemographicsModel(companyId: string | undefined): SuperD
         setStatus('ready')
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : t('errors.generic'))
+        setError(describeApiError(err, t))
         setStatus('error')
       }
     }

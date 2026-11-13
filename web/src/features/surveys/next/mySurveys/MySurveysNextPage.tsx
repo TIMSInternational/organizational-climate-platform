@@ -11,7 +11,7 @@ import {
   SkeletonText,
 } from '../../../../components/ui'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
-import { calendarDay } from '../../../../lib/calendarDay'
+import { instantDay } from '../../../../lib/calendarDay'
 import { useCompanyScope } from '../../../../company-context'
 import { hasAnswered } from '../../respondReceipt'
 import { useRespondentShell } from '../../../../navigation/useRespondentShell'
@@ -237,7 +237,7 @@ function eyebrowFor(departmentName: string | null, respondent: boolean): string 
 
 /** `6 preguntas · unos 4 minutos · cierra el 10 oct`, the line Home prints for the same row. */
 function readingLine(row: MySurveyRow, t: TranslateFn, locale: string): string {
-  const date = calendarDay(Date.parse(row.closesAt), locale)
+  const date = instantDay(Date.parse(row.closesAt), locale)
   return row.underAMinute
     ? t('employee.surveyMetaOneQuestion', { date })
     : t(byCount(row.questionCount, 'employee.surveyMetaOne', 'employee.surveyMeta'), { questions: row.questionCount, minutes: row.minutes, date })
@@ -344,7 +344,7 @@ function ClosedSurveyRow({ row }: { row: MySurveyRow }) {
             {row.name ?? t('surveys.untitled')}
           </span>
           <span className="break-words text-sm text-fg-secondary">
-            {t('employee.closedMeta', { date: calendarDay(Date.parse(row.closesAt), locale) })}
+            {t('employee.closedMeta', { date: instantDay(Date.parse(row.closesAt), locale) })}
           </span>
         </div>
       </div>
@@ -396,7 +396,7 @@ function AnsweredHereRow({ row }: { row: MySurveyRow }) {
               still open and still accepting answers, which is exactly why the row needs
               the correction beside it. */}
           <span className="break-words text-sm text-fg-secondary">
-            {t('employee.next.answeredHereMeta', { date: calendarDay(Date.parse(row.closesAt), locale) })}
+            {t('employee.next.answeredHereMeta', { date: instantDay(Date.parse(row.closesAt), locale) })}
           </span>
         </div>
       </div>

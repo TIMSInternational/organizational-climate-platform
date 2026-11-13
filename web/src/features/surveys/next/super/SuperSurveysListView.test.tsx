@@ -11,6 +11,7 @@ import { listSurveys, type SurveyListItem } from '../../api/surveys'
 import { getClimateTrends, type ClimateTrendsResponse } from '../../api/climateTrends'
 import { listCompanies } from '../../../org-structure/api/companies'
 import { getAllResponsesWorkbook } from '../../api/responseExport'
+import { getCompanyStatusWorkbook, getDeliveryAuditWorkbook } from '../../api/statusExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import SurveysListNextPage from '../list/SurveysListNextPage'
 import en from '../../../../i18n/en.json'
@@ -36,6 +37,11 @@ vi.mock('../../api/responseExport', async (importOriginal) => ({
   getAllResponsesWorkbook: vi.fn(),
 }))
 vi.mock('../../../../lib/downloadBlobFile', () => ({ downloadBlobFile: vi.fn() }))
+vi.mock('../../api/statusExport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/statusExport')>()),
+  getCompanyStatusWorkbook: vi.fn(),
+  getDeliveryAuditWorkbook: vi.fn(),
+}))
 
 function row(over: Partial<SurveyListItem>): SurveyListItem {
   return {
@@ -306,5 +312,128 @@ describe('SuperSurveysListView — the artboard\'s order, copy and the Distribuc
       await screen.findByText('Climate Survey Q4')
       expect(screen.queryByRole('button', { name: copy.exportAll })).toBeNull()
     })
+  })
+})
+
+/**
+ * The two per-company files on the super administrator's /surveys. This is the path TIMS
+ * actually uses — they hold no company claim, so the tenant page's button never reached them
+ * (`SuperSurveysListView.tsx` records why) — and it had no coverage until the picker landed.
+ */
+describe('SuperSurveysListView — the company files', () => {
+  const pickerCopy = en.surveys.next.statusWorkbook
+
+  /** Distinct `createdAt` per survey, so the sheet order asserted below is not a sort tie. */
+  const FILES_ROUND: SurveyListItem[] = [
+    row({ id: 'm-clima', title: 'Clima Organizacional', status: 'active', createdAt: '2026-01-01T00:00:00Z' }),
+    row({ id: 'm-contra', title: 'Contraloría Empresarial', status: 'closed', createdAt: '2026-02-01T00:00:00Z' }),
+    row({ id: 'm-tele', title: 'Teletrabajo', status: 'active', createdAt: '2026-03-01T00:00:00Z' }),
+    row({ id: 'm-draft', title: 'Borrador', status: 'draft', createdAt: '2026-04-01T00:00:00Z' }),
+    row({ id: 'a-other', title: 'Acme Q1', companyId: 'acme', status: 'active', createdAt: '2026-01-05T00:00:00Z' }),
+  ]
+
+  /**
+   * `model.company` is the table's Empresa filter, not the shell's company context: the files
+   * are offered once a company is named THERE. Picked through the control a reader uses.
+   */
+  async function pickCompany(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByText('Clima Organizacional')
+    await user.selectOptions(screen.getByRole('combobox', { name: copy.colCompany }), 'meridiano')
+    await screen.findByRole('button', { name: copy.companyStatus })
+  }
+
+  beforeEach(() => {
+    window.localStorage.setItem('preferredLocale', 'en')
+    vi.mocked(listSurveys).mockReset()
+    vi.mocked(listSurveys).mockResolvedValue(FILES_ROUND)
+    vi.mocked(getClimateTrends).mockReset()
+    vi.mocked(getClimateTrends).mockResolvedValue(MERIDIANO_TRENDS)
+    vi.mocked(listCompanies).mockReset()
+    vi.mocked(listCompanies).mockResolvedValue([
+      { id: 'meridiano', name: 'Grupo Meridiano S.A.', emailDomain: null, industry: null, size: null, country: null, subscriptionTier: null, createdAt: '2026-01-01T00:00:00Z' },
+    ])
+    vi.mocked(downloadBlobFile).mockReset()
+    vi.mocked(getCompanyStatusWorkbook).mockReset()
+    vi.mocked(getCompanyStatusWorkbook).mockResolvedValue(new Blob(['xlsx']))
+    vi.mocked(getDeliveryAuditWorkbook).mockReset()
+    vi.mocked(getDeliveryAuditWorkbook).mockResolvedValue(new Blob(['xlsx']))
+  })
+
+  afterEach(() => {
+    cleanup()
+    clearToken()
+    clearCompanyNameCache()
+    window.localStorage.clear()
+  })
+
+  it('offers both files once a company is chosen', async () => {
+    const user = userEvent.setup()
+    renderAs({ role: 'super_admin' })
+    await screen.findByText('Clima Organizacional')
+    // Before a company is picked there is nothing to name, so neither file is offered.
+    expect(screen.queryByRole('button', { name: copy.companyStatus })).toBeNull()
+
+    await pickCompany(user)
+
+    expect(await screen.findByRole('button', { name: copy.companyStatus })).toBeTruthy()
+    expect(screen.getByRole('button', { name: copy.deliveryAudit })).toBeTruthy()
+  })
+
+  it('asks which surveys, lists only this company own non-draft ones, in workbook order', async () => {
+    const user = userEvent.setup()
+    renderAs({ role: 'super_admin' })
+    await pickCompany(user)
+
+    await user.click(screen.getByRole('button', { name: copy.companyStatus }))
+    await screen.findByRole('checkbox', { name: pickerCopy.all })
+
+    const names = screen.getAllByRole('checkbox').map((box) => box.getAttribute('aria-label'))
+    expect(names).toEqual([pickerCopy.all, 'Clima Organizacional', 'Contraloría Empresarial', 'Teletrabajo'])
+    // The draft and the other tenant's survey are not offered.
+    expect(screen.queryByRole('checkbox', { name: 'Borrador' })).toBeNull()
+    expect(screen.queryByRole('checkbox', { name: 'Acme Q1' })).toBeNull()
+  })
+
+  it('names the surveys left ticked when it asks for the workbook', async () => {
+    const user = userEvent.setup()
+    renderAs({ role: 'super_admin' })
+    await pickCompany(user)
+    await user.click(screen.getByRole('button', { name: copy.companyStatus }))
+    await screen.findByRole('checkbox', { name: pickerCopy.all })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Contraloría Empresarial' }))
+    await user.click(screen.getByRole('button', { name: pickerCopy.download }))
+
+    await waitFor(() => expect(vi.mocked(getCompanyStatusWorkbook)).toHaveBeenCalled())
+    const [, companyId, ids] = vi.mocked(getCompanyStatusWorkbook).mock.calls[0]
+    expect(companyId).toBe('meridiano')
+    expect(ids).toEqual(['m-clima', 'm-tele'])
+    expect(vi.mocked(downloadBlobFile)).toHaveBeenCalled()
+  })
+
+  /** The audit has no sheets to choose between, so it stays a single press. */
+  it('downloads the delivery audit in one press, with no picker', async () => {
+    const user = userEvent.setup()
+    renderAs({ role: 'super_admin' })
+    await pickCompany(user)
+
+    await user.click(screen.getByRole('button', { name: copy.deliveryAudit }))
+
+    // The company, not the base URL: CI sets no VITE_API_BASE_URL, so asserting the first
+    // argument would pass here and fail there (`ci.yml` sets no VITE_ variables).
+    await waitFor(() => expect(vi.mocked(getDeliveryAuditWorkbook)).toHaveBeenCalled())
+    expect(vi.mocked(getDeliveryAuditWorkbook).mock.calls[0][1]).toBe('meridiano')
+    expect(screen.queryByText(pickerCopy.description)).toBeNull()
+  })
+
+  it('says so when the audit cannot be prepared, rather than doing nothing visible', async () => {
+    vi.mocked(getDeliveryAuditWorkbook).mockRejectedValue(new Error('nope'))
+    const user = userEvent.setup()
+    renderAs({ role: 'super_admin' })
+    await pickCompany(user)
+
+    await user.click(screen.getByRole('button', { name: copy.deliveryAudit }))
+
+    expect(await screen.findByText(copy.exportFailed)).toBeTruthy()
   })
 })

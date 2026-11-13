@@ -309,7 +309,9 @@ describe('SurveyCrossPanel — comparing', () => {
     await choose(copy.department, 'Finanzas')
     await userEvent.click(screen.getByRole('button', { name: copy.add }))
 
-    await waitFor(() => expect(screen.getByText('no')).toBeTruthy())
+    // G30: the screen's own sentence, not the thrown text.
+    await waitFor(() => expect(screen.getByText(copy.failed)).toBeTruthy())
+    expect(screen.queryByText('no')).toBeNull()
     // A chip for a column that could not be read is the same disagreement between the two
     // lists, arrived at from the other side.
     expect(screen.queryByText(copy.cohorts)).toBeNull()

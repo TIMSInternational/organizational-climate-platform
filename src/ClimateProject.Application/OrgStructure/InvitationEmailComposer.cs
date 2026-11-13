@@ -75,6 +75,8 @@ public static class InvitationEmailComposer
         AppendText(text, English, acceptUrl, expires);
         text.Append("\n--\n\n");
         AppendText(text, Spanish, acceptUrl, expires);
+        // Both languages, like the body above it.
+        text.Append("\n\n").Append(EmailBranding.Credit("en")).Append(" / ").Append(EmailBranding.Credit("es"));
 
         return new EmailMessage(
             invitation.Email!,

@@ -43,6 +43,7 @@ import {
 import TrendSparkline from './TrendSparkline'
 import CycleTimeline, { type CycleStep } from './CycleTimeline'
 import DashboardExportMenu from './DashboardExportMenu'
+import { actionPlansOffered } from '../../action-plans/offered'
 
 /** The target rule's hex, as the sparklines draw it, for the legend's swatch. */
 /** The band-boundary rule's ink, as the sparklines draw it, for the legend's swatch. */
@@ -713,13 +714,16 @@ function AttentionRow({
         }
         // Reading an action plan is `CanAccessCompany` (`ActionPlanEndpoints.cs:276-279`):
         // the whole-company viewer, and nobody else. Creating one is `canCreateActionPlan`.
+        // Where tracking replaces `/action-plans` in the sidebar it replaces it here too
+        // (`actionPlansOffered`): "create" goes to the tracking listing the sidebar offers,
+        // and a generic plan's page is not linked at all.
         action={
           item.plan
-            ? capabilities.seesWholeCompany
+            ? capabilities.seesWholeCompany && actionPlansOffered()
               ? { label: t('dashboard.next.openPlan'), href: `/action-plans/${item.plan.id}` }
               : undefined
             : capabilities.canCreateActionPlan
-              ? { label: t('dashboard.next.createPlan'), href: '/action-plans' }
+              ? { label: t('dashboard.next.createPlan'), href: actionPlansOffered() ? '/action-plans' : '/tracking/planes' }
               : undefined
         }
       />
@@ -798,10 +802,18 @@ function AttentionRow({
           count: item.remindersSent ?? 0,
         },
       )}
-      // A reminder is a distribution write on the survey, gated like authoring it.
+      // Not "Enviar recordatorio", but the reason changed on 2026-10-31 and the old one is worth
+      // correcting rather than leaving to mislead. It used to be "there is no reminder to send":
+      // the sweep was deleted with the invitation email and the batch route still answers zeros
+      // by design (#G11). Since `e3132f31` there IS a reminder -- per PERSON, from the roster --
+      // so the label is right for a better reason: chasing is a per-person decision, and the
+      // page this leads to is where that decision is made and where the button lives.
+      //
+      // `item.remindersSent` counts both kinds since 2026-11-08: invitation reminders and the
+      // ones recorded on per-survey keys (`remindersOf`).
       action={
         capabilities.canAuthorSurveys
-          ? { label: t('dashboard.next.sendReminder'), href: `/surveys/${survey.id}/distribution` }
+          ? { label: t('surveys.next.distribution.send.seeWhoIsMissing'), href: `/surveys/${survey.id}/distribution` }
           : undefined
       }
     />

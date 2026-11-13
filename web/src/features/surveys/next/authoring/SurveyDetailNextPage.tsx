@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BarChart3, Copy, Lock, Send, ShieldCheck } from 'lucide-react'
+import { BarChart3, CalendarClock, Copy, Lock, Pencil, Send, ShieldCheck, Trash2, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageTopBar } from '../../../../components/layout'
 import {
@@ -14,8 +14,8 @@ import {
 } from '../../../../components/ui'
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import { estimateAudience, targetsWholeCompany } from '../../../../components/distribution'
-import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import { useCompanyScope } from '../../../../company-context/useCompanyScope'
+import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { useFollowCompany } from '../../../../company-context/useFollowCompany'
 import { useTranslation } from '../../../../i18n'
 import ContentFallbackNotice from '../../components/ContentFallbackNotice'
 import { canDistribute } from '../../api/surveyInvitationCopy'
@@ -26,18 +26,22 @@ import { Note, PanelHeading } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
 import { Card, CardHeading, Meter, ReadingTile } from './parts'
 import {
-  dayMonth,
-  daysFrom,
   dimensionSections,
-  fullDay,
   remindersSent,
   responseRate,
   surveyAudience,
   targetedDepartments,
-  yearOf,
   sentenceCase,
 } from './launch'
 import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailModel'
+import { SurveyWindowDialog } from './SurveyWindowDialog'
+import { DeleteSurveyDialog } from './DeleteSurveyDialog'
+import { EditAudienceDialog } from './EditAudienceDialog'
+import { audienceEditability } from './audienceEdit'
+import { ReopenSurveyDialog } from './ReopenSurveyDialog'
+import { EditSurveyTextDialog } from './EditSurveyTextDialog'
+import { isTextEditable } from './model'
+import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, yearIn, zoneLabel } from './zonedWindow'
 
 /**
  * Detalle de encuesta, redesigned (canvas board "SurveyDetail") — `/surveys/:id`.
@@ -55,7 +59,8 @@ import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailM
 export default function SurveyDetailNextPage() {
   const { id } = useParams<{ id: string }>()
   const { t } = useTranslation()
-  const { state, reload, transition, duplicate, pending, actionError } = useSurveyDetailModel(id)
+  const { state, reload, transition, duplicate, saveWindow, saveAudience, saveText, reopen, remove, pending, actionError } = useSurveyDetailModel(id)
+  useFollowCompany(state.status === 'ready' ? state.model.survey.companyId : undefined)
 
   if (state.status === 'loading') {
     return (
@@ -84,6 +89,11 @@ export default function SurveyDetailNextPage() {
       actionError={actionError}
       onTransition={(status) => void transition(status)}
       onDuplicate={() => void duplicate()}
+      onSaveWindow={saveWindow}
+      onSaveAudience={saveAudience}
+      onSaveText={saveText}
+      onReopen={reopen}
+      onDelete={remove}
     />
   )
 }
@@ -94,6 +104,11 @@ export function SurveyDetailView({
   actionError,
   onTransition,
   onDuplicate,
+  onSaveWindow,
+  onSaveAudience,
+  onSaveText,
+  onReopen,
+  onDelete,
   now = new Date(),
 }: {
   model: SurveyDetailModel
@@ -101,6 +116,16 @@ export function SurveyDetailView({
   actionError: string | null
   onTransition: (status: string) => void
   onDuplicate: () => void
+  /** Moves the response window; absent, the dates are not offered for editing. */
+  onSaveWindow?: (window: { startDate?: string; endDate: string }) => Promise<void>
+  /** Rewrites the survey's targets; absent, "Editar audiencia" is not offered. */
+  onSaveAudience?: (targets: { departmentIds?: string[]; userIds: string[] }) => Promise<void>
+  /** Saves the name and description; absent, "Editar nombre" is not offered. */
+  onSaveText?: (text: { title: Partial<Record<'en' | 'es', string>>; description: Partial<Record<'en' | 'es', string>> }) => Promise<void>
+  /** Reopens a closed survey (super admins only); absent, "Reabrir" is not offered. */
+  onReopen?: (body: { endDate: string; reason: string }) => Promise<void>
+  /** Deletes the survey; absent, "Eliminar" is not offered. */
+  onDelete?: () => Promise<void>
   now?: Date
 }) {
   const { t, locale } = useTranslation()
@@ -123,20 +148,46 @@ export function SurveyDetailView({
   })
   const rate = responseRate(survey.responseCount, audience?.count ?? null)
   const targets = targetedDepartments(survey.departmentIds, departments)
-  const closesIn = daysFrom(survey.endDate, now)
-  const opensIn = daysFrom(survey.startDate, now)
-  const reminders = remindersSent(invitations?.invitations ?? null)
+  const reminders = remindersSent(invitations ?? null)
   const sections = dimensionSections(survey.questions)
-  const canAuthor = caps.canAuthorSurveys
-  // A super administrator carries no tenant until they pick one, so `canAuthorSurveys` is
-  // false and every authoring control vanishes -- Duplicar, Distribución, the transitions --
-  // while Resultados stays, because `canOpenResults` admits SUPER_ADMIN unconditionally. The
-  // page then looks complete and merely lacks the thing the reader came for. That silence
-  // cost a real client conversation: the team concluded the product could not share a link.
-  // Eight other pages already branch on this state; this one did not.
-  const scope = useCompanyScope()
-  const needsCompany = !canAuthor && scope.status === 'needs-selection'
-  const editable = survey.isContentEditable && survey.responseCount === 0
+  // The survey's own company decides, never the header. This page used to gate on
+  // `canAuthorSurveys`, which waits for a selected company, so a super administrator with none
+  // (or another one) lost Duplicar, Distribución and the transitions, and was shown a "choose a
+  // company" notice for a survey whose company is already known. That silence once cost a client
+  // conversation; the 2026-11-08 walkthrough (A1) found the same gate hiding the roster.
+  const canAuthor = caps.canAdministerSurvey(survey)
+  // TIMS edits a survey that has left draft (ruled 2026-11-11, super admins only): its questions
+  // while it is scheduled or active and nobody has answered, its name and description until it is
+  // archived. A client's administrator keeps the draft-only rule. The server decides either way;
+  // this only keeps the page from offering what it would refuse.
+  const operator = readViewerClaims().role === 'super_admin'
+  const liveQuestions = operator && (survey.status === 'scheduled' || survey.status === 'active')
+  const editable = (survey.isContentEditable || liveQuestions) && survey.responseCount === 0
+  const textEditable = canAuthor && onSaveText !== undefined && isTextEditable(survey.status, survey.responseCount, operator)
+  const [renaming, setRenaming] = useState(false)
+  // The company's clock, which the window is read and written in. The browser's only when the
+  // company's cannot be read -- and the editor prints whichever zone it is using.
+  const timeZone = isKnownTimeZone(model.timeZone) ? model.timeZone : browserTimeZone()
+  // Counted in the same zone the sheet prints, so the tile, the sheet and "Activar" agree.
+  const closesIn = daysFromIn(survey.endDate, now, timeZone)
+  const opensIn = daysFromIn(survey.startDate, now, timeZone)
+  // `canDistribute` is `AllowsScheduleEdit` (draft, scheduled, active): exactly where
+  // `PUT /surveys/{id}` takes a new window.
+  const windowEditable = canAuthor && onSaveWindow !== undefined && canDistribute(survey.status)
+  // `DeleteSurveyAsync` deletes in any status while nobody has answered, and only then.
+  const deletable = canAuthor && onDelete !== undefined && survey.responseCount === 0
+  const [editingWindow, setEditingWindow] = useState(false)
+  // Reopening is TIMS's alone (ruled 2026-11-08): the server refuses every other role, and a
+  // client administrator keeps seeing "Cerrada" with no way back, as before.
+  const reopenable = survey.status === 'closed' && onReopen !== undefined && readViewerClaims().role === 'super_admin'
+  const [reopening, setReopening] = useState(false)
+  // "Editar audiencia": offered to an author wherever the page can save it, DISABLED with the
+  // reason once the survey has ended (`survey_ended_audience_frozen`, #627) rather than hidden,
+  // so the reader learns why the audience no longer moves.
+  const audienceOffered = canAuthor && onSaveAudience !== undefined
+  const audienceFrozen = audienceEditability(survey) === 'ended'
+  const [editingAudience, setEditingAudience] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   return (
     <div>
@@ -148,6 +199,18 @@ export function SurveyDetailView({
         tightBreadcrumb
         actions={
           <>
+            {textEditable && (
+              <Button type="button" variant="outline" disabled={pending !== null} onClick={() => setRenaming(true)}>
+                <Pencil aria-hidden="true" className="size-icon" />
+                {copy('rename.action')}
+              </Button>
+            )}
+            {deletable && (
+              <Button type="button" variant="outline" disabled={pending !== null} onClick={() => setDeleting(true)}>
+                <Trash2 aria-hidden="true" className="size-icon" />
+                {copy('delete.action')}
+              </Button>
+            )}
             {canAuthor && (
               <Button type="button" variant="outline" disabled={pending !== null} onClick={onDuplicate}>
                 <Copy aria-hidden="true" className="size-icon" />
@@ -170,20 +233,10 @@ export function SurveyDetailView({
                 </Link>
               </Button>
             )}
+            {caps.canOpenResults(survey) && <Button asChild variant="outline"><Link to={`/surveys/${survey.id}/history`}>{t('surveys.next.history.open')}</Link></Button>}
           </>
         }
       />
-
-      {needsCompany && (
-        <p
-          role="status"
-          data-testid="detail-needs-company"
-          className="m-0 rounded-lg border border-line-light bg-surface-panel px-4 py-3 text-sm text-fg-secondary"
-        >
-          <b className="font-semibold text-fg-primary">{t('companyContext.chooseACompany')}</b>{' '}
-          {t('companyContext.chooseACompanyDescription')}
-        </p>
-      )}
 
       <ContentFallbackNotice
         language={survey.language}
@@ -241,8 +294,8 @@ export function SurveyDetailView({
                 : copy('closed')
               : copy('closes')
           }
-          value={dayMonth(survey.endDate, locale)}
-          unit={closeLine(copy, yearOf(survey.endDate), closesIn)}
+          value={dayMonthIn(survey.endDate, timeZone, locale)}
+          unit={closeLine(copy, yearIn(survey.endDate, timeZone), closesIn)}
         >
           {reminders !== null && (
             <span className="text-sm text-fg-secondary">
@@ -256,6 +309,8 @@ export function SurveyDetailView({
           pending={pending}
           onTransition={onTransition}
           endPassed={closesIn !== null && closesIn < 0}
+          onEditWindow={windowEditable ? () => setEditingWindow(true) : undefined}
+          onReopen={reopenable ? () => setReopening(true) : undefined}
         />
       </section>
 
@@ -280,8 +335,10 @@ export function SurveyDetailView({
           {/* `-mt-3` cancels the heading's 12px margin: the line sits the card's 12px gap under it. */}
           <p className="-mt-3 mb-0 text-sm text-fg-secondary">
             {editable
-              ? copy('editableLine')
-              : survey.responseCount > 0 && survey.isContentEditable
+              ? survey.status === 'draft'
+                ? copy('editableLine')
+                : copy('editableLive')
+              : survey.responseCount > 0 && (survey.isContentEditable || liveQuestions)
                 ? copy('lockedResponses')
                 : copy('lockedStatus', { status: copy(`statusAdjective.${survey.status}`) })}
           </p>
@@ -309,14 +366,27 @@ export function SurveyDetailView({
             />
           )}
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-sheet">
-            <CardHeading title={copy('sheet')} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardHeading title={copy('sheet')} />
+              {windowEditable && (
+                <Button type="button" variant="outline" size="sm" disabled={pending !== null} onClick={() => setEditingWindow(true)}>
+                  <CalendarClock aria-hidden="true" className="size-3.5" />
+                  {copy('window.edit')}
+                </Button>
+              )}
+            </div>
             <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
               <dt className="text-fg-secondary">{copy('type')}</dt>
               <dd className="m-0">{sentenceCase(typeLabel(t, survey.type), locale)}</dd>
+              {/* Day AND time, on the company's clock: the window is an instant to the minute
+                  (the lifecycle job opens and closes on it), and the editor beside this writes
+                  in the same zone, so what is read here is what was typed there. */}
               <dt className="text-fg-secondary">{opensIn !== null && opensIn > 0 ? copy('opens') : copy('opened')}</dt>
-              <dd className="m-0 font-mono tabular-nums">{fullDay(survey.startDate, locale)}</dd>
+              <dd className="m-0 font-mono tabular-nums" data-testid="sheet-start">{dayTimeIn(survey.startDate, timeZone, locale)}</dd>
               <dt className="text-fg-secondary">{copy('closesRow')}</dt>
-              <dd className="m-0 font-mono tabular-nums">{fullDay(survey.endDate, locale)}</dd>
+              <dd className="m-0 font-mono tabular-nums" data-testid="sheet-end">{dayTimeIn(survey.endDate, timeZone, locale)}</dd>
+              <dt className="text-fg-secondary">{copy('window.zoneRow')}</dt>
+              <dd className="m-0 break-words">{zoneLabel(timeZone)}</dd>
               <dt className="text-fg-secondary">{copy('language')}</dt>
               <dd className="m-0">{languageLabel(t, survey.language)}</dd>
               <dt className="text-fg-secondary">{copy('floor')}</dt>
@@ -326,7 +396,27 @@ export function SurveyDetailView({
             </dl>
           </Card>
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-departments">
-            <CardHeading title={copy('departments')} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardHeading title={copy('departments')} />
+              {audienceOffered && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending !== null || audienceFrozen}
+                  aria-describedby={audienceFrozen ? 'audience-frozen-reason' : undefined}
+                  onClick={() => setEditingAudience(true)}
+                >
+                  <Users aria-hidden="true" className="size-3.5" />
+                  {copy('audienceEdit.action')}
+                </Button>
+              )}
+            </div>
+            {audienceOffered && audienceFrozen && (
+              <p id="audience-frozen-reason" className="m-0 text-sm text-fg-secondary" data-testid="audience-frozen">
+                {copy('audienceEdit.endedReason')}
+              </p>
+            )}
             {targetsWholeCompany(surveyTargets) ? (
               <p className="m-0 text-sm">{copy('wholeCompany')}</p>
             ) : survey.departmentIds.length === 0 ? (
@@ -363,6 +453,49 @@ export function SurveyDetailView({
           </Note>
         </div>
       </div>
+
+      {windowEditable && onSaveWindow && (
+        <SurveyWindowDialog
+          survey={survey}
+          timeZone={timeZone}
+          open={editingWindow}
+          onOpenChange={setEditingWindow}
+          onSave={onSaveWindow}
+          now={() => now}
+        />
+      )}
+      {audienceOffered && !audienceFrozen && onSaveAudience && (
+        <EditAudienceDialog
+          survey={survey}
+          departments={departments}
+          users={users}
+          hasPublicLink={Boolean(distribution?.publicLink)}
+          open={editingAudience}
+          onOpenChange={setEditingAudience}
+          onSave={onSaveAudience}
+        />
+      )}
+      {reopenable && onReopen && (
+        <ReopenSurveyDialog
+          timeZone={timeZone}
+          open={reopening}
+          onOpenChange={setReopening}
+          onReopen={onReopen}
+          now={() => now}
+        />
+      )}
+      {textEditable && onSaveText && (
+        <EditSurveyTextDialog
+          surveyId={survey.id}
+          live={survey.status !== 'draft'}
+          open={renaming}
+          onOpenChange={setRenaming}
+          onSave={onSaveText}
+        />
+      )}
+      {deletable && onDelete && (
+        <DeleteSurveyDialog status={survey.status} open={deleting} onOpenChange={setDeleting} onDelete={onDelete} />
+      )}
     </div>
   )
 }
@@ -385,6 +518,8 @@ function StatusTile({
   pending,
   onTransition,
   endPassed,
+  onEditWindow,
+  onReopen,
 }: {
   survey: SurveyDetail
   canAuthor: boolean
@@ -392,6 +527,10 @@ function StatusTile({
   onTransition: (status: string) => void
   /** The survey's end date is behind today. */
   endPassed: boolean
+  /** Opens the date editor; absent where the window cannot be moved. */
+  onEditWindow?: () => void
+  /** Opens "Reabrir"; absent unless the survey is closed and the viewer is a super admin. */
+  onReopen?: () => void
 }) {
   const { t } = useTranslation()
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.detail.${key}`, vars)
@@ -447,9 +586,27 @@ function StatusTile({
         </ul>
       )}
       {canAuthor && survey.allowedStatusTransitions.some(opensIntoThePast) && (
-        <p role="note" className="m-0 text-sm text-accent-amber-ink" data-testid="status-end-passed">
-          {copy('endPassedWarning')}
-        </p>
+        <div className="flex flex-col items-start gap-2" data-testid="status-end-passed-block">
+          <p role="note" className="m-0 text-sm text-accent-amber-ink" data-testid="status-end-passed">
+            {copy('endPassedWarning')}
+          </p>
+          {/* The sentence above has always said "cambia primero las fechas"; this is where. A
+              duplicated survey keeps its source's past window, and this is how it gets run. */}
+          {onEditWindow && (
+            <Button type="button" size="sm" variant="outline" disabled={pending !== null} onClick={onEditWindow}>
+              <CalendarClock aria-hidden="true" className="size-3.5" />
+              {copy('window.edit')}
+            </Button>
+          )}
+        </div>
+      )}
+      {onReopen && (
+        <div className="flex flex-col items-start gap-1 border-t border-line-light pt-1.5" data-testid="status-reopen">
+          <Button type="button" size="sm" variant="outline" disabled={pending !== null} onClick={onReopen}>
+            {copy('reopen.action')}
+          </Button>
+          <span className="text-xs text-fg-label">{copy('reopen.hint')}</span>
+        </div>
       )}
       <ConfirmationDialog
         open={confirmClose}

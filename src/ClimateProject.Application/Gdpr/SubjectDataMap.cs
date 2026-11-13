@@ -244,8 +244,12 @@ public static class SubjectDataMap
         Actor("Benchmark", "benchmarks", "CreatedBy",
             "Authorship of a benchmark definition. Benchmark values are aggregates and reference nobody."),
         NotPersonal("BenchmarkMetric", "benchmark_metrics", "Aggregate values on a benchmark. No person referenced."),
+        Actor("BenchmarkGroup", "benchmark_groups", "CreatedBy",
+            "Authorship of a reference group's criteria. A group stores no figure and references nobody else."),
         NotPersonal("Company", "companies",
             "The employer, a legal person. Its email domain is a routing rule, not an individual's address."),
+        NotPersonal("CompanyLogo", "company_logos",
+            "A company's uploaded logo image: a brand asset of a legal person, referencing nobody."),
         NotPersonal("CompanyServiceLicense", "company_service_licenses",
             "A company's entitlement to run a climate service, in respondent seats. Seat counts and status "
             + "against a company, no individual referenced."),
@@ -275,6 +279,15 @@ public static class SubjectDataMap
             "\"This person manages this department\" is a fact about them, and it is exported as a reference. It "
             + "is retained on erasure because the org structure is the employer's record, and because erasure "
             + "pseudonymises the users row rather than deleting it, so no dangling manager_id is created."),
+
+        new("EmailDeliveryEvent", "email_delivery_events", SubjectLink.Subject, ["UserId", "Email"],
+            ExportTreatment.FullRecord, ErasureTreatment.Deleted,
+            BasisLegitimateInterest,
+            "Deleted on erasure; otherwise kept while the delivery audit of the engagement is useful.",
+            "A bounce, complaint or rejection Amazon SES reported for an email the product sent to the subject: "
+            + "their address and the receiving server's reply, which often repeats it. Written only for "
+            + "addresses that belong to a user here. Deleted rather than redacted -- a redacted row would still "
+            + "say that mail to somebody failed, and that is the only fact it holds."),
 
         Actor("Microclimate", "microclimates", "CreatedBy", "Authorship of a microclimate. Its results are aggregates."),
         NotPersonal("MicroclimateAiInsight", "microclimate_ai_insights",

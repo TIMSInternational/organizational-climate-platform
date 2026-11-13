@@ -20,6 +20,7 @@ import {
   chipVariants,
 } from '../../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../../auth/viewerCapabilities'
+import { StatusWorkbookButton } from '../StatusWorkbookButton'
 import { formatMetric } from '../../../../components/charts/formatMetric'
 import { calendarDay, calendarDayOf, todayCalendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
@@ -106,6 +107,7 @@ function SurveysListForCompany() {
   const { t, locale } = useTranslation()
   const capabilities = useViewerCapabilities()
   const state = useSurveysListModel()
+  const companyId = readViewerClaims().companyId
   const sections = groupBySection(state.visible)
   const facets = [{ status: '', count: state.model.rows.length }, ...visibleFacets(state.facets, state.statusFilter)]
 
@@ -117,7 +119,15 @@ function SurveysListForCompany() {
         description={t('surveys.next.list.description')}
         actions={
           capabilities.canAuthorSurveys ? (
-            <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
+            <div className="flex flex-wrap gap-2">{companyId && (
+              <StatusWorkbookButton
+                companyId={companyId}
+                companyName={state.model.companyName ?? ''}
+                baseUrl={import.meta.env.VITE_API_BASE_URL as string}
+                label={t('surveys.next.list.statusExport')}
+              />
+            )}
+            <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
             <Button asChild variant="primary">
               <Link to="/surveys/new">
                 <Plus aria-hidden="true" />

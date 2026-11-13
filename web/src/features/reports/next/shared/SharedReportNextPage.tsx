@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, EyeOff, Link2Off, ShieldCheck } from 'lucide-react'
 import { useParams } from 'react-router'
 import { LanguageSwitcher, useTranslation } from '../../../../i18n'
-import { BrandLockup, ThemeSwitcher } from '../../../../components/layout'
+import { BrandLockup, PoweredByNexadev, ThemeSwitcher } from '../../../../components/layout'
 import {
   Alert,
   AlertDescription,
@@ -166,6 +166,10 @@ export default function SharedReportNextPage() {
         {state.status === 'unavailable' && <Unavailable />}
         {state.status === 'ready' && <ReportBody report={state.report} />}
       </main>
+
+      <footer className="mx-auto flex w-full max-w-[70rem] justify-center px-4 pb-6">
+        <PoweredByNexadev />
+      </footer>
     </div>
   )
 }

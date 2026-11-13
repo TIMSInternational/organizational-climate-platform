@@ -427,39 +427,48 @@ export function liveWordBars(
   }
 }
 
-function format(value: string | Date, locale: string, options: Intl.DateTimeFormatOptions): string | null {
+/**
+ * `timeZone` is an IANA zone: the administrator's pages pass the company's (`companyZone.ts`).
+ * Left out, the reader's own zone -- what the respondent's invitation reads.
+ */
+function format(value: string | Date, locale: string, options: Intl.DateTimeFormatOptions, timeZone?: string): string | null {
   const instant = value instanceof Date ? value.getTime() : Date.parse(value)
   if (Number.isNaN(instant)) return null
-  return new Intl.DateTimeFormat(locale, options).format(instant)
+  return new Intl.DateTimeFormat(locale, timeZone ? { ...options, timeZone } : options).format(instant)
 }
 
 /** "11 sept" — the list row's close date. `null` for an unreadable instant, never "Invalid Date". */
-export function dayMonth(value: string, locale: string): string | null {
-  return format(value, locale, { day: 'numeric', month: 'short' })
+export function dayMonth(value: string, locale: string, timeZone?: string): string | null {
+  return format(value, locale, { day: 'numeric', month: 'short' }, timeZone)
 }
 
 /** "11 de septiembre" — a date in a sentence. */
-export function dayMonthLong(value: string, locale: string): string | null {
-  return format(value, locale, { day: 'numeric', month: 'long' })
+export function dayMonthLong(value: string, locale: string, timeZone?: string): string | null {
+  return format(value, locale, { day: 'numeric', month: 'long' }, timeZone)
 }
 
 /** "21:06" — the hour a session opens or closes. */
-export function clock(value: string | Date, locale: string): string | null {
-  return format(value, locale, { hour: 'numeric', minute: '2-digit' })
+export function clock(value: string | Date, locale: string, timeZone?: string): string | null {
+  return format(value, locale, { hour: 'numeric', minute: '2-digit' }, timeZone)
 }
 
 /** "21:50:42" — when the live figure was last read. */
-export function clockSeconds(value: Date, locale: string): string | null {
-  return format(value, locale, { hour: 'numeric', minute: '2-digit', second: '2-digit' })
+export function clockSeconds(value: Date, locale: string, timeZone?: string): string | null {
+  return format(value, locale, { hour: 'numeric', minute: '2-digit', second: '2-digit' }, timeZone)
 }
 
 /** "9 sept 2026, 21:06" — the facts under the link. */
-export function stamp(value: string, locale: string): string | null {
-  return format(value, locale, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+export function stamp(value: string, locale: string, timeZone?: string): string | null {
+  return format(
+    value,
+    locale,
+    {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    },
+    timeZone,
+  )
 }

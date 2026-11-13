@@ -640,12 +640,37 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // administrator reads back on the phone, and the demographics that same administrator
         // uploaded -- and a field arriving in it without a decision is how an answer would
         // eventually ride along. Extend these lists deliberately or not at all.
+        //
+        // Extended 2026-10-22 (audit gaps G2/G7): the survey's credential mode and title, and
+        // per person the per-survey key's username and two DAYS -- when it was mailed and when
+        // it was last used. Days, never instants, so neither lines up with a response's first
+        // save; they say "was it mailed / did they get in" and nothing finer. On this shared
+        // survey all three key fields are null.
+        //
+        // Extended 2026-10-31: `lastRemindedOn` and `reminderCount`, the key's reminder history.
+        // Deliberate, and safe for the reason this list exists to protect. They are an
+        // ADMINISTRATOR's history -- when WE wrote to somebody -- and record nothing a respondent
+        // did, so neither can line up with a response the way a sign-in instant could. A day and
+        // a count, like the two above. On this shared QR survey both are absent/zero, as every
+        // key field is.
+        //
+        // Extended 2026-11-03: `deliveryProblem` and `deliveryProblemOn` -- what the mail service
+        // reported going wrong with the mail of the person's current key (bounce, spam, rejected)
+        // and on which DAY. Safe for the same reason: it is about OUR mail reaching an address,
+        // not anything the person did in the survey, and it is a day, not an instant. Null on a
+        // shared survey, like every key field.
+        //
+        // Extended 2026-11-08: `excludedFromResults` -- TIMS took this person's response out of the
+        // results (responses.excluded_at). It says nothing about WHAT they answered, only that the
+        // answer stopped counting, and it is TRUE for super admins only: a client administrator
+        // who knew whose response left could subtract results to recover it, so for every other
+        // caller -- including the one here -- it is always false (ResponseExclusionTests pins that).
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            ["answered", "answeredCount", "collectsParticipantIdentity", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "tracksCompletionOnly", "tracksIndividuals"],
+            ["answered", "answeredCount", "collectsParticipantIdentity", "credentialMode", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "surveyTitleEn", "surveyTitleEs", "tracksCompletionOnly", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
-            ["demographics", "email", "lastActivityOn", "name", "role", "status", "userId", "username"],
+            ["credentialIssuedOn", "deliveryProblem", "deliveryProblemOn", "demographics", "email", "excludedFromResults", "lastActivityOn", "lastRemindedOn", "lastSignInOn", "name", "reminderCount", "role", "status", "surveyUsername", "userId", "username"],
             document.RootElement.GetProperty("roster").EnumerateArray().First().EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(_operaciones.ToString(), json, StringComparison.OrdinalIgnoreCase);
     }

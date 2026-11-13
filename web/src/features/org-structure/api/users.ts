@@ -1,4 +1,4 @@
-import { authFetch } from '../../../api/authFetch'
+import { ApiError, authFetch } from '../../../api/authFetch'
 
 export interface User {
   id: string
@@ -25,6 +25,27 @@ export interface UserDetail extends User {
   // became Guid? in #191, so this can genuinely arrive as null.
   companyId: string | null
   managerId: string | null
+  /** The person's demographic answers, keyed by the field's `field` key, values as stored. */
+  demographics: Record<string, string>
+  /**
+   * True when this person's only way in is a per-survey code (a `per_survey` company and no
+   * account password). The admin password reset refuses them, so no screen offers it.
+   */
+  surveyCodesOnly?: boolean
+  /** Present only on the answer to an update that actually changed the address. */
+  emailChange?: UserEmailChange | null
+}
+
+/**
+ * What correcting an address did (`UserEmailChange`, `UserDtos.cs`). The change SENDS NOTHING:
+ * `unusedSurveyCodes` counts per-survey sign-ins on scheduled or active surveys that were mailed
+ * to the OLD address and never used, so the screen can tell the admin to re-send them from each
+ * survey's roster.
+ */
+export interface UserEmailChange {
+  previousEmail: string
+  unusedSurveyCodes: number
+  pendingInvitationsExpired: number
 }
 
 export interface UpdateUserInput {
@@ -32,6 +53,43 @@ export interface UpdateUserInput {
   departmentId?: string
   managerId?: string
   isActive?: boolean
+  /** Omit to leave the address alone. The API trims and lower-cases it. */
+  email?: string
+  /**
+   * An omitted `departmentId` / `managerId` means "leave it alone", so removing one takes these
+   * (`UpdateUserRequest.ClearDepartment` / `ClearManager`). Never sent with a value for the same
+   * link: the API refuses the pair.
+   */
+  clearDepartment?: boolean
+  clearManager?: boolean
+  /**
+   * The person's COMPLETE set of answers to the company's active fields: the API replaces the set,
+   * so an omitted or blank key clears that answer, and a required field must be present. Answers
+   * to retired fields are kept by the API. Omit to leave demographics alone.
+   */
+  demographics?: Record<string, string>
+}
+
+/** The four reasons `PUT /admin/users/{id}` refuses an address, as the API's `code`. */
+export const USER_EMAIL_REFUSALS = ['email_invalid', 'email_undeliverable', 'email_taken', 'email_invited'] as const
+export type UserEmailRefusal = (typeof USER_EMAIL_REFUSALS)[number]
+
+/**
+ * A refused address. Still an `ApiError` (so `err.message` keeps working for every other caller),
+ * plus the code a screen translates -- the API's message is English.
+ */
+export class UserEmailError extends ApiError {
+  readonly code: UserEmailRefusal
+
+  constructor(status: number, message: string, code: UserEmailRefusal) {
+    super(status, message)
+    this.name = 'UserEmailError'
+    this.code = code
+  }
+}
+
+function isEmailRefusal(code: unknown): code is UserEmailRefusal {
+  return typeof code === 'string' && (USER_EMAIL_REFUSALS as readonly string[]).includes(code)
 }
 
 export async function listUsers(baseUrl: string, companyId: string): Promise<User[]> {
@@ -46,10 +104,22 @@ export async function getUser(baseUrl: string, id: string): Promise<UserDetail> 
 }
 
 export async function updateUser(baseUrl: string, id: string, input: UpdateUserInput): Promise<UserDetail> {
-  const response = await authFetch(`${baseUrl}/admin/users/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(input),
-  })
+  const response = await authFetch(
+    `${baseUrl}/admin/users/${id}`,
+    { method: 'PUT', body: JSON.stringify(input) },
+    // Handed back rather than thrown so the refusal's `code` survives; anything else is
+    // re-thrown exactly as authFetch would have.
+    { allowStatus: [400, 409] },
+  )
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string; code?: unknown } | null
+    const message = body?.message || `Request failed: ${response.status}`
+    if (isEmailRefusal(body?.code)) {
+      throw new UserEmailError(response.status, message, body.code)
+    }
+    // Any other code travels on, so describeApiError can say it (`user_own_manager`).
+    throw new ApiError(response.status, message, typeof body?.code === 'string' ? body.code : undefined)
+  }
   return response.json() as Promise<UserDetail>
 }
 
@@ -132,4 +202,45 @@ export async function resendCredentialsBatch(
     body: JSON.stringify({ userIds }),
   })
   return response.json() as Promise<CredentialsResendBatchResult>
+}
+
+/**
+ * `POST /auth/admin/reset-credentials`: replaces the account's password with a temporary one and
+ * hands it back IN THE RESPONSE. It SENDS NOTHING -- no email to the person, no email to the
+ * admin -- so the screen is the only place the password exists, and the admin passes it on.
+ * Every open session of the account ends.
+ *
+ * A company administrator may reset anyone in their company who is not an administrator, and
+ * themselves; another administrator's account is the super administrator's to reset (403).
+ */
+export interface ResetCredentialsResult {
+  email: string
+  temporaryPassword: string
+}
+
+/**
+ * The refusal for a person who signs in only with per-survey codes (400 `per_survey_person`):
+ * a reset would give them an email sign-in that opens every survey, which "one code, one
+ * survey" denies. Their code is re-sent from the survey's roster instead.
+ */
+export class PerSurveyPersonError extends ApiError {
+  constructor(message: string) {
+    super(400, message)
+    this.name = 'PerSurveyPersonError'
+  }
+}
+
+export async function resetCredentials(baseUrl: string, userId: string): Promise<ResetCredentialsResult> {
+  const response = await authFetch(
+    `${baseUrl}/auth/admin/reset-credentials`,
+    { method: 'POST', body: JSON.stringify({ userId }) },
+    { allowStatus: [400] },
+  )
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string; code?: unknown } | null
+    const message = body?.message || `Request failed: ${response.status}`
+    if (body?.code === 'per_survey_person') throw new PerSurveyPersonError(message)
+    throw new ApiError(response.status, message)
+  }
+  return response.json() as Promise<ResetCredentialsResult>
 }

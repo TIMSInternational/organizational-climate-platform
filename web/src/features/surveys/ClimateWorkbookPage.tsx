@@ -10,6 +10,17 @@ import { applyClimateWorkbook, downloadClimateWorkbook, previewClimateWorkbook, 
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL
 
+/**
+ * What the import will mail, and when, for the preview's credential mode. `null` from the
+ * preview means the company does not exist yet; the one the import creates is `shared`.
+ * Any other value is one this screen cannot describe, and approval is withheld.
+ */
+function modeCopy(mode: ClimateWorkbookPreview['credentialMode']): { mode: string; lines: string[] } | { unknown: string } {
+  if (mode === 'per_survey') return { mode: 'climateWorkbook.mode.perSurvey', lines: ['climateWorkbook.mode.perSurveyMail', 'climateWorkbook.mode.perSurveyLater', 'climateWorkbook.mode.draft'] }
+  if (mode === 'shared' || mode == null) return { mode: mode == null ? 'climateWorkbook.mode.newCompanyShared' : 'climateWorkbook.mode.shared', lines: ['climateWorkbook.mode.sharedMail', 'climateWorkbook.mode.draft'] }
+  return { unknown: mode }
+}
+
 export default function ClimateWorkbookPage() {
   const { t } = useTranslation()
   const { canAuthorSurveys } = useViewerCapabilities()
@@ -58,13 +69,15 @@ export default function ClimateWorkbookPage() {
       setPlan(fresh)
       if (fresh.errors.length) return
       // A changed account set requires another review, not an unnoticed change to approval.
-      if (fresh.companyId !== plan.companyId || fresh.surveyId !== plan.surveyId || JSON.stringify(fresh.existingPeople.map(p => `${p.id}:${p.role}`).sort()) !== JSON.stringify(plan.existingPeople.map(p => `${p.id}:${p.role}`).sort())) {
+      if (fresh.companyId !== plan.companyId || fresh.surveyId !== plan.surveyId || (fresh.credentialMode ?? null) !== (plan.credentialMode ?? null) || JSON.stringify(fresh.existingPeople.map(p => `${p.id}:${p.role}`).sort()) !== JSON.stringify(plan.existingPeople.map(p => `${p.id}:${p.role}`).sort())) {
         setApproved(false); setError(t('climateWorkbook.changed')); return
       }
       setResult(await applyClimateWorkbook(baseUrl, fresh, setProgress))
     } catch (cause) { setError(`${message(cause)}\n${t('climateWorkbook.retryNote')}`); setApproved(false); setPlan(null) }
     finally { setBusy(false); setApplying(false); inFlight.current = false }
   }
+  const access = plan ? modeCopy(plan.credentialMode) : null
+  const goToCompany = () => { if (result && readViewerClaims().role === 'super_admin') writeSelectedCompanyId(result.companyId) }
   if (!canAuthorSurveys && readViewerClaims().role !== 'super_admin') return <Alert role="alert"><AlertDescription>{t('climateWorkbook.forbidden')}</AlertDescription></Alert>
   return <div className="mx-auto max-w-5xl space-y-6">
     <PageTopBar title={t('climateWorkbook.title')} description={t('climateWorkbook.description')} actions={<Button variant="outline" disabled={busy} onClick={() => void download()}>{t('climateWorkbook.download')}</Button>} />
@@ -87,10 +100,16 @@ export default function ClimateWorkbookPage() {
       <p>{t(plan.content.company.anonymous ? 'climateWorkbook.anonymous' : 'climateWorkbook.identified')}</p>
       <p>{t('climateWorkbook.bands', { low: plan.content.company.resultBands.opportunityMin, high: plan.content.company.resultBands.strengthMin, scale: plan.content.company.resultBands.scale === 'percent' ? '0–100' : '1–5' })}</p>
       <p>{t(plan.companyId ? 'climateWorkbook.existingCompany' : 'climateWorkbook.newCompany')}</p>
+      {access && <div className="space-y-2 rounded-md border border-line-default p-4" data-testid="workbook-access">
+        <h3 className="font-medium">{t('climateWorkbook.mode.title')}</h3>
+        {'unknown' in access
+          ? <Alert variant="destructive" role="alert"><AlertDescription>{t('climateWorkbook.mode.unknown', { mode: access.unknown })}</AlertDescription></Alert>
+          : <><p>{t(access.mode)}</p><ul className="list-disc space-y-1 pl-6">{access.lines.map(line => <li key={line}>{t(line)}</li>)}</ul></>}
+      </div>}
       <p>{t('climateWorkbook.credentials')}</p>
       </>}
       <details><summary>{t('climateWorkbook.questions')}</summary><ol className="list-decimal space-y-2 pl-6">{plan.content.questions.map((q, i) => <li key={i}><strong>{q.category}</strong> · {typeof q.text === 'string' ? q.text : q.text.es ?? q.text.en} · {t(q.type === 'open_ended' ? 'climateWorkbook.openQuestion' : 'climateWorkbook.scaleQuestion')}</li>)}</ol></details>
-      {plan.errors.length === 0 && <>
+      {plan.errors.length === 0 && access && !('unknown' in access) && <>
       <details><summary>{t('climateWorkbook.fields')}</summary><ul>{plan.fields.map(f => <li key={f.field}>{f.label}: {f.options.map(o => o.label).join(', ')}</li>)}</ul></details>
       <details><summary>{t('climateWorkbook.people')}</summary><div className="max-h-96 overflow-auto"><Table><thead><tr>{['name', 'email', 'department', 'role'].map(k => <th key={k}>{t(`climateWorkbook.${k}`)}</th>)}</tr></thead><tbody>{plan.content.people.map(p => <tr key={p.email}><td>{p.name}</td><td>{p.email}</td><td>{p.department}</td><td>{t(roleLabelKey(plan.existingPeople.find(u => u.email.toLowerCase() === p.email.toLowerCase())?.role ?? p.role) ?? 'users.employee')}</td></tr>)}</tbody></Table></div></details>
         <label className="flex items-start gap-3"><input type="checkbox" checked={approved} disabled={busy} onChange={e => setApproved(e.target.checked)} /><span>{t('climateWorkbook.approve')}</span></label>
@@ -101,9 +120,16 @@ export default function ClimateWorkbookPage() {
     {result && <section className="space-y-4 rounded-lg border border-line-default p-6">
       <h2>{t('climateWorkbook.complete')}</h2>
       <p>{t('climateWorkbook.result', { total: result.total, created: result.created, reused: result.reused })}</p>
-      <p>{t('climateWorkbook.delivery')}</p>
+      {result.credentialMode === 'per_survey'
+        ? <p>{t('climateWorkbook.deliveryPerSurvey')}</p>
+        : <p>{t('climateWorkbook.deliveryShared')} {t('climateWorkbook.delivery')}</p>}
       {result.credentialsNotSent.length > 0 && <Alert variant="destructive"><AlertDescription>{t('climateWorkbook.emailFailures')}<ul>{result.credentialsNotSent.map(email => <li key={email}>{email}</li>)}</ul></AlertDescription></Alert>}
-      <Button asChild><Link reloadDocument to={`/surveys/${result.surveyId}/distribution`} onClick={() => { if (readViewerClaims().role === 'super_admin') writeSelectedCompanyId(result.companyId) }}>{t('climateWorkbook.openDistribution')}</Link></Button>
+      <h3 className="font-medium">{t('climateWorkbook.draftTitle')}</h3>
+      <p>{t('climateWorkbook.nextStep')}</p>
+      <div className="flex flex-wrap gap-3">
+        <Button asChild><Link reloadDocument to={`/surveys/${result.surveyId}`} onClick={goToCompany}>{t('climateWorkbook.openSurvey')}</Link></Button>
+        <Button asChild variant="outline"><Link reloadDocument to={`/surveys/${result.surveyId}/distribution`} onClick={goToCompany}>{t('climateWorkbook.openDistribution')}</Link></Button>
+      </div>
     </section>}
   </div>
 }

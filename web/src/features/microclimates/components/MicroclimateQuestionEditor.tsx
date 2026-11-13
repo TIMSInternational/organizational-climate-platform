@@ -193,8 +193,11 @@ export default function MicroclimateQuestionEditor({
                         ? t('microclimates.optionLabelEn', { number: index + 1 })
                         : t('microclimates.optionLabel', { number: index + 1 })
                     }
-                    value={option.labelEn}
-                    onChange={(value) => updateOption(option.key, { labelEn: value })}
+                    // The column the content language writes, like the question text and the
+                    // emoji labels: a Spanish microclimate's options are `labelEs`, which is
+                    // what `localizedFor` sends and what a draft is read back into (G23).
+                    value={language === 'es' ? option.labelEs : option.labelEn}
+                    onChange={(value) => updateOption(option.key, language === 'es' ? { labelEs: value } : { labelEn: value })}
                     disabled={disabled}
                     className={bilingual ? undefined : 'md:col-span-2'}
                   />
@@ -273,10 +276,7 @@ export default function MicroclimateQuestionEditor({
                   ) : (
                     // Bound to the column the CONTENT LANGUAGE actually writes, the way
                     // the question-text field above does it -- not always to `labelEn`.
-                    // The plain option rows below still bind to `labelEn` unconditionally
-                    // while `localizedFor` reads `labelEs` for a Spanish microclimate;
-                    // that mismatch is a pre-existing defect on the multiple-choice path
-                    // and is deliberately not copied here.
+                    // The plain option rows above bind the same way since G23.
                     <TextField
                       label={t('microclimates.emojiLabel', { number: index + 1 })}
                       value={language === 'es' ? face.labelEs : face.labelEn}

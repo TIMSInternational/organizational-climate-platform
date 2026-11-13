@@ -120,11 +120,13 @@ public static class SubjectAccessExport
 
         var id = subject.Id;
         var email = subject.Email;
+        // email_delivery_events stores the address as SES reported it, lower-cased.
+        var loweredEmail = email.Trim().ToLowerInvariant();
         var idText = id.ToString();
 
         // Harvested first: the child tables below have no person reference of their own and
         // are reachable only through these parents.
-        var responseIds = await db.Responses.Where(r => r.UserId == id)
+        var responseIds = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).Where(r => r.UserId == id)
             .Select(r => r.Id).ToListAsync(cancellationToken);
         var invitationIds = await AddressedInvitations(db, email, companyScope)
             .Select(i => i.Id).ToListAsync(cancellationToken);
@@ -140,7 +142,7 @@ public static class SubjectAccessExport
             await FullAsync(db, "UserDemographic", "UserId",
                 db.UserDemographics.Where(d => d.UserId == id), cancellationToken),
             await FullAsync(db, "Response", "UserId",
-                db.Responses.Where(r => r.UserId == id), cancellationToken),
+                db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded).Where(r => r.UserId == id), cancellationToken),
             await QuestionResponsesAsync(db, responseIds, withholdVerbatimAnswers, cancellationToken),
             await FullAsync(db, "ResponseDemographic", "ResponseId",
                 db.ResponseDemographics.Where(rd => responseIds.Contains(rd.ResponseId)), cancellationToken),
@@ -149,6 +151,10 @@ public static class SubjectAccessExport
             await FullAsync(db, "MicroclimateInvitation",
                 (MicroclimateInvitation i) => i.UserId == id ? "UserId" : "Email",
                 MicroclimateInvitationsFor(db, id, email, companyScope), cancellationToken),
+            // users.email is unique, so the address can only add rows written before a change of
+            // address -- which is exactly when the history is still the subject's.
+            await FullAsync(db, "EmailDeliveryEvent", (EmailDeliveryEvent e) => e.UserId == id ? "UserId" : "Email",
+                db.EmailDeliveryEvents.Where(e => e.UserId == id || e.Email == loweredEmail), cancellationToken),
             await FullAsync(db, "Notification", "UserId",
                 db.Notifications.Where(n => n.UserId == id), cancellationToken),
             await FullAsync(db, "SurveyDraft", "UserId",
@@ -211,6 +217,8 @@ public static class SubjectAccessExport
                     .Select(u => new Reference(u.Id, u.OverallNotes)), cancellationToken),
             await ReferencesAsync("Benchmark", "CreatedBy",
                 db.Benchmarks.Where(b => b.CreatedBy == id).Select(b => new Reference(b.Id, b.NameEn ?? b.NameEs)), cancellationToken),
+            await ReferencesAsync("BenchmarkGroup", "CreatedBy",
+                db.BenchmarkGroups.Where(g => g.CreatedBy == id).Select(g => new Reference(g.Id, g.Name)), cancellationToken),
             await ReferencesAsync("QuestionCategory", "CreatedBy",
                 db.QuestionCategories.Where(c => c.CreatedBy == id).Select(c => new Reference(c.Id, c.NameEn)), cancellationToken),
             await ReferencesAsync("QuestionBankItem", "CreatedBy",

@@ -553,3 +553,36 @@ describe('MySurveysNextPage answered on this device', () => {
     expect(es('employee.next.notKeptAnonymousBody')).toMatch(/no sale de su dispositivo/)
   })
 })
+
+/**
+ * Audit 2026-10-22, R2: the close is printed and counted on the respondent's own clock.
+ *
+ * Zone-explicit: CI runs in UTC, where the defect and the fix print the same thing. The stub
+ * is asserted, so the case cannot pass because of the machine it runs on.
+ */
+describe('MySurveysNextPage — the close on the respondent’s own clock (R2)', () => {
+  const originalTz = process.env.TZ
+  beforeEach(() => {
+    process.env.TZ = 'America/Costa_Rica'
+    // 10:00 on 10 Sep in Costa Rica.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-09-10T16:00:00.000Z'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    process.env.TZ = originalTz
+  })
+
+  it('pins a 00:30 UTC close to the previous calendar day in Costa Rica, and counts it as today', async () => {
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('America/Costa_Rica')
+    // 00:30 UTC on 11 Sep is 18:30 on 10 Sep in Costa Rica: tonight.
+    serves({ surveys: [item({ questionCount: 6, endDate: '2026-09-11T00:30:00.000Z' })] })
+    renderPage()
+
+    expect(
+      await screen.findByText(es('employee.surveyMeta', { questions: 6, minutes: 4, date: '10 sept' })),
+    ).toBeTruthy()
+    expect(screen.queryByText(/cierra el 11 sept/)).toBeNull()
+    expect(chipIn(rowAround('Encuesta de Clima Q4 (abierta)')).textContent).toBe(es('employee.taskClosesToday'))
+  })
+})

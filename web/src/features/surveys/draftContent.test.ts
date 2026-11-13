@@ -24,6 +24,7 @@ function filled(): SurveyWizardValues {
     anonymous: false,
     allowPartialResponses: false,
     showProgress: false,
+    credentialMode: 'per_survey',
     questions: [
       {
         ...emptyQuestion('k-0'),

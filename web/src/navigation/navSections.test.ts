@@ -460,6 +460,8 @@ describe('leafNavItems', () => {
       // #423, appended immediately after the bank: the authoring repository beside the
       // curation surface. Same four-slot reasoning -- every leaf above is unmoved.
       '/admin/question-library',
+      // G21, the audit log, appended after the library for the same four-slot reason.
+      '/admin/audit',
       // Last, for the same four-slot reason -- see 'puts Notifications last' above.
       '/notifications',
     ])
@@ -500,6 +502,7 @@ describe('leafNavItems', () => {
       // #423, appended immediately after the bank in this branch too, for the same
       // reason and with the same shape: no companyId in the href.
       '/admin/question-library',
+      '/admin/audit',
       '/notifications',
     ])
   })

@@ -192,6 +192,8 @@ public static class NotificationEmailComposer
             text.Append('\n').Append(chrome.ManagePreferences).Append(": ").Append(preferencesUrl);
         }
 
+        text.Append("\n\n").Append(EmailBranding.Credit(recipient.Language));
+
         return new EmailMessage(
             recipient.EmailAddress,
             // Null, so the mail is addressed to the bare address: no display name, as the

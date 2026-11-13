@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setToken } from '../../../auth/token'
-import { listUsers, getUser, updateUser, updateUserRole, resendCredentials } from './users'
+import { ApiError } from '../../../api/authFetch'
+import { listUsers, getUser, updateUser, updateUserRole, resendCredentials, UserEmailError } from './users'
 
 const baseUrl = 'http://api.test'
 
@@ -38,6 +39,30 @@ describe('users api client', () => {
 
     expect(fetch).toHaveBeenCalledWith(`${baseUrl}/admin/users/1`, expect.objectContaining({ method: 'PUT' }))
     expect(result.name).toBe('Renamed')
+  })
+
+  it('carries the code of a refused address so the screen can translate it', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'A user with this email already exists', code: 'email_taken' }), { status: 409 }),
+    )
+
+    const error = await updateUser(baseUrl, '1', { email: 'taken@b.com' }).catch((err: unknown) => err)
+
+    expect(error).toBeInstanceOf(UserEmailError)
+    expect((error as UserEmailError).code).toBe('email_taken')
+    expect((error as UserEmailError).status).toBe(409)
+  })
+
+  it('still throws a plain ApiError, with the server message, for a 400 that is not about the address', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Department must exist in the same company' }), { status: 400 }),
+    )
+
+    const error = await updateUser(baseUrl, '1', { departmentId: 'x' }).catch((err: unknown) => err)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).not.toBeInstanceOf(UserEmailError)
+    expect((error as Error).message).toBe('Department must exist in the same company')
   })
 
   it('updates a user role', async () => {

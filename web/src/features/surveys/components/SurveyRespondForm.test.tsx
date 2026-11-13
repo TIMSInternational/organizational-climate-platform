@@ -971,31 +971,64 @@ describe('SurveyRespondForm layout', () => {
   })
 
   /**
-   * The closing date is a CALENDAR DAY, and it is read in UTC.
+   * The closing date is read in the RESPONDENT'S zone (audit 2026-10-22, R2).
    *
-   * The API stamps `endDate` as the end of one — the seeded Q3 closes at
-   * `2026-08-05T23:59:59+00:00`. Formatted in the reader's own zone that instant is
-   * **6 August** in Tokyo and in Madrid, so every respondent east of UTC was told a
-   * deadline a day later than the one the server enforces, on the screen whose whole
-   * job is to say when to answer by.
+   * `endDate` is the instant the server stops taking answers: the builder sends the
+   * administrator's wall clock as an instant, the API stores it as one and closes at
+   * `EndDate <= now`. This used to be read in UTC — this test was "reads the closing date as
+   * a calendar day, not in the reader's timezone", pinned in Tokyo against a seeded
+   * `23:59:59Z` — and in Costa Rica a close at or after 18:00 printed as the NEXT day, a
+   * deadline later than the one the server enforces.
    *
-   * **This test forces a timezone, and it has to.** CI and this machine both run in
-   * UTC, where the wrong code and the right code render the same string — which is
-   * exactly how the bug survived a sweep that routed every other date through
-   * `lib/calendarDay.ts`. Without the stub this case cannot fail.
+   * **This test forces a timezone, and it has to.** CI runs in UTC, where the wrong code and
+   * the right code render the same string. It also asserts the stub took effect, so it
+   * cannot pass because of the machine it runs on.
    */
-  it('reads the closing date as a calendar day, not in the reader’s timezone', async () => {
+  it('reads the closing date on the respondent’s own clock: 00:30 UTC is the previous day in Costa Rica', async () => {
     const original = process.env.TZ
-    process.env.TZ = 'Asia/Tokyo'
+    process.env.TZ = 'America/Costa_Rica'
     try {
-      // 23:59:59Z — the last second of 5 August in UTC, already the 6th in Tokyo.
-      respondWith(view({ endDate: '2026-08-05T23:59:59+00:00' }))
+      expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('America/Costa_Rica')
+      // 00:30 UTC on 12 Sep is 18:30 on 11 Sep in Costa Rica.
+      respondWith(view({ endDate: '2026-09-12T00:30:00Z' }))
       const { container } = renderForm()
       await screen.findByRole('radio', { name: 'Muy de acuerdo' })
 
       const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
-      expect(within(foot).getByText('Cierra el 5 de agosto')).toBeTruthy()
-      expect(within(foot).queryByText('Cierra el 6 de agosto')).toBeNull()
+      expect(within(foot).getByText('Cierra el 11 de septiembre')).toBeTruthy()
+      expect(within(foot).queryByText('Cierra el 12 de septiembre')).toBeNull()
+    } finally {
+      process.env.TZ = original
+    }
+  })
+
+  it('prints the same instant as the 12th to a reader in UTC — the zone decides, not the code', async () => {
+    const original = process.env.TZ
+    process.env.TZ = 'UTC'
+    try {
+      expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toMatch(/^(UTC|Etc\/UTC)$/)
+      respondWith(view({ endDate: '2026-09-12T00:30:00Z' }))
+      const { container } = renderForm()
+      await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+
+      const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
+      expect(within(foot).getByText('Cierra el 12 de septiembre')).toBeTruthy()
+    } finally {
+      process.env.TZ = original
+    }
+  })
+
+  it('prints the confirmation’s close on the respondent’s own clock too', async () => {
+    const original = process.env.TZ
+    process.env.TZ = 'America/Costa_Rica'
+    try {
+      respondWith(view({ endDate: '2026-09-12T00:30:00Z' }))
+      renderForm()
+      await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
+
+      expect(await screen.findByText('La encuesta cierra el 11 de septiembre de 2026')).toBeTruthy()
+      expect(screen.queryByText('La encuesta cierra el 12 de septiembre de 2026')).toBeNull()
     } finally {
       process.env.TZ = original
     }

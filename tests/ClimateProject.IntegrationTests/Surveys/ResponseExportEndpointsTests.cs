@@ -28,6 +28,7 @@ public class ResponseExportEndpointsTests : IAsyncLifetime
     private Guid _identifiedSurveyId;
     private Guid _anonymousSurveyId;
     private Guid _respondentId;
+    private Guid _operacionesId;
 
     // Unique per test instance: IX_users_username is a GLOBAL unique index and every test in
     // this assembly shares one database, so a fixed username collides on the second test.
@@ -85,8 +86,24 @@ public class ResponseExportEndpointsTests : IAsyncLifetime
             UpdatedAt = now,
         });
 
-        _identifiedSurveyId = Seed(db, company.Id, "Clima identificado", anonymous: false, respondent.Id, respondent.Id, now);
-        _anonymousSurveyId = Seed(db, company.Id, "Clima anónimo", anonymous: true, null, respondent.Id, now);
+        // A labelled field, and a department a respondent can declare as their área. `antiguedad`
+        // is deliberately NOT defined: a value with no label must still print, as stored.
+        var operaciones = new Department { Id = Guid.NewGuid(), CompanyId = company.Id, Name = "Operaciones", CreatedAt = now };
+        db.Departments.Add(operaciones);
+        _operacionesId = operaciones.Id;
+        var sexo = new DemographicField
+        {
+            Id = Guid.NewGuid(), CompanyId = company.Id, Field = "sexo", LabelEs = "Sexo", LabelEn = "Sex",
+            Type = "select", Order = 2, CreatedAt = now, UpdatedAt = now,
+        };
+        db.DemographicFields.Add(sexo);
+        db.DemographicFieldOptions.Add(new DemographicFieldOption
+        {
+            DemographicFieldId = sexo.Id, Order = 1, Value = "femenino", LabelEs = "Femenino", LabelEn = "Female",
+        });
+
+        _identifiedSurveyId = Seed(db, company.Id, "Clima identificado", anonymous: false, respondent.Id, respondent.Id, now, operaciones.Id);
+        _anonymousSurveyId = Seed(db, company.Id, "Clima anónimo", anonymous: true, null, respondent.Id, now, operaciones.Id);
 
         await db.SaveChangesAsync();
     }
@@ -96,7 +113,7 @@ public class ResponseExportEndpointsTests : IAsyncLifetime
     /// <summary>One survey, one scale question, one open question, one response to both.</summary>
     private static Guid Seed(
         ClimateProjectDbContext db, Guid companyId, string title, bool anonymous, Guid? userId, Guid createdBy,
-        DateTimeOffset now)
+        DateTimeOffset now, Guid declaredDepartmentId)
     {
         var survey = new Survey
         {
@@ -162,6 +179,16 @@ public class ResponseExportEndpointsTests : IAsyncLifetime
             // jsonb, like response_value: a bare string is not JSON and Postgres rejects it
             // with 22P02, which is how the write side in SurveyResponseEndpoints stores it too.
             Value = "\"4_a_6_anos\"",
+        });
+        db.ResponseDemographics.Add(new ResponseDemographic
+        {
+            ResponseId = response.Id, Field = "sexo", Value = "\"femenino\"",
+        });
+        // The área a respondent with no account declares: the department's ID, under the reserved
+        // key (SelfDeclaredDepartment), never `responses.department_id`.
+        db.ResponseDemographics.Add(new ResponseDemographic
+        {
+            ResponseId = response.Id, Field = "department", Value = $"\"{declaredDepartmentId}\"",
         });
 
         return survey.Id;
@@ -282,6 +309,56 @@ public class ResponseExportEndpointsTests : IAsyncLifetime
 
         // RESUMEN counts the same people, so the number in the index and the list agree.
         Assert.Equal(rows.Count, (int)book.Worksheet("RESUMEN").Cell(2, 10).GetDouble());
+    }
+
+    /// <summary>
+    /// 2026-11-02. The export used to print what the database stores — a department GUID, an
+    /// option value, a field key as the header — and every workbook delivered from it went through
+    /// a script on a developer's machine to become readable.
+    /// </summary>
+    [Fact]
+    public async Task The_export_prints_the_companys_labels_and_the_declared_area_by_name()
+    {
+        using var client = await ClientAsync(Roles.SuperAdmin);
+
+        var response = await client.GetAsync($"/admin/exports/responses?surveyId={_anonymousSurveyId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var book = new XLWorkbook(new MemoryStream(await response.Content.ReadAsByteArrayAsync()));
+        var sheet = SheetFor(book, "Clima anónimo");
+        var header = Header(sheet);
+
+        Assert.Equal("Femenino", sheet.Cell(2, header.IndexOf("Sexo") + 1).GetString());
+        Assert.Equal("Operaciones", sheet.Cell(2, header.IndexOf("Área") + 1).GetString());
+        Assert.DoesNotContain("sexo", header);
+        Assert.DoesNotContain("department", header);
+        Assert.DoesNotContain(sheet.CellsUsed(), c => c.GetString().Contains(_operacionesId.ToString(), StringComparison.OrdinalIgnoreCase));
+
+        // The área first, then the company's own field order; a field with no definition last.
+        Assert.True(header.IndexOf("Área") < header.IndexOf("Sexo"));
+        Assert.True(header.IndexOf("Sexo") < header.IndexOf("antiguedad"));
+    }
+
+    /// <summary>
+    /// The list Eagle asked for on 2026-11-02 to check managers' demographics before the
+    /// analysis: every response, every demographic, and nothing anyone answered.
+    /// </summary>
+    [Fact]
+    public async Task Without_answers_the_export_keeps_every_row_and_demographic_and_no_answer()
+    {
+        using var client = await ClientAsync(Roles.SuperAdmin);
+
+        var response = await client.GetAsync($"/admin/exports/responses?surveyId={_identifiedSurveyId}&answers=false");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var book = new XLWorkbook(new MemoryStream(await response.Content.ReadAsByteArrayAsync()));
+        var sheet = SheetFor(book, "Clima identificado");
+        var header = Header(sheet);
+
+        Assert.DoesNotContain("P01", header);
+        Assert.DoesNotContain("P02", header);
+        Assert.False(book.Worksheets.Contains("PREGUNTAS"));
+        Assert.DoesNotContain(sheet.CellsUsed(), c => c.GetString().Contains("nunca me escucha", StringComparison.Ordinal));
+        Assert.Equal("Femenino", sheet.Cell(2, header.IndexOf("Sexo") + 1).GetString());
+        Assert.Equal(1, sheet.RowsUsed().Count() - 1);
     }
 
     private async Task<bool> UserIdIsNullAsync(Guid surveyId)

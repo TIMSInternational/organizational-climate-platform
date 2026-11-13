@@ -8,7 +8,9 @@ import { CompanyContextProvider, COMPANY_CONTEXT_STORAGE_KEY } from '../../../..
 import { tokenFor } from '../../../../test/jwtFixture'
 import {
   createSurveyTemplate,
+  deleteSurveyTemplate,
   getSurveyTemplate,
+  updateSurveyTemplate,
   listSurveyTemplates,
   type SurveyTemplateDetail,
   type SurveyTemplateListItem,
@@ -24,6 +26,8 @@ vi.mock('../../api/surveyTemplates', async (importOriginal) => ({
   listSurveyTemplates: vi.fn(),
   getSurveyTemplate: vi.fn(),
   createSurveyTemplate: vi.fn(),
+  updateSurveyTemplate: vi.fn(),
+  deleteSurveyTemplate: vi.fn(),
 }))
 vi.mock('../../api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/surveys')>()),
@@ -98,6 +102,8 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
         : Promise.reject(new Error('boom')),
     )
     vi.mocked(createSurveyTemplate).mockReset().mockResolvedValue({ id: 'new-1' } as SurveyTemplateDetail)
+    vi.mocked(updateSurveyTemplate).mockReset().mockResolvedValue({ id: 'clima' } as SurveyTemplateDetail)
+    vi.mocked(deleteSurveyTemplate).mockReset().mockResolvedValue(undefined)
     vi.mocked(listSurveys).mockReset().mockResolvedValue([q4, empty])
     vi.mocked(getSurvey).mockReset().mockImplementation(async (_base, _id, lang) => q4Detail(lang ?? 'en'))
   })
@@ -225,5 +231,121 @@ describe('SurveyTemplatesNextPage (/surveys/templates)', () => {
     expect((within(dialog).getByRole('button', { name: copy.newCreate }) as HTMLButtonElement).disabled).toBe(false)
     // The server's English sentence is not shown to a Spanish-speaking admin.
     expect(within(dialog).queryByText('Name, description, and category are required')).toBeNull()
+  })
+  describe('edit and delete (PUT / DELETE /survey-templates/{id})', () => {
+    const global = { ...item('global', 'Global instrument', 'climate', 7), companyId: null, isGlobal: true }
+    const other = { ...item('ajena', 'Other tenant', 'climate', 0), companyId: 'c2' }
+
+    function detail(fallbackFields: string[] = []): SurveyTemplateDetail {
+      return {
+        name: 'Climate standard', description: 'Climate standard description', category: 'climate', fallbackFields,
+        questions: [question(1, 'trust')],
+      } as unknown as SurveyTemplateDetail
+    }
+
+    function card(name: string): HTMLElement {
+      const heading = screen.getByRole('heading', { name })
+      return heading.closest('[data-slot="template-card"]') as HTMLElement
+    }
+
+    it('draws Edit and Delete only on a template the viewer may write: a company admin never on a global one', async () => {
+      vi.mocked(listSurveyTemplates).mockResolvedValue([item('clima', 'Climate standard', 'climate', 0), global, other])
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByRole('heading', { name: '3 templates' })
+      expect(within(card('Climate standard')).getByRole('button', { name: 'Edit the template Climate standard' })).toBeTruthy()
+      expect(within(card('Climate standard')).getByRole('button', { name: 'Delete the template Climate standard' })).toBeTruthy()
+      expect(within(card('Global instrument')).queryByRole('button', { name: /Edit the template|Delete the template/ })).toBeNull()
+      expect(within(card('Other tenant')).queryByRole('button', { name: /Edit the template|Delete the template/ })).toBeNull()
+      cleanup()
+
+      renderAs({ role: 'super_admin' })
+      await screen.findByRole('heading', { name: '3 templates' })
+      expect(within(card('Global instrument')).getByRole('button', { name: 'Edit the template Global instrument' })).toBeTruthy()
+      expect(within(card('Global instrument')).getByRole('button', { name: 'Delete the template Global instrument' })).toBeTruthy()
+    })
+
+    it('edits name, description and category, writing back to the language on screen, then reloads the list', async () => {
+      vi.mocked(getSurveyTemplate).mockResolvedValue(detail())
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByRole('heading', { name: '2 templates' })
+      const loads = vi.mocked(listSurveyTemplates).mock.calls.length
+      await userEvent.click(within(card('Climate standard')).getByRole('button', { name: 'Edit the template Climate standard' }))
+      const dialog = await screen.findByRole('dialog')
+      const name = (await within(dialog).findByLabelText(new RegExp(copy.newName))) as HTMLInputElement
+      expect(name.value).toBe('Climate standard')
+      expect(within(dialog).getByText(copy.editKeepsSurveys)).toBeTruthy()
+      await userEvent.clear(name)
+      await userEvent.type(name, 'Climate 2027')
+      await userEvent.selectOptions(within(dialog).getByLabelText(new RegExp(copy.newCategory)), 'pulse')
+      await userEvent.click(within(dialog).getByRole('button', { name: copy.editSave }))
+
+      expect(vi.mocked(updateSurveyTemplate)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(updateSurveyTemplate).mock.calls[0][1]).toBe('clima')
+      expect(vi.mocked(updateSurveyTemplate).mock.calls[0][2]).toEqual({
+        name: { en: 'Climate 2027' },
+        description: { en: 'Climate standard description' },
+        category: 'pulse',
+      })
+      await screen.findByRole('heading', { name: '2 templates' })
+      expect(vi.mocked(listSurveyTemplates).mock.calls.length).toBeGreaterThan(loads)
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('writes a name that was shown from the other language back to that language, never over the reader’s', async () => {
+      // Read in English, but the template has only a Spanish name: the server printed it with
+      // `name` in fallbackFields. The edit must replace the Spanish half, not invent an English one.
+      vi.mocked(getSurveyTemplate).mockResolvedValue(detail(['name']))
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByRole('heading', { name: '2 templates' })
+      await userEvent.click(within(card('Climate standard')).getByRole('button', { name: 'Edit the template Climate standard' }))
+      const dialog = await screen.findByRole('dialog')
+      const name = (await within(dialog).findByLabelText(new RegExp(copy.newName))) as HTMLInputElement
+      await userEvent.type(name, ' bis')
+      await userEvent.click(within(dialog).getByRole('button', { name: copy.editSave }))
+      expect(vi.mocked(updateSurveyTemplate).mock.calls[0][2]).toMatchObject({ name: { es: 'Climate standard bis' }, description: { en: 'Climate standard description' } })
+    })
+
+    it('refuses a blank name as create does, and keeps the dialog open with its own words when the server refuses', async () => {
+      vi.mocked(getSurveyTemplate).mockResolvedValue(detail())
+      vi.mocked(updateSurveyTemplate).mockRejectedValue(new Error('Category is required'))
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByRole('heading', { name: '2 templates' })
+      await userEvent.click(within(card('Climate standard')).getByRole('button', { name: 'Edit the template Climate standard' }))
+      const dialog = await screen.findByRole('dialog')
+      const name = (await within(dialog).findByLabelText(new RegExp(copy.newName))) as HTMLInputElement
+      const save = within(dialog).getByRole('button', { name: copy.editSave }) as HTMLButtonElement
+      await userEvent.clear(name)
+      expect(save.disabled).toBe(true)
+      await userEvent.type(name, 'Renamed')
+      await userEvent.click(save)
+      expect(await within(dialog).findByText(copy.editFailed)).toBeTruthy()
+      expect(screen.getByRole('dialog')).toBe(dialog)
+      expect(within(dialog).queryByText('Category is required')).toBeNull()
+    })
+
+    it('deletes only after a confirmation that says surveys built from it are kept, then reloads', async () => {
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByRole('heading', { name: '2 templates' })
+      await userEvent.click(within(card('Engagement pulse')).getByRole('button', { name: 'Delete the template Engagement pulse' }))
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(copy.deleteBodyOne)).toBeTruthy()
+      expect(vi.mocked(deleteSurveyTemplate)).not.toHaveBeenCalled()
+      await userEvent.click(within(dialog).getByRole('button', { name: copy.deleteConfirm }))
+      expect(vi.mocked(deleteSurveyTemplate).mock.calls.map((call) => call[1])).toEqual(['pulso'])
+      await screen.findByRole('heading', { name: '2 templates' })
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+    })
+
+    it('says so when the delete is refused, in its own words', async () => {
+      vi.mocked(deleteSurveyTemplate).mockRejectedValue(new Error('Forbidden'))
+      renderAs({ role: 'company_admin', companyId: 'c1' })
+      await screen.findByRole('heading', { name: '2 templates' })
+      await userEvent.click(within(card('Climate standard')).getByRole('button', { name: 'Delete the template Climate standard' }))
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(copy.deleteBody.replace('{count}', '0'))).toBeTruthy()
+      await userEvent.click(within(dialog).getByRole('button', { name: copy.deleteConfirm }))
+      expect(await screen.findByText(copy.deleteFailed)).toBeTruthy()
+      expect(screen.queryByText('Forbidden')).toBeNull()
+    })
   })
 })

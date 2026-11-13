@@ -30,18 +30,24 @@ export function isUnderAMinute(questionCount: number): boolean {
 }
 
 /**
- * A calendar day as the respond footers print it inside a sentence — "10 de octubre",
- * "October 10" — with no year, as the canvas writes "Cierra el 10 de octubre" and
+ * The day a survey closes, as the respond footers print it inside a sentence — "10 de
+ * octubre", "October 10" — with no year, as the canvas writes "Cierra el 10 de octubre" and
  * "Abierta hasta el 11 de septiembre".
  *
- * `timeZone: 'UTC'` for the reason `lib/calendarDay.ts` exists: a close date is the end
- * of a calendar day stamped in UTC (Q4 closes `2026-10-10T02:03:39Z`), and formatted in
- * the reader's own zone it is the 9th for everyone west of UTC — which is the whole of
- * Costa Rica. The value is returned unchanged when it does not parse, so a malformed
- * date reads as what the server sent rather than as "Invalid Date".
+ * **In the reader's own zone.** A close is an instant, not a UTC calendar day: the builder
+ * sends the administrator's wall clock (`new Date(local).toISOString()`, `wizardValues.ts`),
+ * the API stores it with `ToUniversalTime()` and stops taking answers at `EndDate <= now`.
+ * This used to be read in UTC, and a close at or after 18:00 in Costa Rica printed as the
+ * next day — a deadline a day later than the one the server enforces (audit 2026-10-22,
+ * R2). Every caller is a respondent screen: the respond form, the employee Home and the
+ * microclimate pulse, whose `closesAt` is an instant too.
+ *
+ * `timeZone` is injectable only so a test can pin the zone; callers omit it. The value is
+ * returned unchanged when it does not parse, so a malformed date reads as what the server
+ * sent rather than as "Invalid Date".
  */
-export function formatDayMonth(value: string, locale: string): string {
+export function formatDayMonth(value: string, locale: string, timeZone?: string): string {
   const parsed = Date.parse(value)
   if (Number.isNaN(parsed)) return value
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(parsed)
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone }).format(parsed)
 }

@@ -240,8 +240,10 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(onTransition).not.toHaveBeenCalled()
 
     const dialog = await screen.findByRole('alertdialog')
-    // The consequence is named, not implied: it cannot be reopened.
-    expect(dialog.textContent).toContain('no se puede reabrir')
+    // The consequence is named, not implied: since the 2026-11-08 ruling a close can be undone,
+    // but not by this reader -- only a super admin, with a new close and a reason.
+    expect(dialog.textContent).toContain('Reabrirla solo lo puede hacer un super administrador')
+    expect(dialog.textContent).not.toContain('no se puede reabrir')
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
     expect(onTransition).not.toHaveBeenCalled()
@@ -380,17 +382,13 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
 const noop: DistributionActions = {
   invite: () => undefined,
   setOneSessionOnly: () => undefined,
-  remind: () => undefined,
+  setOpensBeforeStart: () => undefined,
   createLink: () => undefined,
   regenerateLink: () => undefined,
   revokeLink: () => undefined,
-  resendInvitation: () => undefined,
   revokeInvitation: () => undefined,
   setSelfDeclaredDemographics: () => undefined,
   setCollectParticipantIdentity: () => undefined,
-  openCopy: () => undefined,
-  editCopy: () => undefined,
-  saveCopy: async () => true,
 }
 
 const distribution = (
@@ -429,14 +427,14 @@ describe('Distribución (Distribution artboard)', () => {
     expect(screen.getByText('Frase del servidor sobre lo que se registra.').getAttribute('class')).toContain('text-[1.125rem]')
   })
 
-  it('reads 4 of 4 with a working link and nobody invited yet, and keeps naming the audience', () => {
+  it('reads 3 of 3 with a working link and nobody invited yet, and keeps naming the audience', () => {
     // Was 3 of 4 with `invitations: missing`. The share link is a door, so the survey is
     // launchable and the checklist no longer says otherwise -- the change that stopped a
     // link-distributed survey reading "Falta que las invitaciones salgan" forever.
     // The audience line is unchanged: this company HAS a directory, 6 people in two
     // departments, so nothing about it became inapplicable.
     distribution(invitationList())
-    expect(reading('tile-ready')).toBe('4')
+    expect(reading('tile-ready')).toBe('3')
     expect(screen.getByTestId('tile-ready').textContent).toContain('Todo listo para lanzar')
     expect(screen.getByTestId('tile-ready').textContent).not.toContain('Falta que las invitaciones salgan')
     expect(screen.getByTestId('step-invitations').getAttribute('data-state')).toBe('idle')
@@ -493,7 +491,7 @@ describe('Distribución (Distribution artboard)', () => {
 
   it('offers an administrator of another company no way to change the audience, send, or act on an invitation or the link', async () => {
     distribution(invitationList(2), 'company_admin', false)
-    for (const name of [/Cambiar audiencia/, /Enviar invitaciones/, /Enviar recordatorio/, /Más acciones de las invitaciones/, /Acciones de la invitación/]) {
+    for (const name of [/Cambiar audiencia/, /Enviar códigos/, /Registrar la audiencia/, /Acciones de la invitación/]) {
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
     await userEvent.click(screen.getByRole('button', { name: 'Opciones del enlace' }))
@@ -563,45 +561,27 @@ describe('Distribución (Distribution artboard)', () => {
     expect(reading('tile-reach')).toBe('41')
   })
 
-  it('dates the next automatic reminder from the schedule the worker runs, in the artboard\'s words, and never says they go by hand', () => {
-    // Sent 10 Sep, every 3 days: due 13 Sep; the survey closes 10 Oct — 27 days later.
+  it('offers no reminder and promises none: the sweep was deleted and the route answers zeros (G11)', () => {
     distribution(invitationList(2, { sentAt: '2026-09-10T12:00:00Z' }))
-    const text = screen.getByTestId('step-reminders').textContent ?? ''
-    expect(text).toContain(
-      'Ningún recordatorio enviado todavía. Uno programado para el 13 sep, 27 días antes del cierre, solo a quienes no hayan respondido.',
-    )
-    expect(text).not.toContain('a mano')
-    cleanup()
-    // Sent 6 Oct: due 9 Oct, the day before the close.
-    distribution(invitationList(2, { sentAt: '2026-10-06T12:00:00Z' }))
-    expect(screen.getByTestId('step-reminders').textContent).toContain('Uno programado para el 9 oct, un día antes del cierre,')
+    expect(screen.queryByTestId('step-reminders')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Enviar recordatorio/ })).toBeNull()
+    expect(document.body.textContent).not.toContain('Salen solos')
+    expect(document.body.textContent).not.toContain('Recordatorios')
   })
 
-  it('says the reminders are off when the survey turned them off', () => {
-    distribution(invitationList(2, { sentAt: '2026-09-10T15:30:00Z' }), 'company_admin', true, {
-      survey: survey({ settings: { anonymous: false, notificationSendReminders: false, notificationReminderFrequencyDays: 3 } as SurveyDetail['settings'] }),
-    })
-    expect(screen.getByTestId('step-reminders').textContent).toContain('Los recordatorios automáticos están apagados para esta encuesta.')
-  })
-
-  it("offers each invitation's resend and revoke to its administrator, never a resend the server refuses", async () => {
-    const resendInvitation = vi.fn()
-    const list = invitationList(3)
-    list.invitations[1] = { ...list.invitations[1], status: 'completed' }
-    distribution(list, 'company_admin', true, {}, { ...noop, resendInvitation })
+  it("offers each invitation's revoke only: the resend the server answers with a 410 is gone (G11)", async () => {
+    const revokeInvitation = vi.fn()
+    distribution(invitationList(3), 'company_admin', true, {}, { ...noop, revokeInvitation })
     await userEvent.click(screen.getByRole('button', { name: 'Acciones de la invitación de persona0@meridiano.test' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Reenviar' }))
-    expect(resendInvitation).toHaveBeenCalledWith('i0')
-    await userEvent.click(screen.getByRole('button', { name: 'Acciones de la invitación de persona1@meridiano.test' }))
-    expect((await screen.findByRole('menuitem', { name: 'Reenviar' })).getAttribute('data-disabled')).not.toBeNull()
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Revocar'])
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Revocar' }))
+    expect(revokeInvitation).toHaveBeenCalledWith('i0')
   })
 
-  it("opens the invitation's own text from the invitations step", async () => {
-    const openCopy = vi.fn()
-    distribution(invitationList(), 'company_admin', true, {}, { ...noop, openCopy })
-    await userEvent.click(screen.getByRole('button', { name: 'Más acciones de las invitaciones' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Texto de la invitación' }))
-    expect(openCopy).toHaveBeenCalledTimes(1)
+  it("no longer offers the invitation's own text, which no email reads (G11)", () => {
+    distribution(invitationList())
+    expect(screen.queryByRole('button', { name: 'Más acciones de las invitaciones' })).toBeNull()
+    expect(document.body.textContent).not.toContain('Texto de la invitación')
   })
 
   it("keeps the Estado column to its chip, as the artboard does: an invitation's menu shows on the row's hover or focus, and always where nothing can hover", async () => {
@@ -634,8 +614,7 @@ describe('Distribución (Distribution artboard)', () => {
     const action = step.querySelector<HTMLElement>('[data-slot="step-action"]')
     expect(action?.className.split(' ')).toEqual(expect.arrayContaining(['col-start-2', 'sm:col-start-3', 'sm:row-start-1', 'sm:flex-col']))
     expect(within(action as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
-      'Enviar invitaciones',
-      'Más acciones de las invitaciones',
+      'Registrar la audiencia',
     ])
     // The artboard's 14px step title (`text-lg` in this scale; `text-base` is 13px).
     expect(within(step).getByRole('heading', { level: 3 }).className.split(' ')).toContain('text-lg')
@@ -731,13 +710,43 @@ describe('Distribución — the role half of the rule, through the page model', 
   it('offers an administrator of the survey company the audience and send controls (the control)', async () => {
     page('company_admin')
     expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Enviar invitaciones/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
+  })
+
+  /**
+   * The walkthrough's A1 (docs/audits/2026-11-08-operator-ui-walkthrough.md): the survey's own
+   * company decides, never the header. A TIMS operator whose header held another client opened
+   * this page and got no roster, no per-person button and no send control, and nothing said why.
+   */
+  it("offers a super administrator whose header holds another client the survey company's controls, and moves the header there", async () => {
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'otra-empresa')
+    renderAs('super_admin', <SurveyDistributionNextPage />, '', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Registrar la audiencia/ })).toBeTruthy()
+    // The directory read is the survey's company's, not the header's.
+    expect(vi.mocked(usersApi.listUsers).mock.calls.map((call) => call[1])).toEqual(['c1'])
+    await waitFor(() => expect(localStorage.getItem(COMPANY_CONTEXT_STORAGE_KEY)).toBe('c1'))
+  })
+
+  it('offers a super administrator with nothing selected the same controls', async () => {
+    renderAs('super_admin', <SurveyDistributionNextPage />, '', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    expect(await screen.findByRole('button', { name: 'Cambiar audiencia' })).toBeTruthy()
+    expect(usersApi.listUsers).toHaveBeenCalled()
+  })
+
+  it("offers a company administrator of another company nothing, even with the survey's company stored as a selection", async () => {
+    // The selection is consulted for a super administrator only; a company admin is their claim.
+    localStorage.setItem(COMPANY_CONTEXT_STORAGE_KEY, 'c1')
+    renderAs('company_admin', <SurveyDistributionNextPage />, 'c2', '/surveys/s1/distribution', '/surveys/:surveyId/distribution')
+    await screen.findByTestId('step-audience')
+    expect(screen.queryByRole('button', { name: 'Cambiar audiencia' })).toBeNull()
+    expect(usersApi.listUsers).not.toHaveBeenCalled()
   })
 
   it("offers a leader of the survey's own company no audience, send, reminder or link control", async () => {
     page('leader')
     await screen.findByTestId('step-audience')
-    for (const name of [/Cambiar audiencia/, /Enviar invitaciones/, /Enviar recordatorio/, /Crear enlace/, /Más acciones de las invitaciones/]) {
+    for (const name of [/Cambiar audiencia/, /Enviar invitaciones/, /Enviar códigos/, /Registrar la audiencia/, /Enviar recordatorio/, /Crear enlace/]) {
       expect(screen.queryByRole('button', { name })).toBeNull()
     }
     expect(usersApi.listUsers).not.toHaveBeenCalled()
@@ -1102,7 +1111,7 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     const row = await screen.findByTestId('add-question')
     expect(row.textContent).toContain('· del banco, de la biblioteca o en blanco')
     await userEvent.click(within(row).getByRole('button', { name: /Agregar pregunta/ }))
-    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Del banco', 'De la biblioteca', 'En blanco'])
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Del banco', 'De la biblioteca', 'Pegar desde Excel', 'En blanco'])
   })
 
   it("keeps the reader's Spanish on a bilingual template, live — /use takes the language", async () => {
@@ -1134,6 +1143,10 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     expect((await screen.findByTestId('landed')).textContent).toBe('new-survey')
     expect(templatesApi.instantiateSurveyTemplate).toHaveBeenCalledTimes(1)
     expect(vi.mocked(templatesApi.instantiateSurveyTemplate).mock.calls[0][2]).toMatchObject({ language: 'es', title: 'Clima Q1' })
+    // G15: the page's own submit carries the settings it showed, anonymous among them.
+    expect(vi.mocked(templatesApi.instantiateSurveyTemplate).mock.calls[0][2]).toMatchObject({
+      settings: { anonymous: true, allowPartialResponses: true, showProgress: true },
+    })
     expect(questionAuthoring.getSurveyQuestionAuthoring).not.toHaveBeenCalled()
     expect(questionAuthoring.replaceSurveyQuestions).not.toHaveBeenCalled()
   })
@@ -1248,6 +1261,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await within(list).findByText('Confío en la dirección.')
     await userEvent.click(within(list).getAllByRole('switch')[0])
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    // Through the settings step (G16), left untouched, to the review.
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(questionAuthoring.replaceSurveyQuestions).toHaveBeenCalledTimes(1))
     const [, id, sent] = vi.mocked(questionAuthoring.replaceSurveyQuestions).mock.calls[0]
@@ -1282,6 +1297,8 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     await userEvent.keyboard('{Escape}')
     await within(screen.getByTestId('builder-questions')).findByText('Me siento escuchado.')
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    // Through the settings step (G16), left untouched, to the review.
+    await userEvent.click(await screen.findByRole('button', { name: 'Siguiente' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Crear el borrador' }))
     await waitFor(() => expect(creating.createSurvey).toHaveBeenCalledTimes(1))
     const sent = vi.mocked(creating.createSurvey).mock.calls[0][1]
@@ -1306,6 +1323,9 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     const sent = vi.mocked(creating.createSurvey).mock.calls[0][1]
     expect(sent.title).toBe('Pulso de octubre')
     expect(sent.questions).toEqual([{ text: 'Me siento escuchado.', type: 'likert', required: true, order: 0, category: 'trust' }])
-    expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions').filter((k, i, a) => a.indexOf(k) === i).sort())
+    // `targetAudienceCount` joins the payload deliberately (walkthrough B6, 2026-11-08): the count
+    // was left blank, so it is the audience the step chose rather than nothing at all.
+    expect(Number.isInteger(sent.targetAudienceCount) && (sent.targetAudienceCount as number) > 0).toBe(true)
+    expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions', 'targetAudienceCount').filter((k, i, a) => a.indexOf(k) === i).sort())
   })
 })

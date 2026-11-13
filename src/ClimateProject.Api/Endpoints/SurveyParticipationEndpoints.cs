@@ -1,8 +1,14 @@
 using System.Globalization;
+using System.Text;
 using System.Security.Claims;
 using ClimateProject.Api.Infrastructure;
+using ClimateProject.Api.Infrastructure.Auditing;
+using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Exports;
+using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
+using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,9 +42,180 @@ public static class SurveyParticipationEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        app.MapGroup("/surveys")
+        var group = app.MapGroup("/surveys").RequireAuthorization();
+        group.MapGet("/{surveyId:guid}/participation", GetAsync);
+
+        // The roster as a file (audit gap G20). A list of named people leaving the server is
+        // the disclosure "who exported this data" is asked about, so the read is audited --
+        // the same marker the survey and dashboard exports carry.
+        group.MapGet("/{surveyId:guid}/participation/export", ExportAsync)
+            .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Export));
+
+        // Every one of a company's distributed surveys in one workbook -- the file TIMS sends
+        // the client, which through October was three downloads and a Python script. Mapped
+        // here, beside the per-survey export, because it is the same roster read repeated: it
+        // calls the same `LoadAsync`, with the same per-survey authorization, rather than
+        // assembling a second idea of who is in an audience.
+        //
+        // `?survey=` narrows it to the sheets the operator picked. Repeat the parameter once
+        // per survey; omit it entirely for all of them, which is what the route did before a
+        // picker existed and what every existing caller still sends.
+        app.MapGet("/admin/companies/{companyId:guid}/participation/export", ExportCompanyAsync)
             .RequireAuthorization()
-            .MapGet("/{surveyId:guid}/participation", GetAsync);
+            .WithMetadata(new AuditSensitiveReadAttribute(AuditVerbs.Export));
+    }
+
+    /// <summary>
+    /// <c>GET /admin/companies/{companyId}/participation/export</c>: one workbook, a sheet per
+    /// survey.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Draft surveys are left out: nobody has been invited to one, so its sheet would be a page
+    /// of people reported as not having answered something they were never sent. Everything
+    /// else the company has -- active, closed, archived -- is included, because a status file
+    /// that silently dropped the survey that closed yesterday would be read as if that survey
+    /// had never run.
+    /// </para>
+    /// <para>
+    /// Authorization is per survey and not per company, deliberately: each sheet goes through
+    /// <see cref="LoadAsync"/>, so the one predicate that decides who may read a list of named
+    /// people decides it here too. A caller who may administer none of them gets the same
+    /// refusal the single-survey route gives.
+    /// </para>
+    /// <para>
+    /// <paramref name="surveyIds"/> narrows the workbook to the sheets asked for, and an id that
+    /// is not one of this company's distributed surveys is REFUSED rather than dropped. A file
+    /// that quietly came back without the survey the operator picked would be read as that
+    /// survey having no activity -- the same misreading the draft rule above avoids -- and this
+    /// file goes to a client. The refusal says the same thing for a mistyped id, a draft and
+    /// another company's survey, so it cannot be used to discover that an id exists.
+    /// </para>
+    /// <para>
+    /// Sheet order is always the company's own creation order, never the order the ids arrived
+    /// in: the client has been reading these sheets in one order for weeks, and a workbook
+    /// whose tabs moved because of the order someone ticked boxes in would read as a different
+    /// report. Duplicate ids collapse for the same reason.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> ExportCompanyAsync(
+        Guid companyId,
+        [Microsoft.AspNetCore.Mvc.FromQuery(Name = "survey")] Guid[]? surveyIds,
+        [Microsoft.AspNetCore.Mvc.FromQuery(Name = "format")] string? format,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), companyId))
+        {
+            return Results.Forbid();
+        }
+
+        var company = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == companyId)
+            .Select(c => new { c.Name, c.Settings.Language, c.Settings.Timezone })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (company is null)
+        {
+            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+        }
+
+        var spanish = SurveyRosterCsv.IsSpanish(company.Language);
+        // `?format=progress` is ESPH's layout (walkthrough 2026-11-08); absent is the standard one,
+        // which is what every caller sent before the choice existed. Anything else is refused
+        // rather than quietly read as standard: this file goes to a client.
+        StatusWorkbookLayout layout;
+        if (string.IsNullOrEmpty(format) || format == "standard")
+        {
+            layout = StatusWorkbookLayout.Standard;
+        }
+        else if (format == "progress")
+        {
+            layout = StatusWorkbookLayout.Progress;
+        }
+        else
+        {
+            return Results.Json(new { message = "format must be 'standard' or 'progress'" }, statusCode: 400);
+        }
+
+        var distributed = await db.Surveys
+            .AsNoTracking()
+            .Where(s => s.CompanyId == companyId && s.Status != SurveyStatuses.Draft)
+            .OrderBy(s => s.CreatedAt)
+            .Select(s => s.Id)
+            .ToListAsync(cancellationToken);
+
+        var ids = distributed;
+        if (surveyIds is { Length: > 0 })
+        {
+            var asked = surveyIds.ToHashSet();
+            if (asked.Any(id => !distributed.Contains(id)))
+            {
+                return Results.Json(
+                    new { message = spanish
+                        ? "Alguna de las encuestas seleccionadas ya no está disponible. Actualice la página e inténtelo de nuevo."
+                        : "One of the selected surveys is no longer available. Reload the page and try again." },
+                    statusCode: 400);
+            }
+
+            // `distributed` is the company's own list in its own order, so filtering it keeps
+            // both the tenancy scope and the sheet order no matter what arrived in the query.
+            ids = distributed.Where(asked.Contains).ToList();
+        }
+
+        var sheets = new List<StatusWorkbookSurvey>();
+        foreach (var id in ids)
+        {
+            var (loaded, failure) = await LoadAsync(id, principal, db, configuration, cancellationToken);
+            if (failure is not null)
+            {
+                return failure;
+            }
+
+            var survey = loaded!;
+            var title = spanish ? survey.TitleEs ?? survey.TitleEn : survey.TitleEn ?? survey.TitleEs;
+            sheets.Add(new StatusWorkbookSurvey(
+                title ?? id.ToString(),
+                survey.CredentialMode == CredentialModes.PerSurvey,
+                survey.DistinguishesStarted || survey.TracksCompletionOnly,
+                survey.Roster));
+        }
+
+        var today = DateOnly.FromDateTime(
+            SchedulingTimeZone.ToLocal(DateTimeOffset.UtcNow, SchedulingTimeZone.Resolve(company.Timezone)));
+
+        return Results.File(
+            StatusWorkbook.Build(sheets, today, spanish, layout),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            StatusWorkbookFileName(company.Name, today, spanish));
+    }
+
+    /// <summary>
+    /// "estado-esph-2026-10-28.xlsx". ASCII only and punctuation collapsed, for the same reason
+    /// <see cref="ClimateProject.Application.Reports.Rendering.ReportFormats.FileName"/> does
+    /// it: a quote or a non-ASCII byte in `Content-Disposition` is an interoperability problem.
+    /// </summary>
+    internal static string StatusWorkbookFileName(string? companyName, DateOnly day, bool spanish)
+        => CompanyFileName(spanish ? "estado" : "status", companyName, day);
+
+    /// <summary><c>{stem}-{company slug}-{day}.xlsx</c>, the one naming rule for a company's workbooks.</summary>
+    internal static string CompanyFileName(string stem, string? companyName, DateOnly day)
+    {
+        var slug = new string((companyName ?? string.Empty)
+            .Normalize(NormalizationForm.FormD)
+            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            .Select(c => char.IsAsciiLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-')
+            .ToArray())
+            .Trim('-');
+        while (slug.Contains("--", StringComparison.Ordinal))
+        {
+            slug = slug.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        var named = slug.Length == 0 ? stem : $"{stem}-{slug}";
+        return $"{named}-{day:yyyy-MM-dd}.xlsx";
     }
 
     /// <summary>
@@ -51,7 +228,27 @@ public static class SurveyParticipationEndpoints
         CultureInfo.GetCultureInfo("es"),
         CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace | CompareOptions.NumericOrdering);
 
-    private static async Task<IResult> GetAsync(
+    /// <summary>
+    /// What both routes read: the survey, after the authorization check, and its roster with
+    /// the per-survey key columns. One loader, so the download and the screen cannot disagree
+    /// about a single person or a single column.
+    /// </summary>
+    private sealed record LoadedRoster(
+        Guid Id,
+        Guid CompanyId,
+        bool Anonymous,
+        bool CollectParticipantIdentity,
+        string CredentialMode,
+        string? TitleEn,
+        string? TitleEs,
+        List<SurveyRosterRow> Roster,
+        bool DistinguishesStarted)
+    {
+        /// <summary>COMPLETION alone -- see the view's <c>TracksCompletionOnly</c>.</summary>
+        public bool TracksCompletionOnly => Anonymous && !DistinguishesStarted;
+    }
+
+    private static async Task<(LoadedRoster? Loaded, IResult? Failure)> LoadAsync(
         Guid surveyId,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
@@ -61,16 +258,25 @@ public static class SurveyParticipationEndpoints
         var survey = await db.Surveys
             .AsNoTracking()
             .Where(s => s.Id == surveyId)
-            .Select(s => new { s.Id, s.CompanyId, s.Settings.CollectParticipantIdentity, s.Settings.Anonymous })
+            .Select(s => new
+            {
+                s.Id,
+                s.CompanyId,
+                s.Settings.CollectParticipantIdentity,
+                s.Settings.Anonymous,
+                s.Settings.CredentialMode,
+                s.TitleEn,
+                s.TitleEs,
+            })
             .FirstOrDefaultAsync(cancellationToken);
         if (survey is null)
         {
-            return Results.Json(new { message = "Survey not found" }, statusCode: 404);
+            return (null, Results.Json(new { message = "Survey not found" }, statusCode: 404));
         }
 
         if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), survey.CompanyId))
         {
-            return Results.Forbid();
+            return (null, Results.Forbid());
         }
 
         // The key an anonymous survey's partials are findable by. Null only where none is
@@ -80,10 +286,68 @@ public static class SurveyParticipationEndpoints
         var (roster, signInOnly) = await BuildRosterAsync(
             survey.Id, survey.CompanyId, survey.Anonymous, resumeKey, db, cancellationToken);
 
+        // Per-survey keys: who was mailed one and who has used it. Added HERE and not in
+        // `BuildRosterAsync`, which the status-report export shares -- that sheet is about
+        // answering, and a key's days are not something it was ever asked to carry.
+        var credentialMode = survey.CredentialMode ?? CredentialModes.Shared;
+        if (credentialMode == CredentialModes.PerSurvey && roster.Count > 0)
+        {
+            roster = await WithSurveyKeysAsync(roster, survey.Id, survey.CompanyId, db, cancellationToken);
+        }
+
         // Three states for a survey whose answers carry a user id, and for an anonymous one
         // that can only be answered by signing in. `BuildRosterAsync` decides the second from
         // the data rather than from a setting -- see the reasoning on `signInOnly` there.
         var distinguishesStarted = !survey.Anonymous || signInOnly;
+
+        return (new LoadedRoster(
+            survey.Id,
+            survey.CompanyId,
+            survey.Anonymous,
+            survey.CollectParticipantIdentity,
+            credentialMode,
+            survey.TitleEn,
+            survey.TitleEs,
+            roster,
+            distinguishesStarted), null);
+    }
+
+    private static async Task<IResult> GetAsync(
+        Guid surveyId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var (loaded, failure) = await LoadAsync(surveyId, principal, db, configuration, cancellationToken);
+        if (failure is not null)
+        {
+            return failure;
+        }
+
+        var survey = loaded!;
+        var roster = survey.Roster;
+        var distinguishesStarted = survey.DistinguishesStarted;
+
+        // Whose response TIMS took out of the results -- to super admins ONLY. A client
+        // administrator who knew whose response left, and compared the results before and
+        // after, could work that person's answers out by subtraction
+        // (SurveyResponseExclusionEndpoints). For everyone else the flag stays false: the person
+        // still finished, and the roster says so.
+        if (principal.GetCurrentUser().Role == Roles.SuperAdmin && roster.Count > 0)
+        {
+            var excluded = await SurveyResponseExclusionEndpoints.ExcludedPeopleAsync(
+                db,
+                survey.Id,
+                survey.Anonymous,
+                [.. roster.Select(row => row.UserId)],
+                SurveyResumeSessionConfiguration.KeyFrom(configuration),
+                cancellationToken);
+            if (excluded.Count > 0)
+            {
+                roster = [.. roster.Select(row => excluded.Contains(row.UserId) ? row with { ExcludedFromResults = true } : row)];
+            }
+        }
 
         // Respondents with NO account. `survey_participations` is written only for them
         // (`participation-is-not-linked-to-answers.md`), and the 2026-10-13 identity ruling
@@ -144,7 +408,121 @@ public static class SurveyParticipationEndpoints
             distinguishesStarted,
             // COMPLETION alone, which is all an anonymous survey could report before and is
             // still what it reports when there is no key.
-            survey.Anonymous && !distinguishesStarted));
+            survey.TracksCompletionOnly,
+            survey.CredentialMode,
+            survey.TitleEn,
+            survey.TitleEs));
+    }
+
+    /// <summary>
+    /// <c>GET /surveys/{id}/participation/export</c>: the roster the screen shows, as a CSV
+    /// (<see cref="SurveyRosterCsv"/>). Same loader, so the same authorization -- a super_admin
+    /// or the survey's own company_admin, everyone else 403 -- and the same rows.
+    /// </summary>
+    /// <remarks>
+    /// Headers, words and the survey title follow the COMPANY's language, not the caller's:
+    /// the file is forwarded to the client's own staff, and ESPH reads Spanish whoever
+    /// downloaded it. The day in the file name is the company's day for the same reason.
+    /// </remarks>
+    private static async Task<IResult> ExportAsync(
+        Guid surveyId,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var (loaded, failure) = await LoadAsync(surveyId, principal, db, configuration, cancellationToken);
+        if (failure is not null)
+        {
+            return failure;
+        }
+
+        var survey = loaded!;
+        var company = await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == survey.CompanyId)
+            .Select(c => new { c.Settings.Language, c.Settings.Timezone })
+            .FirstOrDefaultAsync(cancellationToken);
+        var spanish = SurveyRosterCsv.IsSpanish(company?.Language);
+        var perSurvey = survey.CredentialMode == CredentialModes.PerSurvey;
+        // The screen's rule for drawing Estado (`SurveyRosterPanel.tsx`: tracked || completionOnly).
+        var showState = survey.DistinguishesStarted || survey.TracksCompletionOnly;
+
+        var title = spanish ? survey.TitleEs ?? survey.TitleEn : survey.TitleEn ?? survey.TitleEs;
+        var today = DateOnly.FromDateTime(
+            SchedulingTimeZone.ToLocal(DateTimeOffset.UtcNow, SchedulingTimeZone.Resolve(company?.Timezone)));
+
+        return Results.File(
+            SurveyRosterCsv.Build(survey.Roster, spanish, perSurvey, showState),
+            "text/csv",
+            SurveyRosterCsv.FileName(title, survey.Id, today, spanish));
+    }
+
+    /// <summary>
+    /// Each row with its survey key: the username it signs in with, the day the key now in force
+    /// was mailed, and the day it was last used -- days in the company's zone, never instants
+    /// (see <see cref="SurveyRosterRow"/>). A person with no key keeps three nulls, which the
+    /// screen reads as "Sin código".
+    /// </summary>
+    private static async Task<List<SurveyRosterRow>> WithSurveyKeysAsync(
+        List<SurveyRosterRow> roster,
+        Guid surveyId,
+        Guid companyId,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var keys = await db.SurveyCredentials
+            .AsNoTracking()
+            .Where(c => c.SurveyId == surveyId)
+            .Select(c => new { c.UserId, c.Username, c.CreatedAt, c.LastSignInAt, c.LastRemindedAt, c.ReminderCount })
+            .ToDictionaryAsync(c => c.UserId, cancellationToken);
+        if (keys.Count == 0)
+        {
+            return roster;
+        }
+
+        var zone = SchedulingTimeZone.Resolve(await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Settings.Timezone)
+            .FirstOrDefaultAsync(cancellationToken));
+        DateOnly LocalDay(DateTimeOffset moment) => DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(moment, zone));
+
+        // Each key holder's latest delivery failure, if any (SurveyDeliveryProblems: the rule).
+        var holders = keys.Keys.ToList();
+        var latestFailure = (await db.EmailDeliveryEvents
+                .AsNoTracking()
+                .Where(e => holders.Contains(e.UserId))
+                .Select(e => new { e.UserId, e.EventType, e.BounceType, e.OccurredAt })
+                .ToListAsync(cancellationToken))
+            .GroupBy(e => e.UserId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(e => e.OccurredAt).First());
+
+        return
+        [
+            .. roster.Select(row =>
+            {
+                if (!keys.TryGetValue(row.UserId, out var key))
+                {
+                    return row;
+                }
+
+                var failure = latestFailure.GetValueOrDefault(row.UserId);
+                var problem = failure is not null && failure.OccurredAt >= key.CreatedAt
+                    ? SurveyDeliveryProblems.From(failure.EventType, failure.BounceType)
+                    : null;
+                return row with
+                {
+                    SurveyUsername = key.Username,
+                    CredentialIssuedOn = LocalDay(key.CreatedAt),
+                    LastSignInOn = key.LastSignInAt is { } signedIn ? LocalDay(signedIn) : null,
+                    LastRemindedOn = key.LastRemindedAt is { } reminded ? LocalDay(reminded) : null,
+                    ReminderCount = key.ReminderCount,
+                    DeliveryProblem = problem,
+                    DeliveryProblemOn = problem is null ? null : LocalDay(failure!.OccurredAt),
+                };
+            }),
+        ];
     }
 
     /// <summary>
@@ -214,7 +592,7 @@ public static class SurveyParticipationEndpoints
             return ([], false);
         }
 
-        var responses = await db.Responses
+        var responses = await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded)
             .AsNoTracking()
             .Where(r => r.SurveyId == surveyId && r.UserId != null)
             .Select(r => new { UserId = r.UserId!.Value, r.IsComplete, r.CompletionTime, r.UpdatedAt })
@@ -293,7 +671,7 @@ public static class SurveyParticipationEndpoints
         // *"quiénes fueron invitados y todavía no han ingresado. Quiénes lo han comenzado pero
         // no lo han terminado."*
         var anonymousStateBySession = anonymous && resumeKey is not null
-            ? (await db.Responses
+            ? (await db.Responses.IgnoreQueryFilters(ResponseQueryFilters.IncludeExcluded)
                     .AsNoTracking()
                     .Where(r => r.SurveyId == surveyId && r.UserId == null && r.SessionId != null)
                     .Select(r => new { SessionId = r.SessionId!, r.IsComplete, r.CompletionTime, r.UpdatedAt })

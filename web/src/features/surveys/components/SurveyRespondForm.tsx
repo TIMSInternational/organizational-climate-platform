@@ -37,6 +37,7 @@ import {
   type AnswerState,
 } from '../respondAnswers'
 import { estimatedMinutes, formatDayMonth, isUnderAMinute } from '../respondEstimate'
+import { respondFailureKey, respondFailureKind } from '../respondFailure'
 import { AnonymityNotice } from './AnonymityNotice'
 import RespondDemographicField from './RespondDemographicField'
 import RespondParticipantFields from './RespondParticipantFields'
@@ -596,14 +597,14 @@ export default function SurveyRespondForm({
         }
       } catch (error: unknown) {
         if (!mounted.current) return
-        const message =
-          error instanceof Error && error.message ? error.message : tRoot('errors.generic')
+        // Our sentence, never the server's: see `respondFailure.ts` (audit R1).
+        const message = t(respondFailureKey(respondFailureKind(error, publicEntry)))
         // `savedAt` survives: "not being saved since 09:14" is a more useful thing to
         // read than "not being saved", and the alert below prints both.
         setSaveState((previous) => ({ status: 'error', savedAt: previous.savedAt, message }))
       }
     },
-    [announce, baseUrl, enqueue, publicEntry, recordServerAnswers, sessionId, t, tRoot],
+    [announce, baseUrl, enqueue, publicEntry, recordServerAnswers, sessionId, t],
   )
 
   async function send(isComplete: boolean): Promise<void> {
@@ -699,24 +700,19 @@ export default function SurveyRespondForm({
         announce(t('progressSaved'))
       }
     } catch (error: unknown) {
-      // **A 402 must never reach the screen as the server wrote it.** `SubmitAsync`
-      // answers 402 when the company has no licence seat left for this survey's service
-      // (`SurveyResponseEndpoints.cs`, `NoLicenseSeats`), and its body is a fixed English
-      // string. Every other branch here falls through to `error.message`, so before this
-      // line a Costa Rican respondent pressing "Enviar mis respuestas" was shown
-      // "This survey is not currently accepting new responses" on an otherwise Spanish
-      // page. The catalogue answers it instead, in the reader's language.
+      // **No refusal reaches the screen as the server wrote it.** `SubmitAsync` answers in
+      // fixed English — "This survey is not currently accepting responses" once the survey
+      // has closed, the response limit, the partial-save refusal, the 402 for a company
+      // with no licence seat — and the browser adds "Failed to fetch" when nothing came
+      // back at all. Each is mapped by status (and, for the three 400s, by the server's
+      // exact message) to a catalogued sentence that says what happened and whether what
+      // was just sent was recorded (`respondFailure.ts`, audit 2026-10-22 R1).
       //
-      // The copy is deliberately about the survey and not about the company: a
-      // respondent is never told that their employer has run out of licences. It also
-      // has to say that **nothing was recorded** — the 402 returns before the commit, so
-      // the whole transaction rolls back and the seat is released — because somebody who
-      // has just pressed Submit will otherwise assume their answers landed.
-      const message = isNoSeats(error)
-        ? t('noSeatsBody')
-        : error instanceof Error && error.message
-          ? error.message
-          : tRoot('errors.generic')
+      // The 402 keeps the sentence it always had: about the survey and not about the
+      // company — a respondent is never told that their employer has run out of licences
+      // — and saying that **nothing was recorded**, because the 402 returns before the
+      // commit and somebody who has just pressed Submit will otherwise assume it landed.
+      const message = t(respondFailureKey(respondFailureKind(error, publicEntry)))
       // A pressed save that failed is the same fact as an autosave that failed, and it
       // belongs in the one place the respondent looks to tell saved from unsaved —
       // not under "your answers could not be SUBMITTED", which is about a different
@@ -1396,10 +1392,10 @@ export default function SurveyRespondForm({
                   ? t(publicEntry ? 'saveFailedBodyPublic' : 'saveFailedBody')
                   : t(publicEntry ? 'saveFailedSincePublic' : 'saveFailedSince', { time: formatTime(saveState.savedAt, locale) })}
               </span>
-              {/* The server's own message names what it objected to, and "this survey
-                  has reached its response limit" is something a respondent can act on
-                  in a way that "not saved" is not. Additional to our sentence, never
-                  instead of it. */}
+              {/* Why it was refused — "this survey has reached its response limit" is
+                  something a respondent can act on in a way that "not saved" is not.
+                  Our catalogued sentence for the refusal (`respondFailure.ts`), never
+                  the server's English. Additional to the line above, never instead. */}
               {saveState.message !== null && (
                 <span className="mt-inline block text-fg-secondary">{saveState.message}</span>
               )}
@@ -1625,19 +1621,6 @@ function localeNameKey(locale: string): string {
  * them into one "something went wrong" is what makes a respondent retry a survey that
  * closed a week ago.
  */
-/**
- * A licensing refusal from `POST /surveys/{id}/responses`.
- *
- * 402 is unused elsewhere in this API — 400, 401, 403 and 404 were all taken by the time
- * the licensing slice needed a status that the client could tell apart from "survey
- * closed" (`SurveyResponseEndpoints.cs`, the comment above `NoLicenseSeats`). Matching on
- * the status rather than on the message is the whole point: the message is the English
- * string this function exists to keep off the screen.
- */
-function isNoSeats(error: unknown): boolean {
-  return error instanceof SurveyRespondError && error.status === 402
-}
-
 function LoadFailure({
   error,
   publicEntry,
@@ -1646,7 +1629,6 @@ function LoadFailure({
   publicEntry: boolean
 }) {
   const { t } = useTranslation('surveyRespond')
-  const { t: tRoot } = useTranslation()
 
   const body = (): { title: string; description: string; signIn: boolean } => {
     switch (error?.status) {
@@ -1664,9 +1646,11 @@ function LoadFailure({
       case 403:
         return { title: t('notYoursTitle'), description: t('notYoursBody'), signIn: false }
       default:
+        // A 5xx, a 429 or no response at all. Our sentence, never the server's English
+        // (audit 2026-10-22, R1).
         return {
           title: t('loadFailedTitle'),
-          description: error?.message || tRoot('errors.generic'),
+          description: t('failure.load'),
           signIn: false,
         }
     }
@@ -2044,25 +2028,20 @@ function WhatHappensRow({
  * 2026" in the run of a sentence, where the abbreviation is the thing that reads
  * wrong.
  *
- * ## `timeZone: 'UTC'`, and it is a correctness fix rather than a preference
+ * ## In the reader's own zone, because `endDate` is an instant
  *
- * A survey's `endDate` is the END OF A CALENDAR DAY, and the API stamps it as one:
- * the seeded Q3 closes at `2026-08-05T23:59:59+00:00`. Formatted in the reader's own
- * zone, that instant is **6 August** in Madrid and in Tokyo — so every respondent east
- * of UTC was told a deadline one day later than the one the server enforces, on the
- * screen whose entire job is to say when to answer by.
- *
- * This is the bug `lib/calendarDay.ts` exists to prevent, and it survived the sweep
- * that routed every date through it because that sweep matched `toLocaleDateString`
- * and this reaches for `Intl.DateTimeFormat`. `calendarDay` itself is not used here:
- * it renders one short form ("11 sept") by design, and this needs two styles, one of
- * them a long form that sits inside a sentence. Same rule, different presentation —
- * so the rule is copied rather than the helper.
+ * The survey closes at an exact instant: the builder sends the administrator's wall
+ * clock as `new Date(local).toISOString()` (`wizardValues.ts`), the API stores it with
+ * `ToUniversalTime()` and stops taking answers at `EndDate <= now`
+ * (`SurveyLifecycleJob`). This used to be read in UTC, on the theory that the date was a
+ * UTC calendar day; it is not, and in UTC a close at or after 18:00 in Costa Rica printed
+ * as the NEXT day — a deadline a day later than the one the server enforces (audit
+ * 2026-10-22, R2). The respondent reads the day the survey closes on their own clock.
  */
 function formatDate(value: string, locale: string, dateStyle: 'medium' | 'long' = 'medium'): string {
   const parsed = Date.parse(value)
   if (Number.isNaN(parsed)) return value
-  return new Intl.DateTimeFormat(locale, { dateStyle, timeZone: 'UTC' }).format(parsed)
+  return new Intl.DateTimeFormat(locale, { dateStyle }).format(parsed)
 }
 
 /**

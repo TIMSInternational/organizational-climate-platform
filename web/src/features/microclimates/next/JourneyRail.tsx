@@ -34,7 +34,14 @@ export function JourneyRail({
       aria-label={t('microclimates.next.journey.label')}
       className="rounded-xl border border-line-default bg-surface-card px-5 py-3 shadow-xs"
     >
-      <ol className="m-0 flex list-none flex-wrap items-center gap-x-3.5 gap-y-3 p-0 xl:flex-nowrap">
+      {/* Below `xl` a grid, not a wrapping row: one step per line on a phone, two by two from
+          `sm`. The wrapping row gave each of four `flex-1` steps a quarter of 390px, so every
+          label broke one word per line and "Compartir" ran into "Ver en vivo" (#640's shot).
+          From `xl` the board's one row with its rules between the steps, unchanged. */}
+      <ol
+        data-slot="journey-rail"
+        className="m-0 grid list-none grid-cols-1 gap-x-3.5 gap-y-3 p-0 sm:grid-cols-2 xl:flex xl:flex-nowrap xl:items-center"
+      >
         {JOURNEY.map((key, index) => {
           const state = states[key]
           const previous = index > 0 ? states[JOURNEY[index - 1] as JourneyKey] : null

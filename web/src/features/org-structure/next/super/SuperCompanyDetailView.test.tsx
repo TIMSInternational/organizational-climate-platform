@@ -15,6 +15,7 @@ import en from '../../../../i18n/en.json'
  * `CompanyDetailPage.test.tsx` keeps pinning the page a company administrator gets.
  */
 const copy = en.superadmin.next.companyDetail
+const ca = en.companySettings.next
 const C = 'c1'
 
 const DETAIL = {
@@ -125,22 +126,31 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/**
+ * The page draws its heading while it is still loading (a skeleton under it), so the heading
+ * is not a "loaded" signal: wait for the form's Save button, which exists only once the read
+ * settled. An absence asserted before that passes for free.
+ */
+async function loaded() {
+  await screen.findByRole('heading', { level: 1, name: copy.title })
+  await screen.findByRole('button', { name: copy.save })
+}
+
 describe('SuperCompanyDetailView', () => {
   it('sends a super administrator to the canvas’s detail, reading the tenant into one form', async () => {
     serve()
     renderPage()
     expect(await screen.findByRole('heading', { level: 1, name: copy.title })).toBeTruthy()
+    await loaded()
     expect((screen.getByLabelText(new RegExp(`^${copy.company.name}( \\*)?$`)) as HTMLInputElement).value).toBe('Grupo Meridiano S.A.')
     expect((screen.getByLabelText(new RegExp(`^${copy.surveys.language}`)) as HTMLSelectElement).value).toBe('es')
-    expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).value).toBe('2555')
-    // As wide as its digits (monospace), so the unit follows the value instead of the field's edge.
-    expect((screen.getByLabelText(copy.surveys.retention) as HTMLInputElement).style.width).toBe('4ch')
+    expect((screen.getByLabelText(ca.timezone) as HTMLSelectElement).value).toBe('America/Costa_Rica')
   })
 
   it('offers both actions from the start, and a save with nothing changed sends nothing and says so', async () => {
     serve()
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: copy.title })
+    await loaded()
     const save = screen.getByRole('button', { name: copy.save })
     expect(save.hasAttribute('disabled')).toBe(false)
     expect(screen.getByRole('button', { name: copy.discard }).hasAttribute('disabled')).toBe(false)
@@ -149,21 +159,58 @@ describe('SuperCompanyDetailView', () => {
     expect(writes()).toEqual([])
   })
 
-  it('names the open wave’s own anonymity under the default, read from its detail', async () => {
+  it('states what the platform does where four controls wrote values nothing reads, and reads no survey to say it', async () => {
     serve({ openWave: true })
     renderPage()
-    expect(
-      await screen.findByText(
-        copy.surveys.anonymityHelperOpen.replace('{code}', 'Q4').replace('{state}', copy.surveys.stateNamed),
-      ),
-    ).toBeTruthy()
+    await loaded()
+    expect(screen.getByText(ca.anonymityAlwaysValue)).toBeTruthy()
+    expect(screen.getByText(ca.anonymityAlwaysHelp)).toBeTruthy()
+    expect(screen.getByText(ca.retentionFixedValue)).toBeTruthy()
+    expect(screen.getByText(ca.retentionFixedHelp)).toBeTruthy()
+    // No frequency select, no retention input, no microclimate switch, no anonymity select.
+    expect(screen.queryByLabelText(copy.surveys.frequency)).toBeNull()
+    expect(screen.queryByLabelText(copy.surveys.retention)).toBeNull()
+    expect(screen.queryByLabelText(copy.surveys.anonymity)).toBeNull()
+    expect(screen.queryAllByRole('switch')).toHaveLength(0)
+    expect(calls.some((call) => call.url.includes('/surveys/s-open'))).toBe(false)
+  })
+
+  it('edits the time zone and the logo path Configuración de empresa edits, sent alone on the settings PUT', async () => {
+    serve()
+    renderPage()
+    const zone = (await screen.findByLabelText(ca.timezone)) as HTMLSelectElement
+    await userEvent.selectOptions(zone, 'America/Panama')
+    await userEvent.type(screen.getByLabelText(ca.logoPath), '/brand/meridiano.svg')
+    // The box previews the draft, as on Configuración de empresa.
+    const preview = screen.getByRole('img', { name: ca.logoAlt.replace('{company}', DETAIL.name) })
+    expect(preview.getAttribute('src')).toBe('/brand/meridiano.svg')
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0].url).toMatch(new RegExp(`/admin/companies/${C}/settings$`))
+    expect(JSON.parse(writes()[0].body ?? '')).toEqual({ timezone: 'America/Panama', logoUrl: '/brand/meridiano.svg' })
+  })
+
+  it('says the colour is the button of the sign-in mail and nothing on screen — the words Configuración de empresa uses', async () => {
+    serve()
+    renderPage()
+    await loaded()
+    expect(screen.getByText(ca.colourEmailHelp)).toBeTruthy()
+    expect(screen.queryByText(copy.brand.colorHelper)).toBeNull()
+    expect(screen.getByText(ca.brandMetaInEffect)).toBeTruthy()
   })
 
   it('reaches the four pages this role opens only from here, each with its own reading', async () => {
     serve()
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: copy.title })
-    const hrefOf = (name: string) => screen.getByRole('link', { name: new RegExp(`^${name}`) }).getAttribute('href')
+    await loaded()
+    // The page's own link cards: the setup checklist (shown for a client still being set up)
+    // links some of the same pages, deliberately.
+    const hrefOf = (name: string) =>
+      screen
+        .getAllByRole('link', { name: new RegExp(`^${name}`) })
+        .filter((link) => !link.closest('[data-testid="company-setup"]'))[0]
+        .getAttribute('href')
     expect(hrefOf(en.navigation.users)).toBe(`/admin/companies/${C}/users`)
     expect(hrefOf(en.navigation.demographicFields)).toBe(`/admin/companies/${C}/demographic-fields`)
     expect(hrefOf(en.navigation.reports)).toBe(`/admin/companies/${C}/reports`)
@@ -189,6 +236,24 @@ describe('SuperCompanyDetailView', () => {
     await waitFor(() => expect(calls.filter((call) => call.method === 'GET' && call.url.endsWith(`/admin/companies/${C}`))).toHaveLength(2))
   })
 
+  it('reads the settings with the GET — never a PUT — and saves a credential-mode change alone', async () => {
+    const modeCopy = en.companySettings.credentialMode
+    serve()
+    renderPage()
+    const card = (await screen.findByRole('heading', { name: modeCopy.heading })).closest('section') as HTMLElement
+    const settingsReads = calls.filter((call) => call.url.includes(`/admin/companies/${C}/settings`))
+    expect(settingsReads.map((call) => call.method)).toEqual(['GET'])
+    // SETTINGS carries no mode, which reads as the API default.
+    expect(within(card).getByText(modeCopy.current.replace('{mode}', modeCopy.sharedLabel))).toBeTruthy()
+
+    await userEvent.click(within(card).getByRole('radio', { name: new RegExp(modeCopy.perSurveyLabel) }))
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0].url).toContain(`/admin/companies/${C}/settings`)
+    expect(JSON.parse(writes()[0].body ?? '')).toEqual({ credentialMode: 'per_survey' })
+  })
+
   it('offers País as the canvas’s select over the countries, with the tenant’s own value selected', async () => {
     serve()
     renderPage()
@@ -198,7 +263,7 @@ describe('SuperCompanyDetailView', () => {
     expect([...country.options].map((option) => option.value)).toContain('Colombia')
   })
 
-  it('puts the form back on Discard, and offers no save for a retention it would refuse', async () => {
+  it('puts the form back on Discard, and offers no save for a logo path the API would refuse', async () => {
     serve()
     renderPage()
     const name = await screen.findByLabelText(new RegExp(`^${copy.company.name}( \\*)?$`))
@@ -207,9 +272,8 @@ describe('SuperCompanyDetailView', () => {
     await userEvent.click(screen.getByRole('button', { name: copy.discard }))
     expect((name as HTMLInputElement).value).toBe('Grupo Meridiano S.A.')
 
-    const retention = screen.getByLabelText(copy.surveys.retention)
-    await userEvent.clear(retention)
-    await userEvent.type(retention, 'siete')
+    await userEvent.type(screen.getByLabelText(ca.logoPath), 'https://cdn.example.com/logo.png')
+    expect(screen.getByText(ca.logoPathInvalid)).toBeTruthy()
     expect(screen.getByRole('button', { name: copy.save }).hasAttribute('disabled')).toBe(true)
   })
 
@@ -285,7 +349,69 @@ describe('SuperCompanyDetailView Escala de resultados', () => {
   it('draws no card when the settings carry no scale', async () => {
     serve({ bands: false })
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: copy.title })
+    await loaded()
     expect(screen.queryByRole('heading', { name: bandsCopy.heading })).toBeNull()
+  })
+
+  /**
+   * After "Crear empresa" the operator lands here; the decisions a survey freezes at creation --
+   * the access mode first -- were nowhere on the way (walkthrough C, 2026-11-08).
+   */
+  it('lists the setup steps for a client with no survey yet, each marked from what the page read', async () => {
+    serve()
+    renderPage()
+    await loaded()
+    const setup = await screen.findByTestId('company-setup')
+    const done = (id: string) => setup.querySelector(`[data-step="${id}"]`)?.getAttribute('data-done')
+    expect(done('people')).toBe('true')
+    expect(done('fields')).toBe('false')
+    expect(done('survey')).toBe('false')
+    expect(done('access')).toBe('false')
+    expect(within(setup).getByText(en.superadmin.next.companyDetail.setup.access.title)).toBeTruthy()
+  })
+
+  it('does not nag an established client that already has people and a survey', async () => {
+    serve({ openWave: true })
+    renderPage()
+    await loaded()
+    expect(screen.queryByTestId('company-setup')).toBeNull()
+  })
+
+  /** Walkthrough B4 (2026-11-08): every new client's logo used to need a developer and a deploy. */
+  it('uploads a logo as the request body, then reloads so the form reads what was saved', async () => {
+    serve()
+    const answer = vi.mocked(fetch).getMockImplementation()!
+    const puts: { url: string; body: unknown }[] = []
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if ((init?.method ?? 'GET') === 'PUT' && String(input).endsWith(`/admin/companies/${C}/logo`)) {
+        puts.push({ url: String(input), body: init?.body })
+        return Promise.resolve(new Response(JSON.stringify({ logoUrl: `/logos/${C}?v=abc123abc123` }), { status: 200 }))
+      }
+      return answer(input, init)
+    })
+    renderPage()
+    await loaded()
+    const before = vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes(`/admin/companies/${C}/settings`)).length
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'logo.png', { type: 'image/png' })
+    await userEvent.upload(screen.getByLabelText(en.companySettings.next.upload), file)
+    await waitFor(() => expect(puts).toHaveLength(1))
+    expect(puts[0].body).toBe(file)
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).includes(`/admin/companies/${C}/settings`)).length).toBeGreaterThan(before),
+    )
+  })
+
+  it('says why a file was refused, in words, when it is not an image', async () => {
+    serve()
+    const answer = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) =>
+      (init?.method ?? 'GET') === 'PUT' && String(input).endsWith('/logo')
+        ? Promise.resolve(new Response(JSON.stringify({ message: 'no', code: 'logo_not_an_image' }), { status: 400 }))
+        : answer(input, init),
+    )
+    renderPage()
+    await loaded()
+    await userEvent.upload(screen.getByLabelText(en.companySettings.next.upload), new File(['<svg/>'], 'logo.png', { type: 'image/png' }))
+    expect(await screen.findByText(en.companySettings.next.uploadNotImage)).toBeTruthy()
   })
 })

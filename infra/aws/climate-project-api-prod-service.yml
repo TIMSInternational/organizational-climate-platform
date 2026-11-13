@@ -356,6 +356,12 @@ Resources:
               # breaking the boot.
               - Name: Email__SesConfigurationSet
                 Value: "tims-transactional"
+              # The topic that set publishes bounces, complaints and rejections to. POST
+              # /webhooks/ses accepts signed messages from THIS topic only, and answers 404 to
+              # everything while it is unset. Setting it exposes nothing by itself: SNS sends
+              # nothing until the subscription in docs/runbooks/ses-bounce-webhook.md is made.
+              - Name: Email__SesEventsTopicArn
+                Value: "arn:aws:sns:us-east-1:747814092517:tims-ses-transactional-events"
             RuntimeEnvironmentSecrets:
               - Name: TrackingJwtSecret
                 Value: !Ref TrackingJwtSecretArn
