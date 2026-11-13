@@ -21,7 +21,7 @@ const BORROWED = [
 const TU_WORDS = [
   'tu', 'tus', 'tú', 'te', 'ti', 'contigo', 'tienes', 'tengas', 'puedes', 'puedas',
   'quieres', 'necesitas', 'estás', 'eres', 'sabes', 'lees', 'registras', 'diriges',
-  'participas', 'esperas',
+  'participas', 'esperas', 'estabas',
   // tú clitic imperatives. Whether «-alo» is tú or usted depends on the verb's class
   // (déjalo is tú, elíjala is usted), so these are named rather than matched by shape.
   'revísalo', 'cópialo', 'cópialos', 'elígela', 'restáurala', 'duplícala', 'archívala',

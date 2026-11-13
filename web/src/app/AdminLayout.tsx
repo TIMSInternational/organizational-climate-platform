@@ -361,8 +361,9 @@ function AdminShell() {
 
       {/* Last in the shell, outside every column, because it portals to the body
           anyway and its Cmd+K listener is document-wide. Handed the same `sections`
-          the rail gets, so it can only ever offer this role's own destinations. */}
-      <CommandPalette sections={sections} />
+          the rail gets, so it can only ever offer this role's own destinations -- and the
+          role and tracking setting, so a search hit is kept only where this role can load it. */}
+      <CommandPalette sections={sections} role={role} trackingEnabled={isTrackingEnabled()} />
     </div>
   )
 }
