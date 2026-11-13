@@ -207,7 +207,7 @@ describe('the survey results on the tenant’s real payload', () => {
   it('draws ONE grid: the columns, the whole company first, then every group with its change since Q2', async () => {
     await open()
     const map = screen.getByRole('region', { name: 'Clima por grupo y dimensión · Q3' })
-    expect(within(map).getByText('tres áreas de resultado · selecciona una celda para ver su pregunta')).toBeTruthy()
+    expect(within(map).getByText('tres áreas de resultado · seleccione una celda para ver su pregunta')).toBeTruthy()
     expect(within(map).getAllByRole('table')).toHaveLength(1)
     const grid = screen.getByTestId('climate-grid')
     expect(within(grid).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([

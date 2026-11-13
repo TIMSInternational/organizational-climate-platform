@@ -132,7 +132,7 @@ describe('Detalle de encuesta — the window and delete (audit G16)', () => {
     const status = await screen.findByTestId('tile-status')
     expect((within(status).getByRole('button', { name: 'Activar' }) as HTMLButtonElement).disabled).toBe(true)
 
-    // The warning that always said "cambia primero las fechas" now has the way to do it.
+    // The warning that always said "cambie primero las fechas" now has the way to do it.
     await user.click(within(screen.getByTestId('status-end-passed-block')).getByRole('button', { name: window_.edit }))
     const dialog = await screen.findByRole('dialog')
     // Read on the company's clock, and says so.
