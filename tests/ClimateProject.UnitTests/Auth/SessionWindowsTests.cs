@@ -50,6 +50,18 @@ public class SessionWindowsTests
     }
 
     [Fact]
+    public void The_window_carries_the_instant_its_expiry_was_measured_from()
+    {
+        // The mint stamps iat from this rather than reading the clock again, so a token's
+        // lifetime is exactly the window and cannot lose a second to a boundary in between.
+        var now = SignIn.AddMinutes(50);
+
+        var window = SessionWindows.Next(SignIn, now, sessionTimeoutMinutes: 60);
+
+        Assert.Equal(now, window!.IssuedAt);
+    }
+
+    [Fact]
     public void The_idle_window_is_truncated_by_the_absolute_ceiling()
     {
         // Twenty-three and a half hours in, a sixty-minute idle window would reach past the
