@@ -208,7 +208,7 @@ describe('Detalle de encuesta (SurveyDetail artboard)', () => {
     expect(closes).toContain('Debía cerrar')
     expect(closes).not.toContain('Cerró')
     const status = screen.getByTestId('tile-status')
-    expect(within(status).getByText('Lo que puedes hacer ahora')).toBeTruthy()
+    expect(within(status).getByText(es.surveys.next.detail.allowed)).toBeTruthy()
     expect((within(status).getByRole('button', { name: 'Activar' }) as HTMLButtonElement).disabled).toBe(true)
     expect((within(status).getByRole('button', { name: 'Programar' }) as HTMLButtonElement).disabled).toBe(true)
     expect((within(status).getByRole('button', { name: 'Archivar' }) as HTMLButtonElement).disabled).toBe(false)
