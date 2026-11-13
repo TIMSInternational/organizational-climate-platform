@@ -14,7 +14,12 @@ namespace ClimateProject.Application.Auth;
 /// <param name="ExpiresAt">
 /// The idle deadline, or the ceiling, whichever comes first.
 /// </param>
-public sealed record SessionWindow(DateTimeOffset StartedAt, DateTimeOffset ExpiresAt);
+/// <param name="IssuedAt">
+/// The instant <see cref="ExpiresAt"/> was measured from, and the token's <c>iat</c>. The mint
+/// used to read the clock a second time for <c>iat</c>, after a database round-trip, so a
+/// second boundary falling between the two readings minted a 60-minute window as 59:59.
+/// </param>
+public sealed record SessionWindow(DateTimeOffset StartedAt, DateTimeOffset ExpiresAt, DateTimeOffset IssuedAt);
 
 /// <summary>
 /// The idle window, and the ceiling underneath which it slides.
@@ -93,7 +98,7 @@ public static class SessionWindows
         }
 
         var idleDeadline = now + IdleWindow(sessionTimeoutMinutes);
-        return new SessionWindow(startedAt, idleDeadline < ceiling ? idleDeadline : ceiling);
+        return new SessionWindow(startedAt, idleDeadline < ceiling ? idleDeadline : ceiling, now);
     }
 
     /// <summary>
