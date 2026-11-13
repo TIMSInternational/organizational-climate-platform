@@ -1103,7 +1103,7 @@
     "myDashboardDescription": "Sus encuestas, plazos y notificaciones",
     "myDashboardInDepartment": "Sus encuestas, plazos y notificaciones en {department}",
     "welcomeName": "Hola de nuevo, {name}",
-    "pendingSurveys": "Encuestas que te esperan",
+    "pendingSurveys": "Encuestas que lo esperan",
     "completedSurveys": "Encuestas que completó",
     "unreadNotifications": "Notificaciones sin leer",
     "nextDeadlineOn": "La próxima encuesta cierra el {date}.",
@@ -2675,7 +2675,7 @@
     "trackingPlans": "Planes de acción",
     "trackingPlansDesc": "Crear y gestionar planes de acción de seguimiento",
     "trackingMisTareas": "Mis tareas",
-    "trackingMisTareasDesc": "Planes asignados a usted o donde está involucrado",
+    "trackingMisTareasDesc": "Planes asignados a usted o en los que está involucrado",
     "trackingConsolidado": "Vista consolidada",
     "trackingConsolidadoDesc": "Agregado de semáforo a nivel de empresa",
     "settings": "Configuración",
@@ -2729,7 +2729,7 @@
       "emailSectionTitle": "Notificaciones por correo",
       "emailSectionDescription": "Desactivar una detiene ese correo y ningún otro.",
       "emailSurveys": "Correos de encuestas",
-      "emailSurveysDescription": "Invitaciones a encuestas y novedades sobre las encuestas en las que participas.",
+      "emailSurveysDescription": "Invitaciones a encuestas y novedades sobre las encuestas en las que participa.",
       "emailMicroclimates": "Correos de microclimas",
       "emailMicroclimatesDescription": "Invitaciones a microclimas y sus resultados.",
       "emailActionPlans": "Correos de planes de acción",
@@ -7597,7 +7597,7 @@
     "treatmentFull": "Todas las columnas de cada fila",
     "treatmentReference": "Solo identificador y título",
     "emptyTablesToggle": "Tablas consultadas que no guardan nada sobre usted ({count})",
-    "emptyTablesNote": "Estas también se consultaron. Se listan para que una respuesta vacía sea algo que puedas ver y no algo que tengas que creer.",
+    "emptyTablesNote": "Estas también se consultaron. Se listan para que una respuesta vacía sea algo que pueda ver y no algo que tenga que creer.",
     "limitationsTitle": "Lo que esta exportación no puede hacer",
     "limitationsDescription": "Lo dice la propia plataforma, con sus palabras, en vez de resumirlo aquí:",
     "consentTitle": "Consentimiento almacenado en su cuenta",
@@ -7781,7 +7781,7 @@
         "name": "Nombre",
         "copy": "Copiar datos",
         "copied": "Copiado.",
-        "copyRefused": "El portapapeles no lo permitió: cópialos a mano."
+        "copyRefused": "El portapapeles no lo permitió: cópielos a mano."
       }
     }
   },
