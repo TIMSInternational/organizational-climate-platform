@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowRight, Check, Clock, Compass, Ellipsis, Eye, ListChecks, Plus, ShieldCheck, TrendingUp } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { PageHeader } from '../../../components/layout'
 import {
   Alert,
   AlertDescription,
@@ -122,7 +122,7 @@ export default function PlanDetailNextPage() {
   if (state.status === 'error') {
     return (
       <div>
-        <PageTopBar title={t('tracking.detail.title')} />
+        <PageHeader title={t('tracking.detail.title')} />
         <NetworkError
           title={t('tracking.serviceUnavailableTitle')}
           description={t('tracking.serviceUnavailableBody')}
@@ -136,7 +136,7 @@ export default function PlanDetailNextPage() {
   if (state.status === 'loading' || !state.model) {
     return (
       <div>
-        <PageTopBar title={t('tracking.detail.title')} />
+        <PageHeader title={t('tracking.detail.title')} />
         <LoadingRegion loading label={t('common.loading')}>
           <SkeletonText lines={8} />
         </LoadingRegion>
@@ -191,9 +191,8 @@ function PlanGate({
   const listReachable = back.href === '/tracking/planes'
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         breadcrumbs={[back, { label: crumb }]}
-        tightBreadcrumb
         eyebrow={t('tracking.next.planEyebrowBare')}
         title={title}
         description={description}
@@ -201,7 +200,7 @@ function PlanGate({
       <section
         aria-labelledby="plan-gate"
         data-slot="plan-gate"
-        className="flex items-start gap-4 rounded-lg border border-line-default bg-surface-card px-5 pb-4.5 pt-4 shadow-sm"
+        className="flex items-start gap-4 rounded-xl border border-line-panel bg-surface-card px-5 pb-4.5 pt-4"
       >
         <span
           aria-hidden="true"
@@ -284,9 +283,8 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         breadcrumbs={[plansCrumb(claims?.role, t), { label: plan.planCode }]}
-        tightBreadcrumb
         // The leader boards of 10 Sep close the eyebrow with the reader's relation to the
         // plan — "Ingeniería · Plan de acción · tu nodo", "Finanzas · Plan de acción ·
         // participas" — which is the one line that tells a leader, before they read a word
@@ -315,15 +313,14 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
         title={plan.descripcionQue}
         // The Main artboard: the code, the semáforo and the date 10px apart, just under the
         // title — not the 6px status line the authoring boards draw.
-        metaClassName="mt-0.5 gap-2.5"
         meta={
-          <>
-            <Chip label={plan.planCode} className="font-mono" />
+          <div data-slot="page-meta" className="mt-0.5 flex flex-wrap items-center gap-2.5">
+            <Chip label={plan.planCode} className="tabular-nums" />
             <SemaforoChip estado={plan.estadoSemaforo} />
             {/* One run of text: where the title column is narrow (1024) it wraps as a sentence
                 does, rather than breaking between two flex items and opening a line with "·". */}
             <span className="text-base" data-slot="plan-meta-dates">
-              <span className={overdue ? 'text-accent-red' : 'text-fg-secondary'}>
+              <span className={overdue ? 'font-semibold text-fg-primary' : 'text-fg-secondary'}>
                 {dueSentence(t, locale, plan.fechaCompromiso, days, plan.cumplido)}
               </span>
               <span className="ml-2.5 text-fg-label">
@@ -332,16 +329,18 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
                   : t('tracking.next.metaNoAvances')}
               </span>
             </span>
-          </>
+          </div>
+        }
+        primaryAction={
+          writable && !plan.cumplido ? (
+            <Button type="button" variant="primary" onClick={() => setAvanceOpen(true)}>
+              <Plus aria-hidden="true" />
+              {t('tracking.actions.registrarAvance')}
+            </Button>
+          ) : undefined
         }
         actions={
           <>
-            {writable && !plan.cumplido && (
-              <Button type="button" variant="primary" onClick={() => setAvanceOpen(true)}>
-                <Plus aria-hidden="true" />
-                {t('tracking.actions.registrarAvance')}
-              </Button>
-            )}
             {/* `AccessLevel.Approve`, not `Write`. Until the ruling of 2026-09-14 this sat
                 inside the block above, so the node's own leader was offered a control the
                 service now answers 403 — the exact shape this file's module comment calls
@@ -508,7 +507,7 @@ function PlanDetail({ model, state }: { model: PlanDetailModel; state: PlanDetai
 
 function Card({ children, labelledBy, className }: { children: React.ReactNode; labelledBy: string; className?: string }) {
   return (
-    <section aria-labelledby={labelledBy} className={cn('flex flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pb-4.5 pt-4 shadow-sm', className)}>
+    <section aria-labelledby={labelledBy} className={cn('flex flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-5 pb-4.5 pt-4 ', className)}>
       {children}
     </section>
   )
@@ -574,14 +573,14 @@ function AvanceCard({
         </span>
       </div>
       <div className="flex flex-wrap items-end gap-5">
-        <span className="shrink-0 whitespace-nowrap font-mono text-[40px] leading-none text-fg-primary tabular-nums">
+        <span className="shrink-0 whitespace-nowrap tabular-nums text-kpi-hero font-semibold leading-none tracking-display text-fg-primary">
           {t('tracking.next.percentBig', { percent })}
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1 pb-1">
           <span className="text-base text-fg-secondary">
             {t('tracking.next.goalFor', { date: calendarDayLong(Date.parse(plan.fechaCompromiso), locale) })}
           </span>
-          <span className={cn('text-sm', overdue ? 'text-accent-red' : 'text-accent-green-ink')}>{sentence}</span>
+          <span className={cn('text-sm', 'text-fg-secondary')}>{sentence}</span>
         </div>
       </div>
       <ProgressTrack percent={percent} overdue={overdue} label={t('tracking.next.progressLabel', { percent })} />
@@ -621,11 +620,11 @@ function QueComoCard({ model, t }: { model: PlanDetailModel; t: TranslateFn }) {
         {t('tracking.next.queComoHeading')}
       </h2>
       <dl className="m-0 grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2 text-base">
-        <dt className="pt-0.5 text-2xs font-bold uppercase tracking-label text-fg-label">{t('tracking.next.que')}</dt>
+        <dt className="text-sm text-fg-secondary">{t('tracking.next.que')}</dt>
         <dd className="m-0 max-w-[70ch] text-fg-primary">{asSentence(plan.descripcionQue)}</dd>
-        <dt className="pt-0.5 text-2xs font-bold uppercase tracking-label text-fg-label">{t('tracking.next.como')}</dt>
+        <dt className="text-sm text-fg-secondary">{t('tracking.next.como')}</dt>
         <dd className="m-0 max-w-[70ch] text-fg-primary">{asSentence(plan.metodologiaComo)}</dd>
-        <dt className="pt-0.5 text-2xs font-bold uppercase tracking-label text-fg-label">{t('tracking.fields.hallazgo')}</dt>
+        <dt className="text-sm text-fg-secondary">{t('tracking.fields.hallazgo')}</dt>
         {/* Text, never a link: see the module comment. */}
         <dd className="m-0 text-fg-label">
           {plan.hallazgoExternalId ? t('tracking.next.hallazgoRef', { ref: plan.hallazgoExternalId }) : t('tracking.next.hallazgoNone')}
@@ -676,7 +675,7 @@ function BitacoraCard({
       </div>
       <ol className="m-0 flex list-none flex-col p-0" data-slot="bitacora">
         <li className={row} data-entry="created">
-          <span className="pt-1.5 font-mono text-sm text-fg-label">{calendarDay(Date.parse(plan.fechaCreacion), locale)}</span>
+          <span className="pt-1.5 tabular-nums text-sm text-fg-label">{calendarDay(Date.parse(plan.fechaCreacion), locale)}</span>
           <RowGlyph icon={<Plus />} />
           <div className="flex flex-col gap-0.5 pt-1">
             <span className="text-base text-fg-primary">{t('tracking.next.created')}</span>
@@ -690,7 +689,7 @@ function BitacoraCard({
         </li>
         {progressed && (
           <li className={row} data-entry="latest">
-            <span className="pt-1.5 font-mono text-sm text-fg-label">{calendarDay(Date.parse(plan.fechaUltimaActualizacion), locale)}</span>
+            <span className="pt-1.5 tabular-nums text-sm text-fg-label">{calendarDay(Date.parse(plan.fechaUltimaActualizacion), locale)}</span>
             <RowGlyph icon={plan.cumplido ? <Check /> : <TrendingUp />} />
             <div className="flex flex-col gap-0.5 pt-1">
               <span className="text-base text-fg-primary">
@@ -781,11 +780,11 @@ function FichaCard({
         <dt className={term}>{t('tracking.next.fichaCiclo')}</dt>
         <dd className="m-0 text-fg-label">{plan.cicloEncuestaExternalId ?? t('tracking.next.ninguno')}</dd>
         <dt className={term}>{t('tracking.next.fichaCreado')}</dt>
-        <dd className="m-0 font-mono tabular-nums">{fullDay(plan.fechaCreacion, locale)}</dd>
+        <dd className="m-0 tabular-nums">{fullDay(plan.fechaCreacion, locale)}</dd>
         <dt className={term}>{t('tracking.next.boxCompromiso')}</dt>
-        <dd className={cn('m-0 font-mono tabular-nums', overdue && 'text-accent-red')}>{fullDay(plan.fechaCompromiso, locale)}</dd>
+        <dd className={cn('m-0 tabular-nums', overdue && 'font-semibold')}>{fullDay(plan.fechaCompromiso, locale)}</dd>
         <dt className={term}>{t('tracking.next.fichaActualizado')}</dt>
-        <dd className="m-0 font-mono tabular-nums">{fullDay(plan.fechaUltimaActualizacion, locale)}</dd>
+        <dd className="m-0 tabular-nums">{fullDay(plan.fechaUltimaActualizacion, locale)}</dd>
         {/* The last row of TrackingPlanDetailLeaderReadOnly's ficha, and only there: a reader
             with write access does not need the plan to tell them their part in it. */}
         {papel && (

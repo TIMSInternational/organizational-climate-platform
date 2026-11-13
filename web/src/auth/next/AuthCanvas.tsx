@@ -308,7 +308,7 @@ export function AuthCard({ children, className }: { children: ReactNode; classNa
     <section
       data-slot="auth-card"
       className={cn(
-        'flex min-w-0 flex-col gap-5 rounded-xl border border-line-default bg-surface-card px-7 pb-6 pt-7 shadow-sm',
+        'flex min-w-0 flex-col gap-5 rounded-xl border border-line-panel bg-surface-card px-7 pb-6 pt-7',
         className,
       )}
     >
@@ -349,9 +349,11 @@ export function AuthHeadline({
           data-slot="auth-tile"
           className={cn(
             'mb-1 inline-flex size-9 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4',
-            tone === 'critical' && 'bg-accent-red-soft text-accent-red',
-            tone === 'warning' && 'bg-accent-amber-soft text-accent-amber-ink',
-            tone === 'good' && 'bg-accent-green-soft text-accent-green-ink',
+            // Red, amber and green are the three result areas and nothing else (Apple-design
+            // ruling, 11 Nov): a failed sign-in is not «Crítica». The heading under the tile
+            // carries the state; the tile is the quiet grey, or the blue tint for success.
+            (tone === 'critical' || tone === 'warning') && 'bg-surface-fill-subtle text-fg-secondary',
+            tone === 'good' && 'bg-accent-blue-soft text-accent-blue-ink',
             tone === 'neutral' && 'bg-surface-icon-box text-accent-blue',
           )}
         >
@@ -373,14 +375,15 @@ export function AuthHeadline({
  * The quiet line under a card: an icon in the lane's tone and one sentence.
  *
  * Both the sign-in and the register boards close with the anonymity promise drawn exactly
- * this way — outside the card, 12px, tertiary ink, the shield in the green ink. It is the
+ * this way — outside the card, 12px, tertiary ink, the shield in the blue ink (it was green
+ * until green became a result area only). It is the
  * one thing an employee about to answer an anonymous survey is actually asking about, so
  * it is on the page rather than in a help article.
  */
 export function AuthFootnote({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <p data-slot="auth-footnote" className="m-0 flex items-start gap-2 px-1 text-sm leading-normal text-fg-tertiary">
-      <span aria-hidden="true" className="mt-0.5 inline-flex shrink-0 text-accent-green-ink [&_svg]:size-3.5">
+      <span aria-hidden="true" className="mt-0.5 inline-flex shrink-0 text-accent-blue-ink [&_svg]:size-3.5">
         {icon}
       </span>
       <span className="min-w-0">{children}</span>

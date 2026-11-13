@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { CalendarDays, Download } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
-import { KpiTile } from '../../../components/charts'
-import { Alert, AlertDescription, Button, EmptyState, ErrorState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../components/ui'
+import { PageHeader } from '../../../components/layout'
+import { Alert, AlertDescription, Button, KpiCard, EmptyState, ErrorState, LoadingRegion, NetworkError, SkeletonText, Table } from '../../../components/ui'
 import { useCompanyName } from '../../../company-context/useCompanyName'
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
@@ -17,22 +16,18 @@ import { SEMAFORO_ORDER, semaforoCount, semaforoPresentation, type SemaforoEstad
 import { todayIso } from '../planDates'
 import { percentagePoints } from '../trackingUnits'
 import { joinNames, nodosIn } from './derive'
+import { StateFootnote } from './parts'
 import type { ConsolidadoModel, NodoBlock, PlanLine } from './model'
 import { useConsolidadoModel } from './useConsolidadoModel'
 import { byCount } from '../../../i18n/plural'
 
-const HEAD = 'h-auto bg-transparent px-3 pb-2 pt-0 text-2xs font-bold uppercase tracking-label text-fg-label whitespace-nowrap'
+const HEAD = 'h-auto bg-transparent px-3 pb-2 pt-0 text-xs font-semibold text-fg-label whitespace-nowrap'
 /** Shown from 1360px, where Avance and Compromiso have columns of their own. */
 const WIDE_ONLY = 'hidden min-[1360px]:table-cell'
 /** Shown below 1360px, where Avance and Compromiso fold under the plan's qué. */
 const FOLDED_ONLY = 'min-[1360px]:hidden'
 
 /** The ink a state's figures and sentences take — the chip carries the word and shape. */
-const TONE_INK: Record<string, string> = {
-  critical: 'text-accent-red',
-  warning: 'text-accent-amber-ink',
-  good: 'text-accent-green-ink',
-}
 
 /** The line under each state's tile, in the artboard's lower case. */
 const TILE_SUB: Record<keyof SemaforoCounts, string> = {
@@ -92,7 +87,7 @@ export default function ConsolidadoNextPage() {
   const { model } = state
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={
           companyName ? t('tracking.next.consolidadoEyebrow', { company: companyName }) : t('tracking.next.consolidadoEyebrowBare')
         }
@@ -166,16 +161,15 @@ function Tiles({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn; 
 
   return (
     <KpiRow>
-      <KpiTile
+      <KpiCard
         label={t('tracking.totalPlanes')}
-        value={total}
-        locale={locale}
+        value={new Intl.NumberFormat(locale).format(total)}
         unit={
           nodosWithPlans.length === 1
             ? t('tracking.next.inOneNodo')
             : t('tracking.next.inNodos', { count: nodosWithPlans.length })
         }
-        sub={parts.length > 0 ? <span className="text-fg-label">{parts.join(' · ')}</span> : undefined}
+        footnote={parts.length > 0 ? <span className="text-fg-label">{parts.join(' · ')}</span> : undefined}
       />
       {SEMAFORO_ORDER.map((estado) => (
         <StateTile key={estado} estado={estado} model={model} t={t} locale={locale} />
@@ -190,16 +184,16 @@ function StateTile({ estado, model, t, locale }: { estado: SemaforoEstado; model
   const names = nodosIn(model.nodos, estado)
   const sub = t(TILE_SUB[presentation.countKey])
   return (
-    <KpiTile
+    <KpiCard
       label={t(presentation.labelKey)}
-      value={count}
-      locale={locale}
+      value={new Intl.NumberFormat(locale).format(count)}
       unit={count === 1 ? t('tracking.next.unitPlan') : t('tracking.next.unitPlans')}
-      aside={<SemaforoChip estado={estado} />}
-      sub={
-        <span className={count > 0 ? TONE_INK[presentation.tone] : 'text-fg-label'} data-state={presentation.countKey}>
-          {count > 0 && names.length > 0 ? t('tracking.next.joined', { first: sub, second: joinNames(names, locale) }) : sub}
-        </span>
+      footnote={
+        <StateFootnote estado={estado}>
+          <span className={count > 0 ? 'text-fg-primary' : 'text-fg-label'} data-state={presentation.countKey}>
+            {count > 0 && names.length > 0 ? t('tracking.next.joined', { first: sub, second: joinNames(names, locale) }) : sub}
+          </span>
+        </StateFootnote>
       }
     />
   )
@@ -218,19 +212,22 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
           <h2 id="consolidado-por-nodo" className="m-0">
             {t('tracking.next.byNodoHeading')}
           </h2>
-          <span className="font-mono text-xs text-fg-label tabular-nums">
+          <span className="tabular-nums text-xs text-fg-label">
             {t('tracking.next.byNodoCount', { nodos: model.nodos.length, planes: total })}
           </span>
         </div>
         <p className="m-0 text-xs text-fg-label">{t('tracking.next.byNodoNote')}</p>
       </div>
 
-      <div className="rounded-lg border border-line-default bg-surface-card pt-2 shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-line-panel bg-surface-card pt-2" data-slot="por-nodo-card">
         {/* No minimum width: at 1024 the sheet fits its card instead of scrolling inside it.
             From 1360px Avance and Compromiso are columns, as the artboard draws them; below
             that they fold under the plan's qué (`PlanRow`). Widths sit on the header cells,
             because a `<col>` keeps a hidden column's width in the fixed layout, and every row
             spans the same six columns in the folded layout and eight in the wide one. */}
+        {/* Below md the sheet keeps a readable width and scrolls inside its card, instead of
+            squeezing the plan rows to one letter; from md up it fits as before. */}
+        <div className="min-w-[46rem] md:min-w-0">
         <Table className="table-fixed">
           <thead>
             <tr className="border-b border-line-default">
@@ -243,7 +240,7 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
               ))}
               <th className={HEAD}>{t('tracking.next.colQue')}</th>
               <th className={cn(HEAD, WIDE_ONLY, 'w-[142px]')}>{t('tracking.columnAvance')}</th>
-              <th className={cn(HEAD, WIDE_ONLY, 'w-[136px]')}>{t('tracking.next.colCompromiso')}</th>
+              <th className={cn(HEAD, WIDE_ONLY, 'w-[164px]')}>{t('tracking.next.colCompromiso')}</th>
             </tr>
           </thead>
           {model.nodos.map((nodo) => (
@@ -254,7 +251,7 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
               <th scope="row" className="border-0 px-3 py-2.5 text-left text-base font-semibold text-fg-primary">
                 {t('tracking.next.total')}
               </th>
-              <td className="border-0 px-3 py-2.5 text-right font-mono tabular-nums text-fg-primary">{total}</td>
+              <td className="border-0 px-3 py-2.5 text-right tabular-nums text-fg-primary">{total}</td>
               {SEMAFORO_ORDER.map((estado) => (
                 <CountCell key={estado} estado={estado} counts={model.conteos} />
               ))}
@@ -267,6 +264,7 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
             </tr>
           </tfoot>
         </Table>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -274,7 +272,7 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
           const presentation = semaforoPresentation(estado)
           return (
             <span key={estado} className="inline-flex items-center gap-1.5 text-xs text-fg-label">
-              <SemaforoGlyph estado={estado} className={cn('size-3.5', TONE_INK[presentation.tone])} />
+              <SemaforoGlyph estado={estado} className={cn('size-3.5', 'text-fg-primary')} />
               {t('tracking.next.legendItem', { state: t(presentation.labelKey), meaning: t(TILE_SUB[presentation.countKey]) })}
             </span>
           )
@@ -292,12 +290,11 @@ function ByNodo({ model, t, locale }: { model: ConsolidadoModel; t: TranslateFn;
 
 function CountCell({ estado, counts }: { estado: SemaforoEstado; counts: SemaforoCounts }) {
   const count = semaforoCount(counts, estado)
-  const presentation = semaforoPresentation(estado)
   return (
     <td
       className={cn(
-        'border-0 px-3 py-2.5 text-center font-mono tabular-nums',
-        count > 0 ? TONE_INK[presentation.tone] : 'text-fg-label',
+        'border-0 px-3 py-2.5 text-center tabular-nums',
+        count > 0 ? 'text-fg-primary' : 'text-fg-label',
       )}
     >
       {count}
@@ -319,7 +316,7 @@ function NodoRows({ nodo, t, locale }: { nodo: NodoBlock; t: TranslateFn; locale
             {nodo.name ?? nodo.nodoExternalId}
           </Link>
         </th>
-        <td className="border-0 px-3 py-2 text-right font-mono tabular-nums text-fg-primary">{nodo.totalPlanes}</td>
+        <td className="border-0 px-3 py-2 text-right tabular-nums text-fg-primary">{nodo.totalPlanes}</td>
         {SEMAFORO_ORDER.map((estado) => (
           <CountCell key={estado} estado={estado} counts={nodo.conteos} />
         ))}
@@ -341,18 +338,18 @@ function NodoRows({ nodo, t, locale }: { nodo: NodoBlock; t: TranslateFn; locale
 }
 
 /** The semáforo word and the progress bar — the Avance column, or its folded line. */
-function AvanceReading({ plan, overdue, stretch, t }: { plan: PlanLine; overdue: boolean; stretch: boolean; t: TranslateFn }) {
+function AvanceReading({ plan, stretch, t }: { plan: PlanLine; overdue: boolean; stretch: boolean; t: TranslateFn }) {
   return (
     <div className={cn('flex gap-1', stretch ? 'flex-col' : 'flex-row flex-wrap items-center gap-2')}>
-      <SemaforoChip estado={plan.estado} className={stretch ? 'w-full' : undefined} />
+      <SemaforoChip estado={plan.estado} className="self-start" />
       <div className="flex items-center gap-1.5">
         <span className="inline-flex h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-icon-box">
           <span
-            className={cn('h-full rounded-full', overdue ? 'bg-accent-red' : 'bg-accent-green')}
+            className={cn('h-full rounded-full', 'bg-accent-blue')}
             style={{ width: `${plan.percent}%` }}
           />
         </span>
-        <span className="font-mono text-xs text-fg-secondary tabular-nums">{t('tracking.next.percentBig', { percent: plan.percent })}</span>
+        <span className="tabular-nums text-xs text-fg-secondary">{t('tracking.next.percentBig', { percent: plan.percent })}</span>
       </div>
     </div>
   )
@@ -374,10 +371,10 @@ function CompromisoReading({
 }) {
   return (
     <div className={cn('flex', inline ? 'flex-row items-baseline gap-1.5' : 'flex-col')}>
-      <span className={cn('font-mono text-sm tabular-nums', overdue ? 'text-accent-red' : 'text-fg-primary')}>
+      <span className={cn('tabular-nums text-sm', 'text-fg-primary')}>
         {calendarDay(Date.parse(plan.fechaCompromiso), locale)}
       </span>
-      <span className={cn('whitespace-nowrap text-xs', overdue ? 'text-accent-red' : 'text-fg-label')}>
+      <span className={cn('whitespace-nowrap text-xs', overdue ? 'font-semibold text-fg-secondary' : 'text-fg-label')}>
         {plan.cumplido
           ? t('tracking.detail.cumplido')
           : overdue
@@ -393,7 +390,7 @@ function PlanCode({ plan }: { plan: PlanLine }) {
   return (
     <Link
       to={`/tracking/planes/${plan.id}`}
-      className="rounded-sm bg-surface-icon-box px-1.5 py-px font-mono text-xs text-fg-secondary no-underline hover:underline"
+      className="whitespace-nowrap rounded-sm bg-surface-icon-box px-1.5 py-px tabular-nums text-xs text-fg-secondary no-underline hover:underline"
     >
       {plan.code}
     </Link>

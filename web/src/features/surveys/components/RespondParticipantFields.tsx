@@ -38,10 +38,10 @@ export default function RespondParticipantFields({
     <fieldset
       id="participant-identity"
       tabIndex={-1}
-      className="min-w-0 rounded-xl border border-line-default bg-surface-card p-panel shadow-sm transition-colors focus-within:border-accent-blue-ring"
+      className="-m-2 min-w-0 rounded-xl border-0 p-2"
     >
       <legend className="float-left m-0 w-full p-0">
-        <span className="block text-question font-normal text-fg-primary md:text-respond-question">
+        <span className="block font-display text-respond-display font-semibold tracking-title text-fg-primary">
           {t('identity.question')}
         </span>
       </legend>

@@ -440,7 +440,7 @@ async function findSurveyColumn(): Promise<HTMLElement> {
   return column as HTMLElement
 }
 
-describe('the respond instrument sticks', () => {
+describe('no ancestor of the respond column swallows a sticky child', () => {
   beforeAll(async () => {
     const entry = await readFile(join(SRC, 'index.css'), 'utf8')
     const compiled = await compile(entry, {

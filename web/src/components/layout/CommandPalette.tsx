@@ -4,6 +4,7 @@ import { ArrowRight, ClipboardList, FileText, MessageCircleQuestion, Network, Se
 import { useTranslation } from '../../i18n'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../ui'
 import type { NavSection } from '../../navigation/navSections'
+import { canReach } from '../../navigation/roleCapabilities'
 import { search, hrefForResult, type SearchEntityType, type SearchResultItem } from '../../features/search/api/search'
 
 /**
@@ -70,9 +71,16 @@ const RESULT_LIMIT = 5
 
 export interface CommandPaletteProps {
   sections: NavSection[]
+  /**
+   * The caller's role claim, and whether the tracking service is configured -- the two
+   * things `roleCapabilities.canReach` needs to say whether a search hit's page loads for
+   * this caller. The nav half needs neither: `sections` is already this role's own.
+   */
+  role: string | undefined
+  trackingEnabled: boolean
 }
 
-export function CommandPalette({ sections }: CommandPaletteProps) {
+export function CommandPalette({ sections, role, trackingEnabled }: CommandPaletteProps) {
   const { t, locale } = useTranslation()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -178,7 +186,13 @@ export function CommandPalette({ sections }: CommandPaletteProps) {
     return results.flatMap((item) => {
       const href = hrefForResult(item)
       // A row with nowhere to go is dropped rather than rendered dead -- see hrefForResult.
-      if (!href) return []
+      //
+      // So is a row this role cannot load. `GET /search` answers a leader, a supervisor and an
+      // employee with the surveys they are asked to answer, and a survey hit routes to
+      // `/surveys/{id}`, the administrator's Detalle (`CanAdminister`, 403 for all three). The
+      // supervisor's strip has carried this palette's chip since 2026-11-12. Every kind
+      // `hrefForResult` routes is in both administrator lists, so their hits are unchanged.
+      if (!href || !canReach(role, href, trackingEnabled)) return []
       return [{
         labelKey: `search:${item.type}:${item.id}`,
         label: item.title,
@@ -188,7 +202,7 @@ export function CommandPalette({ sections }: CommandPaletteProps) {
         group,
       }]
     })
-  }, [results, t])
+  }, [results, t, role, trackingEnabled])
 
   // Destinations first, data second: the menu is instant and local, the results arrive a
   // beat later, and a list that reorders under the cursor mid-type is the thing to avoid.

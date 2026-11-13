@@ -172,7 +172,7 @@ export function SegmentedScale({
         aria-labelledby={labelledBy}
         aria-required={required || undefined}
         aria-disabled={disabled || undefined}
-        className="flex gap-1.5"
+        className="flex gap-2"
       >
         {points.map((point, index) => {
           const checked = index === selected
@@ -216,7 +216,7 @@ export function SegmentedScale({
           so the row reads as a scale rather than as five unrelated buttons. Decoration,
           so hidden from assistive technology — the radiogroup already says how many
           points there are. */}
-      <div aria-hidden="true" data-slot="scale-ticks" className="mt-1.5 flex gap-1.5">
+      <div aria-hidden="true" data-slot="scale-ticks" className="mt-1.5 flex gap-2">
         {points.map((point) => (
           <span key={point} className="flex flex-1 justify-center">
             <span className="h-1.5 w-px bg-line-default" />
@@ -226,7 +226,8 @@ export function SegmentedScale({
       {/* Under the ENDS of the row, which is the whole point of the treatment — the
           design's note calls out that the anchors floating under the first two
           radios read as two unrelated labels rather than as the ends of a scale. */}
-      <div className="mt-1.5 flex justify-between text-xs text-fg-secondary">
+      {/* 13px, the board's `.ends` — secondary text, not the 12px chip step. */}
+      <div className="mt-1.5 flex justify-between gap-4 text-sm text-fg-secondary">
         <span>{minLabel}</span>
         <span>{maxLabel}</span>
       </div>

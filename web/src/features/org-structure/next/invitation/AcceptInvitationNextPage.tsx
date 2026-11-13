@@ -10,8 +10,8 @@ import { useAcceptInvitationModel } from './useAcceptInvitationModel'
 /** `SystemSettings.PasswordPolicy.MinLength` defaults to 8; the server is authoritative. */
 const DEFAULT_MIN_PASSWORD_LENGTH = 8
 
-/** The artboard's `.card`: 8px, the default hairline, the faint shadow. */
-const CARD = 'rounded-xl border border-line-default bg-surface-card shadow-sm'
+/** The Apple design's `.card`: 12px corners, the panel hairline, no shadow. */
+const CARD = 'rounded-xl border border-line-panel bg-surface-card'
 
 /**
  * `/accept-invitation/:token` — accepting an invitation and choosing a password, drawn as
@@ -89,12 +89,12 @@ function Form({
 
   return (
     <div className="flex flex-col gap-panel-gap">
-      <section className={cn(CARD, 'flex flex-col gap-5 p-7 pb-6')}>
+      <section data-slot="invitation-card" className={cn(CARD, 'flex flex-col gap-5 p-7 pb-6')}>
         <header className="grid gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
+          <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
             {t('auth.next.accept.eyebrow')}
           </span>
-          <h1 className="text-2xl font-semibold tracking-tight text-fg-primary">
+          <h1 className="mb-0 font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
             {t('auth.next.accept.title')}
           </h1>
           <p className="max-w-prose text-base text-fg-secondary">
@@ -118,6 +118,7 @@ function Form({
             label={t('auth.next.accept.emailLabel')}
             type="email"
             value={model.email}
+            placeholder={t('auth.next.emailPlaceholder')}
             description={t('auth.next.accept.emailHint')}
             onChange={model.setEmail}
           />
@@ -145,20 +146,29 @@ function Form({
           >
             {t('auth.next.accept.submit')}
           </Button>
+
+          {/* Inside the card, as on /register and /login. Under it, these stood on the
+              photograph from `lg` up in both themes but on the theme's own ground below
+              `lg`, so no one ink could serve both: in light the page inks measured 1.58:1
+              (#48484d) and 2.15:1 (#1d4ed8) on the navy (12 Nov review). The card is the
+              one paper these inks are measured against at every width and in both themes. */}
+          <p className="m-0 flex flex-wrap gap-1.5 text-sm text-fg-secondary">
+            <span>{t('auth.next.accept.alreadyHaveAccount')}</span>
+            <Link to="/login" className="text-accent-blue-ink underline">
+              {t('auth.next.accept.signIn')}
+            </Link>
+          </p>
         </form>
+
+        {/* The one promise this page can make about what the account is for, and the
+            reason an employee should be willing to create one at all, so it is on the card
+            with the form it is about. A neutral note on the fill, its shield in the link
+            blue: green is a result area and nothing else. */}
+        <p className="m-0 flex items-start gap-inline rounded-lg bg-surface-fill-subtle px-3 py-2.5 text-sm text-fg-secondary">
+          <ShieldCheck aria-hidden="true" className="size-icon shrink-0 translate-y-0.5 text-accent-blue-ink" />
+          <span className="min-w-0">{t('auth.next.accept.anonymityNote')}</span>
+        </p>
       </section>
-
-      <p className="flex flex-wrap items-center justify-center gap-inline text-base">
-        <span className="text-fg-secondary">{t('auth.next.accept.alreadyHaveAccount')}</span>
-        <Link to="/login">{t('auth.next.accept.signIn')}</Link>
-      </p>
-
-      {/* The one promise this page can make about what the account is for, and the reason
-          an employee should be willing to create one at all. */}
-      <p className="flex items-start gap-inline px-1 text-sm text-fg-secondary">
-        <ShieldCheck aria-hidden="true" className="size-icon shrink-0 translate-y-0.5 text-accent-green" />
-        <span className="min-w-0">{t('auth.next.accept.anonymityNote')}</span>
-      </p>
     </div>
   )
 }
@@ -191,7 +201,7 @@ function DeadState({
       live="alert"
       action={
         offerSignIn ? (
-          <Button asChild variant="primary" size="canvas" className="w-full">
+          <Button asChild variant="primary" size="lg" className="w-full">
             <Link to="/login">{t('next.accept.signIn')}</Link>
           </Button>
         ) : undefined
@@ -243,9 +253,9 @@ function CreatedState() {
       title={t('auth.accountCreated')}
       body={t('auth.accountCreatedRoleNote')}
       live="status"
-      icon={<CheckCircle2 aria-hidden="true" className="size-icon text-accent-green" />}
+      icon={<CheckCircle2 aria-hidden="true" className="size-icon text-accent-blue-ink" />}
       action={
-        <Button asChild variant="primary" size="canvas" className="w-full">
+        <Button asChild variant="primary" size="lg" className="w-full">
           <Link to="/login">{t('auth.backToSignIn')}</Link>
         </Button>
       }
@@ -274,12 +284,12 @@ function StateCard({
 }) {
   return (
     <section role={live} className={cn(CARD, 'flex flex-col gap-2.5 p-7 pb-6')}>
-      <span className="flex items-center gap-inline text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
+      <span className="flex items-center gap-inline text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
         {icon}
         {label}
       </span>
       <div className="grid min-w-0 gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-fg-primary">{title}</h1>
+        <h1 className="mb-0 font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">{title}</h1>
         <p className="max-w-prose text-base text-fg-secondary">{body}</p>
       </div>
       {action}

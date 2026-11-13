@@ -181,7 +181,7 @@ describe('SurveyInvitationPage', () => {
     await screen.findByRole('heading', { name: 'Clima laboral 2026' })
     await waitFor(() => expect(steps()).toEqual(['opened']))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Empezar a responder' }))
 
     await waitFor(() => expect(steps()).toEqual(['opened', 'started']))
   })
@@ -191,7 +191,7 @@ describe('SurveyInvitationPage', () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Clima laboral 2026' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar a responder' }))
 
     await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
     await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
@@ -211,7 +211,7 @@ describe('SurveyInvitationPage', () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Clima laboral 2026' })
-    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar a responder' }))
     expect(screen.queryByRole('button', { name: 'Guardar y terminar después' })).toBeNull()
     await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
     await waitFor(
@@ -242,7 +242,7 @@ describe('SurveyInvitationPage', () => {
     serve()
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar a responder' }))
     await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
     expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true)
 
@@ -255,7 +255,7 @@ describe('SurveyInvitationPage', () => {
     await waitFor(() =>
       expect((screen.getByRole('radio', { name: 'Bien' }) as HTMLInputElement).checked).toBe(true),
     )
-    expect(screen.queryByRole('button', { name: 'Start the survey' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start answering' })).toBeNull()
     expect(screen.queryByText('Your invitation')).toBeNull()
   })
 
@@ -270,7 +270,7 @@ describe('SurveyInvitationPage', () => {
     serve()
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar a responder' }))
     await waitFor(() => expect(steps()).toEqual(['opened', 'started']))
 
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Cambiar idioma' }), 'en')
@@ -291,7 +291,7 @@ describe('SurveyInvitationPage', () => {
     serve({ submission: { alreadySubmitted: true } })
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar a responder' }))
     await userEvent.click(await screen.findByRole('radio', { name: 'Bien' }))
     await userEvent.click(screen.getByRole('button', { name: 'Enviar mis respuestas' }))
 
@@ -320,13 +320,13 @@ describe('SurveyInvitationPage', () => {
       </TranslationProvider>,
     )
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar a responder' }))
     await screen.findByRole('radio', { name: 'Bien' })
 
     await userEvent.click(screen.getByRole('link', { name: 'Otra invitación' }))
 
     // Its own landing card, not the previous invitation's half-answered form.
-    expect(await screen.findByRole('button', { name: 'Comenzar la encuesta' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Empezar a responder' })).toBeTruthy()
   })
 
   /**
@@ -379,7 +379,7 @@ describe('SurveyInvitationPage', () => {
     )
 
     await screen.findByRole('heading', { name: 'Encuesta A' })
-    await userEvent.click(screen.getByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Empezar a responder' }))
     await screen.findByRole('radio', { name: 'Bien' })
 
     await userEvent.click(screen.getByRole('link', { name: 'Otra invitación' }))
@@ -399,7 +399,7 @@ describe('SurveyInvitationPage', () => {
     serve({ steps: () => new Response(JSON.stringify({ message: 'no' }), { status: 500 }) })
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Empezar a responder' }))
 
     expect(await screen.findByRole('radio', { name: 'Bien' })).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
@@ -431,7 +431,7 @@ describe('SurveyInvitationPage', () => {
     renderPage()
 
     expect(await screen.findByText(expected)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Comenzar la encuesta' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Empezar a responder' })).toBeNull()
   })
 
   /**
@@ -474,7 +474,7 @@ describe('SurveyInvitationPage', () => {
     expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
     expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(1)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Comenzar la encuesta' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Empezar a responder' }))
     await screen.findByRole('radio', { name: 'Bien' })
 
     expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
@@ -505,7 +505,7 @@ describe('SurveyInvitationPage', () => {
     })
     renderPage()
 
-    expect(await screen.findByRole('button', { name: 'Comenzar la encuesta' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Empezar a responder' })).toBeTruthy()
     expect(screen.queryByText(/tendrá que|se le pedirá iniciar sesión/i)).toBeNull()
     expect(screen.queryByRole('link', { name: 'Iniciar sesión' })).toBeNull()
   })

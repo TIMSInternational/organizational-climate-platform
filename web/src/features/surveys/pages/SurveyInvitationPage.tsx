@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../components/layout'
-import { Button } from '../../../components/ui'
+import { Button, CanvasArrowRightIcon, LoadingState } from '../../../components/ui'
 import { instantDay } from '../../../lib/calendarDay'
 import SurveyRespondForm, {
   AnonymityNotice,
@@ -256,7 +256,7 @@ function Landing({
           (audit 2026-10-22, R2). */}
       <section
         aria-label={t('panelLabel')}
-        className="grid gap-panel-gap sm:grid-flow-col sm:auto-cols-fr"
+        className="grid grid-cols-2 gap-panel-gap"
       >
         <RespondReading
           label={t('closesReading')}
@@ -270,12 +270,11 @@ function Landing({
 
       <AnonymityNotice anonymous={detail.anonymity.anonymous} />
 
-
-      <p>
-        <Button type="button" variant="primary" onClick={onBegin}>
-          {t('beginSurvey')}
-        </Button>
-      </p>
+      {/* The one primary action, full width and 44px: the Respond board's «Comenzar». */}
+      <Button type="button" variant="primary" size="lg" className="w-full" onClick={onBegin}>
+        {t('beginSurvey')}
+        <CanvasArrowRightIcon className="size-icon" />
+      </Button>
     </>
   )
 }
@@ -283,7 +282,7 @@ function Landing({
 function LoadingNotice() {
   const { t: tRoot } = useTranslation()
 
-  return <p className="text-base text-fg-secondary">{tRoot('common.loading')}</p>
+  return <LoadingState label={tRoot('common.loading')} />
 }
 
 /**

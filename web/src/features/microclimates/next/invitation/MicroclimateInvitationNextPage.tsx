@@ -1,16 +1,14 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
-import { Calendar, Check, CircleAlert, EyeOff, Search, ShieldCheck } from 'lucide-react'
+import { Calendar, Check, CircleAlert, Lock, Search, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { RespondCaption, RespondReading, RespondShell } from '../../../../components/layout'
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
   Button,
   CanvasArrowRightIcon,
   CanvasClockIcon,
   CanvasLockIcon,
+  LoadingState,
 } from '../../../../components/ui'
 import { returnTo } from '../../../../auth/returnPath'
 import { cn } from '../../../../lib/cn'
@@ -21,8 +19,8 @@ import { dayMonth, dayMonthLong } from '../derive'
 import { deadCopy, respondUntil, type DeadKind, type InvitationView } from './derive'
 import { useMicroclimateInvitationModel } from './useMicroclimateInvitationModel'
 
-/** The artboard's `.card`: 8px, the default hairline, the faint shadow. */
-const CARD = 'rounded-xl border border-line-default bg-surface-card shadow-sm'
+/** The Apple design's `.card`: 12px corners, the panel hairline, no shadow. */
+const CARD = 'rounded-xl border border-line-panel bg-surface-card'
 
 /**
  * `/microclimate-invitations/:token` — the personal invitation link as its invitee meets
@@ -96,7 +94,7 @@ function InvitationBody({ view, onBegin }: { view: InvitationView; onBegin: () =
   const { t: tRoot } = useTranslation()
 
   if (view.kind === 'loading') {
-    return <p className="text-base text-fg-secondary">{tRoot('common.loading')}</p>
+    return <LoadingState label={tRoot('common.loading')} />
   }
 
   if (view.kind === 'landing') return <Landing detail={view.detail} onBegin={onBegin} />
@@ -163,7 +161,7 @@ function Landing({
 
       <AnonymityNotice anonymous={detail.anonymity.anonymous} />
 
-      <Button type="button" variant="primary" className="h-11 w-full" onClick={onBegin}>
+      <Button type="button" variant="primary" size="lg" className="w-full" onClick={onBegin}>
         {t('next.invitation.begin')}
         <CanvasArrowRightIcon strokeWidth={2} />
       </Button>
@@ -183,24 +181,38 @@ function Landing({
  * that much. On an anonymous session the invitation ladder stops at `opened`, so "we know
  * you looked and we will not know whether you answered" is literally true.
  *
- * `Alert` rather than a hand-rolled tinted box: its soft fill, hairline and icon ink are
- * the pair `styles/accentInkContrast.test.ts` measures, and the artboard's green block is
- * that treatment. Only the title's typographic rule is overridden, to the small uppercase
- * label the artboard sets it in.
+ * Drawn in the survey's promise box (`surveys/components/AnonymityNotice`): the card
+ * hairline, 16px across and 14px down, the blue padlock, the small uppercase label, and
+ * the body at the respond step (15px). It was an `Alert` at 13px with an 8px gap, beside a
+ * survey invitation whose promise was 15px with a 16px gap (12 Nov review): one promise,
+ * two shapes. The words stay the pulse's own: "No se asocia a usted" and "Este pulso
+ * registra quién participa" say what this payload's flag means for a pulse, which the
+ * survey's "Anónima" does not.
  */
 function AnonymityNotice({ anonymous }: { anonymous: boolean }) {
   const { t } = useTranslation('microclimates')
 
   return (
-    <Alert variant={anonymous ? 'success' : 'info'} role="status">
-      {anonymous ? <EyeOff aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
-      <AlertTitle className="text-2xs font-semibold uppercase tracking-label">
-        {anonymous ? t('next.invitation.anonymousTitle') : t('next.invitation.identifiedTitle')}
-      </AlertTitle>
-      <AlertDescription>
-        {anonymous ? t('next.invitation.anonymousBody') : t('next.invitation.identifiedBody')}
-      </AlertDescription>
-    </Alert>
+    <section
+      role="status"
+      data-slot="anonymity-notice"
+      data-anonymous={anonymous}
+      className="flex gap-2.5 rounded-xl border border-line-panel bg-surface-card px-4 py-3.5"
+    >
+      {anonymous ? (
+        <Lock aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue-ink" />
+      ) : (
+        <ShieldCheck aria-hidden="true" className="mt-px size-icon shrink-0 text-accent-blue-ink" />
+      )}
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
+          {anonymous ? t('next.invitation.anonymousTitle') : t('next.invitation.identifiedTitle')}
+        </span>
+        <p className="m-0 text-respond text-fg-secondary">
+          {anonymous ? t('next.invitation.anonymousBody') : t('next.invitation.identifiedBody')}
+        </p>
+      </div>
+    </section>
   )
 }
 
@@ -224,7 +236,7 @@ function SignInState() {
       tone="neutral"
       live="status"
       action={
-        <Button asChild variant="primary" className="h-11 w-full">
+        <Button asChild variant="primary" size="lg" className="w-full">
           <Link to="/login" state={returnTo(`${location.pathname}${location.search}`)}>
             {t('next.invitation.signInAction')}
           </Link>
@@ -280,9 +292,12 @@ const DEAD_SHAPE: Readonly<Record<DeadKind, { icon: ReactNode; tone: StateTone }
 type StateTone = 'neutral' | 'amber' | 'green'
 
 const TONE_CLASS: Readonly<Record<StateTone, string>> = {
-  neutral: 'bg-surface-icon-box text-fg-secondary',
-  amber: 'bg-accent-amber-soft text-accent-amber-ink',
-  green: 'bg-accent-green-soft text-accent-green-ink',
+  // The tone names survive as the states' classification; their colours do not. Amber and
+  // green are result areas only (Apple-design ruling, 11 Nov): a revoked link is not
+  // «Oportunidad». The sentence beside the tile carries the state.
+  neutral: 'bg-surface-fill-subtle text-fg-secondary',
+  amber: 'bg-surface-fill-subtle text-fg-secondary',
+  green: 'bg-accent-blue-soft text-accent-blue-ink',
 }
 
 /**
@@ -315,7 +330,7 @@ function StateCard({
 }) {
   return (
     <section role={live} className={cn(CARD, 'flex flex-col gap-2.5 p-panel')}>
-      <span className="text-2xs font-semibold uppercase tracking-label text-fg-tertiary">
+      <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
         {label}
       </span>
       <div className="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-3">

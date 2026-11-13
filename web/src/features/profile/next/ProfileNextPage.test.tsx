@@ -154,14 +154,13 @@ describe('ProfileNextPage — the respondent is not shown their own name', () =>
     expect(screen.getByText('panel')).toBeTruthy()
   })
 
-  it('redirects a supervisor too, whose every page is also their own', () => {
-    // Measured, not assumed: `navSections.test.ts:712` and `AdminLayout.test.tsx`'s
-    // `PER_USER_ROLES = ['supervisor', 'employee']` both already say so, and the nav note
-    // gives the reason -- "no admin page exists for this role yet". A supervisor in this
-    // build has no admin surface, so #594 already gives them the railless shell; this
-    // follows that decision rather than inventing a second one.
+  it('lets a supervisor in, since the supervisor keeps the rail — ruled 2026-11-12', async () => {
+    // It used to redirect them, following #594's railless shell. The owner ruled on 12 Nov that
+    // the supervisor gets the rail shell, account menu included, and that menu links here; a
+    // page that bounced the role its own menu offers it to would be the disagreement
+    // `useRespondentShell` exists to prevent. `drawsRespondentShell` carries the exception.
     renderAsRespondent('supervisor')
-    expect(screen.getByText('panel')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: es.profile.accountTitle })).toBeTruthy()
   })
 
   it('still lets every role that administers anything in', async () => {

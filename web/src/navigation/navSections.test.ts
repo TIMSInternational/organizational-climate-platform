@@ -4,6 +4,7 @@ import { join, sep } from 'node:path'
 import {
   activeHref,
   buildNavSections,
+  drawsRespondentShell,
   isPerUserOnly,
   isUnder,
   leafNavItems,
@@ -706,5 +707,32 @@ describe('isPerUserOnly', () => {
     // shell it already has is the safer wrong answer.
     expect(isPerUserOnly([])).toBe(false)
     expect(isPerUserOnly([{ titleKey: 'empty', items: [] } satisfies NavSection])).toBe(false)
+  })
+})
+
+describe('drawsRespondentShell', () => {
+  /**
+   * The shell's actual gate: `AdminLayout` draws the railless strip, and `useRespondentShell`
+   * reports it, exactly when this is true. It is {@link isPerUserOnly} less the supervisor.
+   */
+  const sections = (role: string | undefined, trackingEnabled = false) =>
+    buildNavSections(role, 'company-1', { trackingEnabled })
+
+  it.each([false, true])('is true for an employee (tracking %s), as ESPH asked on 18 Oct', (tracking) => {
+    expect(drawsRespondentShell('employee', sections('employee', tracking))).toBe(true)
+  })
+
+  it.each([false, true])(
+    'is false for a supervisor (tracking %s), whose rows are all its own — ruled 2026-11-12',
+    (tracking) => {
+      // The rows did not change: this is still a per-user-only set, so the exception is what
+      // brings the rail back and not a new destination.
+      expect(isPerUserOnly(sections('supervisor', tracking))).toBe(true)
+      expect(drawsRespondentShell('supervisor', sections('supervisor', tracking))).toBe(false)
+    },
+  )
+
+  it.each(['super_admin', 'company_admin', 'leader'])('is false for %s, as before', (role) => {
+    expect(drawsRespondentShell(role, sections(role))).toBe(false)
   })
 })

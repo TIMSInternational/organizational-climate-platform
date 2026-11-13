@@ -362,7 +362,7 @@ describe('EmployeeHomeView', () => {
     expect(await screen.findByText(es('employee.next.homeDescriptionMany', { count: 3 }))).toBeTruthy()
     expect(screen.queryByText(es('employee.homeDescription'))).toBeNull()
     expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
-      es('employee.next.toAnswerMetaAndMore', { count: 2 }),
+      es('employee.next.toAnswerMetaAndMore', { count: 3 }),
     )
   })
 
@@ -376,8 +376,46 @@ describe('EmployeeHomeView', () => {
 
     expect(await screen.findByText(es('employee.next.homeDescriptionMany', { count: 7 }))).toBeTruthy()
     expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
-      es('employee.next.toAnswerMetaAndMore', { count: 6 }),
+      es('employee.next.toAnswerMetaAndMore', { count: 7 }),
     )
+  })
+
+  /**
+   * The meta prints the same total as the greeting, as a plain count. It was "una encuesta
+   * abierta, y otra más", which made the reader add one to reach the greeting's number
+   * (12 Nov review).
+   */
+  it('prints the section meta as the plain total, never as "one, and N more"', () => {
+    expect(es('employee.next.toAnswerMetaOne')).toBe('1 encuesta abierta')
+    expect(es('employee.next.toAnswerMetaAndOneMore')).toBe('2 encuestas abiertas')
+    expect(es('employee.next.toAnswerMetaAndMore', { count: 7 })).toBe('7 encuestas abiertas')
+  })
+
+  /**
+   * Every listed survey answered in this browser, and the count still above zero (the page
+   * beyond the five rows). The greeting said "Hay 2 encuestas abiertas para usted" while the
+   * card under it said "No tiene nada que responder ahora mismo" (12 Nov review). All three
+   * now say the count.
+   */
+  it('never tells a reader the count says owes surveys that there is nothing to answer', async () => {
+    const page = Array.from({ length: 5 }, (_, index) =>
+      survey({ id: `00000000-0000-4000-8000-00000000001${index}`, title: `Encuesta ${index + 1}` }),
+    )
+    for (const row of page) markAnswered(row.id)
+    serves({ dashboard: home({ pendingSurveyCount: 7, pendingSurveys: page }) })
+    renderHome()
+
+    expect(await screen.findByText(es('employee.next.homeDescriptionMany', { count: 2 }))).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2, name: es('employee.next.toAnswerHeading') })).toBeTruthy()
+    expect(document.querySelector('[data-slot="home-to-answer-meta"]')?.textContent).toBe(
+      es('employee.next.toAnswerMetaAndOneMore'),
+    )
+    const card = document.querySelector('[data-slot="home-open-unlisted"]') as HTMLElement
+    expect(card, 'the unlisted-surveys card stands in for the lead').toBeTruthy()
+    expect(within(card).getByText(es('employee.next.openUnlistedTitleMany', { count: 2 }))).toBeTruthy()
+    expect(document.querySelector('[data-slot="home-nothing-due"]')).toBeNull()
+    expect(screen.queryByText(es('employee.next.nothingDueTitle'))).toBeNull()
+    expect(screen.queryByText(es('employee.next.answeredHeading'))).toBeNull()
   })
 
   it('keeps the one-survey sentences when one survey is open', async () => {
@@ -697,7 +735,7 @@ describe('EmployeeHomeView', () => {
     renderHome('employee')
 
     await screen.findByRole('link', { name: es('employee.startAnswering') })
-    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    const eyebrow = document.querySelector('[data-slot="page-header-eyebrow"]')
     expect(eyebrow?.textContent).toBe(es('employee.eyebrow'))
     // Scoped to the eyebrow deliberately: "Ingeniería" legitimately appears elsewhere on
     // this page — the outcome panel names the departments a plan was opened in — so a
@@ -715,7 +753,7 @@ describe('EmployeeHomeView', () => {
     renderHome('company_admin')
 
     await screen.findByRole('link', { name: es('employee.startAnswering') })
-    expect(document.querySelector('[data-slot="page-eyebrow"]')?.textContent).toBe('Ingeniería')
+    expect(document.querySelector('[data-slot="page-header-eyebrow"]')?.textContent).toBe('Ingeniería')
   })
 
   it('gives a role it does not know the respondent eyebrow, not a guessed department', async () => {
@@ -732,7 +770,7 @@ describe('EmployeeHomeView', () => {
     renderHome('auditor')
 
     await screen.findByRole('link', { name: es('employee.startAnswering') })
-    const eyebrow = document.querySelector('[data-slot="page-eyebrow"]')
+    const eyebrow = document.querySelector('[data-slot="page-header-eyebrow"]')
     expect(eyebrow?.textContent).toBe(es('employee.eyebrow'))
     expect(eyebrow?.textContent).not.toContain('Ingeniería')
   })

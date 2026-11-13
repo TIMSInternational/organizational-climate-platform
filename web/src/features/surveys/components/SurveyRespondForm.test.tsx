@@ -488,6 +488,19 @@ describe('SurveyRespondForm dimension labels', () => {
    * and grouping on the rendered label would re-section the form when the language
    * changes mid-answer — which is why `dimensionLabel` claims only what it can hold.
    */
+  it('says the content language mid-sentence in lower case, with a space between its two sentences', async () => {
+    // Review of 12 Nov: «…se muestra en Inglés, porque…redactada.Algunas partes…» — a capital
+    // language name mid-sentence, and the two sentences glued together.
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'es')
+    respondWith(view({ resolvedLocale: 'en', fallbackFields: ['questions[0].text'], questions: [question({ id: 'a', text: 'Question A' })] }))
+    renderForm()
+    const title = await screen.findByText(copy.es('surveyRespond.contentLanguageTitle'))
+    const body = title.parentElement!.textContent ?? ''
+    expect(body).toContain(copy.es('surveyRespond.contentLanguageBody').replace('{language}', 'inglés'))
+    expect(body).not.toContain('Inglés')
+    expect(body).toMatch(/redactada\. \S/)
+  })
+
   it('reads the same for a catalogued dimension and a category spelled like its label', async () => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
     const enpsHeading = copy.en('surveyRespond.dimensions.enps')
@@ -781,20 +794,19 @@ describe('SurveyRespondForm numeric scales', () => {
   })
 
   /**
-   * The canvas sets the question at 17px with line-height 1.4 and its scale points at 17px
-   * (RespondSurveyPhone.dc.html). The type scale had no 17px step, so both were drawn at
-   * 16px; `text-question` is that step (`tokens.css`, pinned in `tokens.test.ts`).
+   * The Respond board (Apple design, 12 Nov) sets the question in the serif at 24px — the
+   * ruling gives the display face to the respondent's question text and to titles only —
+   * and its scale points at the respond page's 17px step (`text-question`).
    */
-  it('sets the question and its scale points at the canvas’s 17px step', async () => {
+  it('sets the question in the serif at the board’s 24px, and its scale points at 17px', async () => {
     respondWith(view({ questions: [scaleQuestion()] }))
     const { container } = renderForm()
 
     const group = await screen.findByRole('radiogroup')
     const text = container.querySelector('[data-slot="question-text"]') as HTMLElement
-    expect(text.className.split(/\s+/)).toContain('text-question')
-    expect(text.className.split(/\s+/)).not.toContain('text-xl')
-    // The step carries the canvas's 1.4; a `leading-*` beside it would override it.
-    expect(text.className).not.toMatch(/\bleading-/)
+    expect(text.className.split(/\s+/)).toContain('font-display')
+    expect(text.className.split(/\s+/)).toContain('text-respond-display')
+    expect(text.className.split(/\s+/)).not.toContain('text-question')
     for (const point of within(group).getAllByRole('radio')) {
       expect(point.className.split(/\s+/)).toContain('text-question')
     }
@@ -873,12 +885,13 @@ describe('SurveyRespondForm layout', () => {
   })
 
   /**
-   * The canvas's order under the promise: the survey's name with where the respondent is
-   * and a 6px bar, the one question card, then the pair — Anterior and the way on — with
-   * "Guardar y terminar después" under it. Nothing pinned to the viewport: every page is
-   * one question, so the pair is always right under the card it acts on.
+   * The order under the promise: the head (`.ph-top`) — the survey's name with where the
+   * respondent is, and the bar — then the one question card, then the foot (`.ph-foot`)
+   * with a labelled Anterior and the way on, and "Guardar y terminar después" under it.
+   * Anterior was a bare chevron in the head until the 12 Nov review measured it as the
+   * smallest target on the screen; it is a 44px labelled button in the foot now.
    */
-  it('heads the question with the position and the bar, and puts the pair and the save under the card', async () => {
+  it('heads the question with the position and the bar, and puts Anterior, the way on and the save under the card', async () => {
     respondWith(
       view({
         showProgress: true,
@@ -897,8 +910,17 @@ describe('SurveyRespondForm layout', () => {
     const card = container.querySelector('fieldset[id^="question-"]') as HTMLElement
     const nav = container.querySelector('[data-slot="respond-nav"]') as HTMLElement
     const save = container.querySelector('[data-slot="respond-save"]') as HTMLElement
-    expect(within(nav).getByRole('button', { name: 'Anterior' })).toBeTruthy()
-    expect(within(nav).getByRole('button', { name: 'Siguiente' })).toBeTruthy()
+    // The head carries no control at all; the way back is in the foot, labelled.
+    expect(within(head).queryAllByRole('button')).toEqual([])
+    // The foot: Anterior, by its visible words and not only an sr-only name, then the way on.
+    expect(within(nav).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Anterior', 'Siguiente'])
+    // 44px, the canvas's `.btn.lg`, the same height as Siguiente beside it.
+    expect(within(nav).getByRole('button', { name: 'Anterior' }).className).toMatch(/(^|\s)h-11(\s|$)/)
+    // While the bar is pinned over a phone screen, the document keeps a focused control
+    // out from under it (WCAG 2.2 SC 2.4.11). happy-dom evaluates neither `:has()` nor the
+    // media query, so the class carrying it is what can be asserted here; the measurement
+    // (41px of the comment box under the bar before, 0px after) is in the component.
+    expect(nav.className).toContain('max-md:[:root:has(&)]:scroll-pb-')
     expect(within(save).getByRole('button', { name: 'Guardar y terminar después' })).toBeTruthy()
     // In that order down the page. Read off `querySelectorAll`, which returns document
     // order — happy-dom's `compareDocumentPosition` answered 0 for the header against the
@@ -937,19 +959,19 @@ describe('SurveyRespondForm layout', () => {
   })
 
   /**
-   * The canvas inks the promise's label green (`#0f7f4e`), and that ink measures 4.31:1 on
-   * the soft green over the respond page's ground — under AA for 10px text
-   * (`respondContrast.test.ts` records it as rejected). The label keeps the green on the
-   * chip's measured green ink instead.
+   * Green is one of the three result areas and nothing else (Apple-design ruling, 11 Nov),
+   * so the promise is a quiet card and its label is the secondary ink — the pair
+   * `respondContrast.test.ts` measures in both palettes. No green may come back on it.
    */
-  it('inks the promise’s label with the measured green, not the canvas’s own', async () => {
+  it('inks the promise’s label in the measured secondary ink, never a result green', async () => {
     respondWith(view({ anonymous: true }))
     const { container } = renderForm()
 
     await screen.findByRole('radio', { name: 'Muy de acuerdo' })
     const label = container.querySelector('[data-slot="anonymity-label"]') as HTMLElement
-    expect(label.className.split(/\s+/)).toContain('text-chip-good-ink')
-    expect(label.className.split(/\s+/)).not.toContain('text-accent-green-ink')
+    expect(label.className.split(/\s+/)).toContain('text-fg-secondary')
+    const notice = container.querySelector('[data-slot="anonymity-notice"]') as HTMLElement
+    expect(notice.outerHTML).not.toMatch(/green|chip-good/)
   })
 
   /**
@@ -966,8 +988,8 @@ describe('SurveyRespondForm layout', () => {
     expect(within(foot).getByText('Cierra el 12 de septiembre')).toBeTruthy()
     const left = foot.querySelector('[data-slot="respond-time-left"]') as HTMLElement
     expect(left.textContent).toBe('Queda 10:00')
-    expect(left.className).toContain('font-mono')
     expect(left.className).toContain('tabular-nums')
+    expect(left.className).not.toContain('font-mono')
   })
 
   /**
@@ -1225,7 +1247,7 @@ describe('SurveyRespondForm confirmation', () => {
     const receipt = document.querySelector('[data-slot="respond-receipt"]') as HTMLElement
     expect(within(receipt).getByText('Respuestas registradas')).toBeTruthy()
     // The server's own count as a reading, beside what it is out of.
-    const reading = receipt.querySelector('.font-mono.tabular-nums')
+    const reading = receipt.querySelector('.tabular-nums')
     expect(reading?.textContent).toBe('3 de 3')
     expect(
       within(receipt).getByText(/^Enviadas a las \d{1,2}:\d{2}\. Se guardaron sin nada que lo identifique\.$/),

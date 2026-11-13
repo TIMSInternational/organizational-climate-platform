@@ -1,15 +1,15 @@
 import { getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
 import { isTrackingEnabled } from '../features/tracking/api/config'
-import { buildNavSections, isPerUserOnly } from './navSections'
+import { buildNavSections, drawsRespondentShell } from './navSections'
 
 /**
  * Whether the signed-in caller is in the railless respondent shell.
  *
  * ## Why this exists rather than `role === 'employee'` at each call site
  *
- * `AdminLayout` decides the shell with {@link isPerUserOnly}, computed from the role's own
- * navigation. Three screens outside the shell have to agree with that decision, and a second
+ * `AdminLayout` decides the shell with {@link drawsRespondentShell} -- {@link isPerUserOnly},
+ * computed from the role's own navigation, less the supervisor (ruled 2026-11-12). Three screens outside the shell have to agree with that decision, and a second
  * spelling of it would eventually disagree — which here means a respondent reaching, by a
  * link the shell removed, the exact page the shell removed it for.
  *
@@ -39,5 +39,5 @@ export function useRespondentShell(): boolean {
   const role = typeof claims?.role === 'string' ? claims.role : undefined
   const companyId = typeof claims?.companyId === 'string' ? claims.companyId : undefined
 
-  return isPerUserOnly(buildNavSections(role, companyId, { trackingEnabled: isTrackingEnabled() }))
+  return drawsRespondentShell(role, buildNavSections(role, companyId, { trackingEnabled: isTrackingEnabled() }))
 }

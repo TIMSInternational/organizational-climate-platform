@@ -135,18 +135,22 @@ export default function RegisterNextPage() {
           </Button>
 
           <p className="m-0 text-sm text-fg-tertiary">{t('auth.next.registerRoleNote')}</p>
+
+          {/* Inside the card, the way login carries its mirror line. The board draws it
+              UNDER the card, and there it stood on the photograph from `lg` up in BOTH
+              themes but on the theme's own ground below `lg`: in light, the page inks
+              measured 1.56:1 (#48484d) and 1.19:1 (#1d1d1f) on the navy (12 Nov review),
+              and the shell inks that would fix the photo would fail the light ground on a
+              phone. The card is the one paper the page inks are measured against at every
+              width and in both themes. */}
+          <p className="m-0 flex flex-wrap gap-1.5 text-sm text-fg-secondary">
+            <span>{t('auth.next.alreadyHaveAccount')}</span>
+            <Link to="/login" className="text-accent-blue-ink underline">
+              {t('auth.next.signIn')}
+            </Link>
+          </p>
         </form>
       </AuthCard>
-
-      {/* Under the card, centred, as the board draws it. The base layer inks every anchor
-          in the app's link blue; the canvas's is the primary ink, underlined. */}
-      <p className="m-0 flex flex-wrap justify-center gap-1.5 text-base text-fg-secondary">
-        <span>{t('auth.next.alreadyHaveAccount')}</span>
-        <Link to="/login" className="text-fg-primary underline">
-          {t('auth.next.signIn')}
-        </Link>
-      </p>
-
     </AuthCanvas>
   )
 }

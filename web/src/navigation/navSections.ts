@@ -531,6 +531,39 @@ export function isPerUserOnly(sections: NavSection[]): boolean {
 }
 
 /**
+ * The roles that keep the rail although every row in it is their own page.
+ *
+ * ⚠️ This NARROWS the 2026-10-18 ESPH ruling, it does not reverse it. That ruling stripped the
+ * chrome from every role {@link isPerUserOnly} answers true for, which on 18 Oct was `employee`
+ * and `supervisor` alike. Ruled by the owner 2026-11-12: a SUPERVISOR gets the rail shell --
+ * Inicio, Mis encuestas and Seguimiento › Mis tareas, the account menu, the bell, the palette
+ * chip and the phone's tab bar -- because a supervisor runs a team, and `/dashboard` is their
+ * team's page (`DepartmentAdminDashboardView`), not a respondent's welcome. An EMPLOYEE keeps
+ * the railless shell exactly as ESPH asked for it.
+ *
+ * G27 (#624, 2026-10-22) asked for the same outcome for the same reason -- the shell stripped
+ * a supervisor of the only way to its own pages -- and wrote it as `isRespondentRole(role) &&
+ * isPerUserOnly(sections)`. For the five roles `Roles.cs` defines the two rules agree; they
+ * differ only for a role this build does not know, which this one keeps railless (the safer
+ * wrong answer, pinned in `ProfileNextPage.test.tsx`). #624's tests in `AdminLayout.test.tsx`
+ * pin the supervisor's rail through this function.
+ *
+ * A role list, and deliberately beside the computed check rather than inside it: the rows are
+ * unchanged, so the hrefs cannot tell the two roles apart (`roleCapabilities.ts` gives them the
+ * same list), and what differs is a decision about chrome, not a destination.
+ */
+const RAIL_DESPITE_PER_USER_ROLES: ReadonlySet<string> = new Set(['supervisor'])
+
+/**
+ * Whether the shell is the railless respondent one -- the single answer `AdminLayout` draws
+ * and `useRespondentShell` reports, so the screens outside the shell cannot disagree with it.
+ */
+export function drawsRespondentShell(role: string | undefined, sections: NavSection[]): boolean {
+  if (role !== undefined && RAIL_DESPITE_PER_USER_ROLES.has(role)) return false
+  return isPerUserOnly(sections)
+}
+
+/**
  * Does `pathname` sit under `href` at all?
  *
  * Segment-aware: `/surveys` must not claim `/surveys-archive`, which a bare

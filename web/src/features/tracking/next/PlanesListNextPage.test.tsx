@@ -60,7 +60,7 @@ const NODOS = {
 }
 const PERSONAS = { personas: [{ id: 'persona-2', name: 'Adriana Marín', email: 'adriana@acme.test' }] }
 
-function routeFetch(plans: PlanAccion[] = PLANS, options: { pickers?: boolean; down?: boolean; ownNodo?: { id: string; name: string } } = {}) {
+function routeFetch(plans: PlanAccion[] = PLANS, options: { pickers?: boolean; down?: boolean; refused?: boolean; ownNodo?: { id: string; name: string } } = {}) {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
     const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
@@ -75,6 +75,7 @@ function routeFetch(plans: PlanAccion[] = PLANS, options: { pickers?: boolean; d
     }
     if (url.includes('/api/planes-accion')) {
       if (options.down) throw new TypeError('Failed to fetch')
+      if (options.refused) return Promise.resolve(new Response(JSON.stringify({ message: 'Forbidden' }), { status: 403 }))
       return json(plans)
     }
     return Promise.resolve(new Response(null, { status: 404 }))
@@ -132,6 +133,19 @@ describe('PlanesListNextPage', () => {
     expect(screen.getByText(`${T.planesTileVerde} · Ingeniería y Operaciones`)).toBeTruthy()
     expect(screen.getByText(`${T.planesWithProgress.replace('{count}', '1')} · ${T.planesNoneCumplido}`)).toBeTruthy()
     expect(screen.getByText(/3 planes en 3 de 4 nodos · Personas sin plan/)).toBeTruthy()
+  })
+
+  it('leads every state tile with its shape, the same grammar as Vista consolidada', async () => {
+    renderPage()
+    await screen.findByText('PA-2026-00001')
+    const stateTiles = Array.from(document.querySelectorAll('[data-slot="kpi-card"]')).filter((card) =>
+      card.querySelector('[data-state]'),
+    )
+    expect(stateTiles).toHaveLength(3)
+    for (const tile of stateTiles) {
+      expect(tile.querySelector('[data-slot="state-footnote"] svg'), tile.textContent ?? '').not.toBeNull()
+      expect(tile.querySelector('[data-slot="chip"]'), tile.textContent ?? '').toBeNull()
+    }
   })
 
   it('names the responsable from the directory, marks the viewer, and links each code to its plan', async () => {
@@ -216,6 +230,16 @@ describe('PlanesListNextPage', () => {
     expect(screen.queryByText(/Failed to fetch/)).toBeNull()
     expect(screen.queryByText(T.planesTileRojo)).toBeNull()
     expect(screen.queryByText(T.planesNoneCumplido, { exact: false })).toBeNull()
+  })
+
+  it('says a refusal is a refusal, with no retry, never «no se pudo contactar» over an instant 403', async () => {
+    // The e2e walk of 12 Nov: an account outside the company the service serves got a 403 and
+    // was told the service was down and to try again in a few minutes.
+    routeFetch(PLANS, { refused: true })
+    renderPage()
+    expect(await screen.findByText(es.tracking.noAccessTitle)).toBeTruthy()
+    expect(screen.queryByText(es.tracking.serviceUnavailableTitle)).toBeNull()
+    expect(screen.queryByRole('button', { name: es.common.retry })).toBeNull()
   })
 })
 

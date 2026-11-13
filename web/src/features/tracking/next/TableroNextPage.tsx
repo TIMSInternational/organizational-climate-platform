@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight, Check, LayoutDashboard, ListChecks, PanelsTopLeft, Target } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
-import { PageTopBar } from '../../../components/layout'
+import { PageHeader } from '../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, DatePicker, EmptyState, Input, LoadingRegion, NetworkError, SkeletonText } from '../../../components/ui'
 import { useViewerCapabilities } from '../../../auth/viewerCapabilities'
 import { calendarDay, calendarDayLong } from '../../../lib/calendarDay'
@@ -58,7 +58,7 @@ export default function TableroNextPage() {
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         eyebrow={nodoName ? t('tracking.next.tableroEyebrow', { nodo: nodoName }) : null}
         title={t('tracking.tableroTitle')}
         description={state.adminView ? t('tracking.tableroDescription') : t('tracking.next.tableroDescription')}
@@ -150,7 +150,7 @@ function TableroBody({ state }: { state: TableroState }) {
 /** The board's one-card states: no nodo to show, or not this viewer's screen. */
 function VariantCard({ title, body, actions }: { title: string; body: string; actions: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2.5 rounded-lg border border-line-default bg-surface-card px-6 py-7 text-center shadow-sm" data-slot="tablero-variant">
+    <div className="flex flex-col items-center gap-2.5 rounded-xl border border-line-panel bg-surface-card px-6 py-7 text-center" data-slot="tablero-variant">
       <span aria-hidden="true" className="inline-flex size-10 items-center justify-center rounded-md bg-surface-icon-box text-fg-secondary">
         <PanelsTopLeft className="size-4" />
       </span>
@@ -189,7 +189,7 @@ function Board({
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <NodoTile label={t('tracking.next.tilePlanes')}>
-            <span className="font-mono text-3xl leading-none text-fg-primary tabular-nums">{open.length}</span>
+            <span className="tabular-nums text-3xl font-semibold leading-none tracking-display text-fg-primary">{open.length}</span>
             <span className="text-sm text-fg-label">{open.length === 1 ? t('tracking.next.openOne') : t('tracking.next.openMany')}</span>
           </NodoTile>
           <NodoTile label={t('tracking.next.tileSemaforo')}>
@@ -217,16 +217,16 @@ function Board({
           <NodoTile label={t('tracking.next.tileProximo')}>
             {next ? (
               <>
-                <span className="font-mono text-3xl leading-none text-fg-primary tabular-nums">
+                <span className="tabular-nums text-3xl font-semibold leading-none tracking-display text-fg-primary">
                   {calendarDay(Date.parse(next.fechaCompromiso), locale)}
                 </span>
-                <span className={cn('text-sm', next.daysToCompromiso < 0 ? 'text-accent-red' : 'text-fg-label')}>
+                <span className={cn('text-sm', next.daysToCompromiso < 0 ? 'font-semibold text-fg-secondary' : 'text-fg-label')}>
                   {daysNote(t, next.daysToCompromiso)}
                 </span>
               </>
             ) : (
               <>
-                <span className="font-mono text-3xl leading-none text-fg-primary">—</span>
+                <span className="tabular-nums text-3xl font-semibold leading-none tracking-display text-fg-primary">—</span>
                 <span className="text-sm text-fg-label">{t('tracking.next.noneDue')}</span>
               </>
             )}
@@ -234,7 +234,7 @@ function Board({
           {model.avances.withProgress === 0 || model.avances.latest === null ? (
             // Exact: no plan of the nodo has an avance on record, so none has been registered.
             <NodoTile label={t('tracking.next.tileAvances')}>
-              <span className="font-mono text-3xl leading-none text-fg-primary tabular-nums" data-slot="avances-reading">
+              <span className="tabular-nums text-3xl font-semibold leading-none tracking-display text-fg-primary" data-slot="avances-reading">
                 0
               </span>
               <span className="text-sm text-fg-label">{anyWritable ? t('tracking.next.firstBelow') : t('tracking.next.noneYet')}</span>
@@ -243,7 +243,7 @@ function Board({
             // Once any has, the payload says which plans carry one and the latest day — never
             // how many avances there are, which only the bitácora knows.
             <NodoTile label={t('tracking.next.tilePlanesConAvance')}>
-              <span className="font-mono text-3xl leading-none text-fg-primary tabular-nums" data-slot="avances-reading">
+              <span className="tabular-nums text-3xl font-semibold leading-none tracking-display text-fg-primary" data-slot="avances-reading">
                 {model.avances.withProgress}
               </span>
               <span className="text-sm text-fg-label">
@@ -332,15 +332,15 @@ function PlanCard({
       : t('tracking.next.onTimeBoard')
 
   return (
-    <article aria-labelledby={headingId} data-plan={card.code} className="flex flex-col gap-3 rounded-lg border border-line-default bg-surface-card px-5 pb-4.5 pt-4 shadow-sm">
+    <article aria-labelledby={headingId} data-plan={card.code} className="flex flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-5 pb-4.5 pt-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Chip label={card.code} className="font-mono" />
+            <Chip label={card.code} className="tabular-nums" />
             <SemaforoChip estado={card.estado} long />
             {nodoName && <span className="text-sm text-fg-label">{t('tracking.next.nodoLabel', { nodo: nodoName })}</span>}
           </div>
-          <h3 id={headingId} className="m-0 font-store-serif text-2xl font-normal">
+          <h3 id={headingId} className="m-0 font-display text-xl font-semibold">
             {card.que}
           </h3>
         </div>
@@ -351,14 +351,14 @@ function PlanCard({
       </div>
 
       <div className="flex flex-wrap items-end gap-5">
-        <span className="shrink-0 whitespace-nowrap font-mono text-[36px] leading-none text-fg-primary tabular-nums">
+        <span className="shrink-0 whitespace-nowrap tabular-nums text-kpi-hero font-semibold leading-none tracking-display text-fg-primary">
           {t('tracking.next.percentBig', { percent: card.percent })}
         </span>
         <div className="flex min-w-0 flex-col gap-1 pb-0.5">
           <span className="text-base text-fg-secondary">
             {t('tracking.next.goalFor', { date: calendarDayLong(Date.parse(card.fechaCompromiso), locale) })}
           </span>
-          <span className={cn('text-sm', overdue ? 'text-accent-red' : 'text-accent-green-ink')}>{sentence}</span>
+          <span className={cn('text-sm', 'text-fg-secondary')}>{sentence}</span>
         </div>
       </div>
 
@@ -480,7 +480,7 @@ function AvanceInlineForm({
       )}
       <div className="flex flex-wrap items-end gap-2.5">
         <div className="flex w-24 flex-col gap-1">
-          <label htmlFor={`${idBase}-percent`} className="mb-0 text-2xs font-bold uppercase tracking-label text-fg-label">
+          <label htmlFor={`${idBase}-percent`} className="mb-0 text-sm font-semibold text-fg-secondary">
             {t('tracking.next.fieldAvance')}
           </label>
           <div className="relative">
@@ -495,7 +495,7 @@ function AvanceInlineForm({
               aria-invalid={invalid || undefined}
               aria-describedby={invalid ? `${idBase}-range` : undefined}
               disabled={saving}
-              className="pl-2.5 pr-2 font-mono text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="pl-2.5 pr-2 tabular-nums text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
             {/* The unit follows the figure, "25 %" as the artboard prints it. In the mono face
                 every digit is one `ch`, so the sign sits a space after however many digits
@@ -503,7 +503,7 @@ function AvanceInlineForm({
             <span
               aria-hidden="true"
               data-slot="avance-unit"
-              className="pointer-events-none absolute top-1/2 -translate-y-1/2 font-mono text-base text-fg-primary"
+              className="pointer-events-none absolute top-1/2 -translate-y-1/2 tabular-nums text-base text-fg-primary"
               style={{ left: `calc(0.625rem + ${Math.max(1, percent.length) + 1}ch)` }}
             >
               %
@@ -511,7 +511,7 @@ function AvanceInlineForm({
           </div>
         </div>
         <div className="flex w-40 flex-col gap-1">
-          <span aria-hidden="true" className="mb-0 text-2xs font-bold uppercase tracking-label text-fg-label">
+          <span aria-hidden="true" className="mb-0 text-sm font-semibold text-fg-secondary">
             {t('tracking.next.fieldFecha')}
           </span>
           <DatePicker
@@ -524,11 +524,11 @@ function AvanceInlineForm({
             formatValue={(date) => fullDay(isoOfDate(date), locale)}
             showIcon={false}
             disabled={saving}
-            className="font-mono"
+            className="tabular-nums"
           />
         </div>
         <div className="flex min-w-48 flex-1 flex-col gap-1">
-          <label htmlFor={`${idBase}-que`} className="mb-0 text-2xs font-bold uppercase tracking-label text-fg-label">
+          <label htmlFor={`${idBase}-que`} className="mb-0 text-sm font-semibold text-fg-secondary">
             {t('tracking.next.fieldQueSeHizo')}
           </label>
           <Input
@@ -545,7 +545,7 @@ function AvanceInlineForm({
         </Button>
       </div>
       {invalid && (
-        <p id={`${idBase}-range`} role="alert" className="m-0 text-sm text-accent-red">
+        <p id={`${idBase}-range`} role="alert" className="m-0 text-sm text-accent-red-ink">
           {t('tracking.fields.avanceRange')}
         </p>
       )}

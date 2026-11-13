@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import RoleBasedNav from '../navigation/RoleBasedNav'
-import { buildNavSections, isPerUserOnly } from '../navigation/navSections'
-import { isRespondentRole } from '../navigation/respondentSurface'
+import { buildNavSections, drawsRespondentShell } from '../navigation/navSections'
 import { isTrackingEnabled } from '../features/tracking/api/config'
 import { clearToken, getToken } from '../auth/token'
 import { decodeJwtPayload } from '../auth/jwt'
@@ -101,18 +100,12 @@ function AdminShell() {
   // `hidden` class on the aside: delete the rail without moving its footer and a
   // respondent has no way to leave.
   //
-  // RESPONDENTS only -- the role `RequireAuth` holds to `respondentSurface` -- and not every
-  // role whose rows happen to be per-user (G27, 2026-10-22). `isPerUserOnly` alone also
-  // stripped the `supervisor`, whose rows are the same four, and with the rail went the
-  // account menu, the bell and the drawer: a supervisor was left a wordmark and Cerrar
-  // sesión, with no way to their profile, their preferences, their notifications or Mis
-  // encuestas -- all pages their role loads (`roleCapabilities.ts`, SELF_SERVICE). The
-  // 2026-10-18 ruling that removed that chrome was about the person sent one email to
-  // answer one survey; a supervisor runs a team from `/dashboard` and is not that reader.
-  //
-  // `isPerUserOnly` stays in the conjunction so the rail still comes back for an employee
-  // on its own the day their sections gain a destination the page is not.
-  const perUserOnly = isRespondentRole(role) && isPerUserOnly(sections)
+  // The railless shell is the EMPLOYEE's only (G27, 2026-10-22, and the owner's ruling of
+  // 2026-11-12, both carried by `drawsRespondentShell`). The
+  // `supervisor` keeps the rail: its rows are the same per-person pages, but it runs a team
+  // from `/dashboard` and is not the reader the 2026-10-18 cull was for (owner ruling
+  // 2026-11-12). `drawsRespondentShell` carries the exception and the ruling it narrows.
+  const perUserOnly = drawsRespondentShell(role, sections)
 
   return (
     <div className="flex h-dvh flex-col bg-surface-shell">
@@ -279,6 +272,10 @@ function AdminShell() {
                 <button
                   type="button"
                   onClick={handleSignOut}
+                  // A 32px target on a phone; HIG `buttons.md` asks for 44x44 under a finger, as
+                  // every Button size already grows to (12 Nov). `min-height` beats the inline
+                  // `height`, so the desktop strip is unchanged.
+                  className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 justify-center"
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     background: 'transparent', border: 0, borderRadius: 6,
@@ -366,8 +363,9 @@ function AdminShell() {
 
       {/* Last in the shell, outside every column, because it portals to the body
           anyway and its Cmd+K listener is document-wide. Handed the same `sections`
-          the rail gets, so it can only ever offer this role's own destinations. */}
-      <CommandPalette sections={sections} />
+          the rail gets, so it can only ever offer this role's own destinations -- and the
+          role and tracking setting, so a search hit is kept only where this role can load it. */}
+      <CommandPalette sections={sections} role={role} trackingEnabled={isTrackingEnabled()} />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight, Check, Clock, EyeOff, FileText, Inbox, Target } from 'lucide-react'
-import { PageTopBar } from '../../../../components/layout'
+import { PageHeader } from '../../../../components/layout'
 import { Button, Chip } from '../../../../components/ui'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
 import { instantDay } from '../../../../lib/calendarDay'
@@ -71,7 +71,7 @@ export default function EmployeeHomeView({
 
   return (
     <div>
-      <PageTopBar
+      <PageHeader
         // "INGENIERÍA · EMPLEADO": where this person stands, as the artboard's eyebrow
         // says it. `null` while loading, because an eyebrow that appears and then changes
         // is worse than one that arrives with its page.
@@ -154,16 +154,17 @@ function homeDescription(pendingCount: number, t: TranslateFn): string {
 }
 
 /**
- * The section meta in the canvas's pattern — the survey on the card, then what else is open.
- * The canvas says "una encuesta abierta, y su copia de ensayo" because its second survey is
- * its demo's rehearsal copy; nothing on `DashboardPendingSurvey` says a survey is a copy, so
- * the rest is counted: "una encuesta abierta, y otra más", "…, y 2 más". From
+ * The section meta: the plain total, "1 encuesta abierta", "3 encuestas abiertas". From
  * `pendingSurveyCount`, never from the list, which is a page of it (`SurveyRowLimit` = 5).
+ *
+ * It was the canvas's "una encuesta abierta, y otra más" / "…, y 2 más", which the 12 Nov
+ * review read as unclear: a reader had to add one to the number to get the number the
+ * greeting above had just printed. The total is the same figure as the greeting's.
  */
 function toAnswerMeta(pendingCount: number, t: TranslateFn): string {
   if (pendingCount === 1) return t('employee.next.toAnswerMetaOne')
   if (pendingCount === 2) return t('employee.next.toAnswerMetaAndOneMore')
-  return t('employee.next.toAnswerMetaAndMore', { count: pendingCount - 1 })
+  return t('employee.next.toAnswerMetaAndMore', { count: pendingCount })
 }
 
 function HomeBody({ model }: { model: EmployeeHomeModel }) {
@@ -181,7 +182,7 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
               task, and "Ya respondió" over the answered card. The third heading is the
               honest floor between them — see `nothingDueHeading` below. */}
           <h2 id="home-to-answer" className="m-0">
-            {model.lead
+            {model.lead || model.pendingCount > 0
               ? t('employee.next.toAnswerHeading')
               : model.hasAnsweredIdentified
                 ? t('employee.next.answeredHeading')
@@ -211,6 +212,8 @@ function HomeBody({ model }: { model: EmployeeHomeModel }) {
               </Button>
             ) : null}
           </>
+        ) : model.pendingCount > 0 ? (
+          <OpenUnlistedCard model={model} />
         ) : (
           <NothingDueCard model={model} />
         )}
@@ -252,7 +255,7 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
       className={cn(
         // 16px sides on a phone, the canvas's 20px from `sm`: the 8px given back is what lets
         // the three readings sit on one line at 390px.
-        'grid gap-6 rounded-xl border border-accent-blue bg-surface-card px-4 pb-5 pt-4.5 shadow-sm sm:px-5',
+        'grid gap-6 rounded-xl border border-accent-blue bg-surface-card px-4 pb-5 pt-4.5 sm:px-5',
         // The promise takes the right-hand column only when there is one to make; a
         // survey that records who answered gets the full width and no block.
         survey.anonymous && 'lg:grid-cols-[minmax(0,1fr)_320px]',
@@ -265,7 +268,7 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
         </div>
         <h3 className="m-0 font-display text-2xl font-semibold">{survey.name ?? t('surveys.untitled')}</h3>
 
-        {/* Three readings, in mono, as the canvas sets them. `dl` because each is a
+        {/* Three readings, in tabular figures in the sans (the Apple design's `.num`). `dl` because each is a
             labelled value rather than a row of a table. Equal thirds wherever a third holds
             its reading — the canvas's 1440 — and never a tile narrower than its reading: a
             tile that cannot have its third keeps its reading's width and the others share
@@ -281,9 +284,12 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
           {/* `/surveys/:id/respond` is authorized per user by the respond endpoint itself:
               every role that can be sent a survey can open it, so nothing gates this. */}
           <Button asChild variant="primary" size="canvas">
+            {/* The arrow after the words, as on every other way into a survey (the link
+                entry, the invitation, the pulse invitation, Siguiente): one action, one
+                name, one shape through the flow. */}
             <Link to={`/surveys/${survey.id}/respond`}>
-              <ArrowRight aria-hidden="true" />
               {t('employee.startAnswering')}
+              <ArrowRight aria-hidden="true" />
             </Link>
           </Button>
           {allowsSaveForLater === true ? (
@@ -329,6 +335,45 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
  *   name and the floor — and each falls back to a sentence that states neither rather than
  *   assuming one.
  */
+/**
+ * Open surveys the count knows about and the list cannot show.
+ *
+ * `pendingCount` is the server's total less the rows this browser answered, and the list is
+ * a page of at most five. When every listed row was answered here, the count can still be
+ * above zero with no row to lead with. This card used to be `NothingDueCard` -- "No tiene
+ * nada que responder ahora mismo" -- under a greeting that said "Hay 2 encuestas abiertas
+ * para usted" and a meta that said the same (12 Nov review, surveys-my@employee-390): the
+ * screen contradicted itself. Now all three say the count, and this card says what the page
+ * can and cannot do about it.
+ */
+function OpenUnlistedCard({ model }: { model: EmployeeHomeModel }) {
+  // See `navigation/respondentSurface`: /surveys/my is not reachable for a respondent.
+  const lockedToDashboard = useIsRespondent()
+  const { t } = useTranslation()
+
+  return (
+    <div
+      data-slot="home-open-unlisted"
+      className="flex flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-4 pb-5 pt-4.5 sm:px-5"
+    >
+      <h3 className="m-0 font-display text-2xl font-semibold">
+        {model.pendingCount === 1
+          ? t('employee.next.openUnlistedTitleOne')
+          : t('employee.next.openUnlistedTitleMany', { count: model.pendingCount })}
+      </h3>
+      <p className="mb-0 max-w-measure text-base text-fg-secondary">{t('employee.next.openUnlistedBody')}</p>
+      {!lockedToDashboard && (
+        <Button asChild variant="outline" size="canvas" className="w-fit">
+          <Link to="/surveys/my">
+            <Inbox aria-hidden="true" />
+            {t('navigation.mySurveys')}
+          </Link>
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
   // See `navigation/respondentSurface`: /surveys/my is not reachable for a respondent.
   const lockedToDashboard = useIsRespondent()
@@ -337,11 +382,11 @@ function NothingDueCard({ model }: { model: EmployeeHomeModel }) {
   return (
     <div
       data-slot="home-nothing-due"
-      // The lead card's geometry with the canvas's green hairline
-      // (`--admin-accent-border-green` IS `rgba(18,148,91,.2)`), and its two columns at the
-      // same breakpoint, so the answered state and the task state are one card in two moods.
+      // The lead card's geometry on the plain card hairline (it was the canvas's green; green
+      // is a result area since the 11 Nov ruling), and its two columns at the same
+      // breakpoint, so the answered state and the task state are one card in two moods.
       className={cn(
-        'grid gap-6 rounded-xl border border-accent-green-ring bg-surface-card px-4 pb-5 pt-4.5 shadow-sm sm:px-5',
+        'grid gap-6 rounded-xl border border-line-panel bg-surface-card px-4 pb-5 pt-4.5 sm:px-5',
         // The artboard's own split (`minmax(0,1fr) 440px`), a little narrower: at 440 the
         // steps' lines are short enough that the column runs well past the left one, and the
         // card is as tall as whichever side is taller.
@@ -409,7 +454,7 @@ function WhatHappensNow({ model }: { model: EmployeeHomeModel }) {
     // The rule is the column divider at the width the card actually has two columns, and
     // nothing above it: on a phone the steps sit under the text, not beside a stray line.
     <div className="flex min-w-0 flex-col lg:border-l lg:border-line-light lg:pl-6">
-      <span className="pb-0.5 text-2xs font-bold uppercase tracking-eyebrow text-fg-label">
+      <span className="pb-0.5 text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">
         {t('employee.next.whatHappensNow')}
       </span>
       <ul className="m-0 flex list-none flex-col p-0">
@@ -462,7 +507,7 @@ function NextStep({ icon, title, body }: { icon: ReactNode; title: string; body:
     <li className="flex items-start gap-3 border-b border-line-light py-3.5 last:border-b-0 last:pb-0">
       <span
         aria-hidden="true"
-        className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary"
+        className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-fill-subtle text-fg-secondary"
       >
         {icon}
       </span>
@@ -487,10 +532,10 @@ function Reading({ label, value }: { label: string; value: string }) {
   return (
     // `flex-1` from a zero basis is the equal thirds; `min-w-max` is the floor — with
     // `min-w-0` instead, a tile shrank below its reading and "10 oct" broke as "10 oc / t".
-    <div className="flex min-w-max flex-1 flex-col gap-0.5 rounded-lg bg-surface-outer px-2.5 py-2.5 sm:px-3">
-      <dt className="text-2xs font-bold uppercase tracking-label text-fg-secondary">{label}</dt>
+    <div className="flex min-w-max flex-1 flex-col gap-0.5 rounded-lg bg-surface-fill-subtle px-2.5 py-2.5 sm:px-3">
+      <dt className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-label">{label}</dt>
       {/* Never truncated: an ellipsised "unos 4…" is a different reading from "unos 4 min". */}
-      <dd className="m-0 break-words font-mono text-lg tabular-nums text-fg-primary">{bindLastWord(value)}</dd>
+      <dd className="m-0 break-words text-lg font-semibold tabular-nums text-fg-primary">{bindLastWord(value)}</dd>
     </div>
   )
 }
@@ -520,7 +565,7 @@ function AlsoOpenRow({ survey }: { survey: HomeSurvey }) {
       <div className="flex min-w-0 grow basis-45 items-center gap-2.5">
         <span
           aria-hidden="true"
-          className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary"
+          className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-fill-subtle text-fg-secondary"
         >
           <Inbox className="size-icon" />
         </span>
@@ -608,7 +653,7 @@ function OutcomeCard({ outcome }: { outcome: HomeOutcome }) {
     <section
       aria-labelledby="home-outcome"
       data-slot="home-outcome"
-      className="mt-6 flex flex-col gap-3 rounded-xl border border-line-default bg-surface-card px-5 pb-4.5 pt-4 shadow-sm"
+      className="mt-6 flex flex-col gap-3 rounded-xl border border-line-panel bg-surface-card px-5 pb-4.5 pt-4"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 id="home-outcome" className="m-0">
@@ -646,7 +691,9 @@ function OutcomeCard({ outcome }: { outcome: HomeOutcome }) {
 
 /**
  * One row of the outcome card: the tinted glyph box, the claim and its qualification, and
- * the date on the right in mono. Hairline-separated, as the canvas draws the list.
+ * the date on the right in tabular figures. The «done» glyph box is the blue tint, not
+ * green: green is a result area (Apple-design ruling, 11 Nov), and a survey closing is not
+ * a result. Hairline-separated, as the canvas draws the list.
  */
 function OutcomeRow({
   icon,
@@ -667,8 +714,8 @@ function OutcomeRow({
         aria-hidden="true"
         className={
           tone === 'good'
-            ? 'grid size-7 shrink-0 place-items-center rounded-lg bg-accent-green-soft text-accent-green-ink'
-            : 'grid size-7 shrink-0 place-items-center rounded-lg bg-surface-icon-box text-fg-secondary'
+            ? 'grid size-7 shrink-0 place-items-center rounded-lg bg-accent-blue-soft text-accent-blue-ink'
+            : 'grid size-7 shrink-0 place-items-center rounded-lg bg-surface-fill-subtle text-fg-secondary'
         }
       >
         {icon}
@@ -678,7 +725,7 @@ function OutcomeRow({
         {body ? <span className="max-w-measure text-sm text-fg-secondary">{body}</span> : null}
       </div>
       {aside ? (
-        <span className="shrink-0 whitespace-nowrap font-mono text-sm tabular-nums text-fg-secondary">{aside}</span>
+        <span className="shrink-0 whitespace-nowrap text-sm tabular-nums text-fg-secondary">{aside}</span>
       ) : null}
     </li>
   )

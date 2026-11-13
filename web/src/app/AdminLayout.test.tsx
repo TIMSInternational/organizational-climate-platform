@@ -440,8 +440,9 @@ describe('AdminLayout', () => {
   describe('the way to the privacy page', () => {
     /**
      * The roles that still have a rail, and therefore a mobile drawer under it. `supervisor`
-     * joined them with G27: its rows are per-user, but it is not the respondent the
-     * 2026-10-18 cull was for, and without the rail it had no way to its own pages.
+     * joined them with G27 (2026-10-22) and the owner's ruling of 2026-11-12: its rows are
+     * per-user, but it runs a team and is not the respondent the 2026-10-18 cull was for, and
+     * without the rail it had no way to its own pages (`drawsRespondentShell`).
      */
     const RAIL_ROLES = ['super_admin', 'company_admin', 'leader', 'supervisor'] as const
     /** The role the shell strips the chrome from: the respondent `RequireAuth` holds. */
@@ -510,7 +511,7 @@ describe('AdminLayout', () => {
       },
     )
 
-    it.each(RAIL_ROLES)('still offers %s their profile, since it is an admin page', async (role) => {
+    it.each(RAIL_ROLES)('still offers %s their profile in the account menu', async (role) => {
       // The other side, so "hide it from everyone" cannot pass. An administrator's name
       // really does appear in an audit trail, which is what that page is for.
       setToken(tokenFor({ role, companyId: 'c1' }))
@@ -565,6 +566,47 @@ describe('AdminLayout', () => {
       // than drawn. Sign out is the whole reason any of this followed the rail into the
       // strip, so it is the one thing that must survive every cull.
       expect(screen.getByRole('button', { name: /Sign out/i })).toBeTruthy()
+    })
+
+    it('draws a supervisor the rail, with its own rows and nothing it cannot load — ruled 2026-11-12', async () => {
+      // The owner's ruling, and the one place it is asserted whole: a supervisor gets the rail
+      // shell (its rows, the account menu, the bell, the phone's tab bar) while an employee keeps
+      // the wordmark and Cerrar sesión. The rows are the SAME per-person pages an employee has
+      // -- `roleCapabilities.ts` gives the two roles one list -- so the second half matters as
+      // much as the first: the rail must not invite a supervisor anywhere they would be refused.
+      setToken(tokenFor({ role: 'supervisor', companyId: 'c1' }))
+      renderShell()
+
+      // The rail's own rows: Inicio and Mis encuestas (Seguimiento › Mis tareas joins them when
+      // the tracking service is configured; `navSections.test.ts` covers that build).
+      const rail = screen.getAllByRole('navigation')[0]
+      const railHrefs = within(rail).getAllByRole('link').map((a) => a.getAttribute('href'))
+      expect(railHrefs).toEqual(expect.arrayContaining(['/dashboard', '/surveys/my']))
+
+      // The phone's tab bar exists, so its "More" drawer does.
+      expect(screen.getByRole('button', { name: 'More' })).toBeTruthy()
+
+      // The account menu, with the rows the strip took away from an employee.
+      await userEvent.click(screen.getAllByRole('button', { name: /Account/i })[0])
+      const menu = await screen.findByRole('menu')
+      const menuHrefs = within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('href'))
+        .filter((href): href is string => href !== null)
+      expect(menuHrefs).toEqual(expect.arrayContaining(['/profile', '/settings/privacy']))
+      expect(within(menu).getByRole('menuitem', { name: /Theme/ })).toBeTruthy()
+      expect(within(menu).getByRole('menuitem', { name: /Language/ })).toBeTruthy()
+
+      // The notification settings are the rail foot's Configuración link, beside the menu.
+      const everyHref = screen.queryAllByRole('link').map((a) => a.getAttribute('href'))
+      expect(everyHref).toContain('/settings/notifications')
+
+      // Every link the shell now draws for this role is one `roleCapabilities.ts` says it can
+      // load. Nothing is granted here: the rail is drawn from the routes the role already had.
+      for (const href of [...everyHref, ...menuHrefs]) {
+        if (href === null || !href.startsWith('/')) continue
+        expect(canReach('supervisor', href), `supervisor is offered ${href}`).toBe(true)
+      }
     })
 
     it.each(RAIL_ROLES)('keeps the notification bell for %s', async (role) => {

@@ -91,12 +91,12 @@ export default function RespondQuestionField({
       // turns to this question, and when a submit finds it unanswered, so they land on
       // the question rather than on a control they then have to hunt from.
       tabIndex={-1}
-      // The canvas's question card (RespondSurveyPhone, 10 Sep): the card surface with
-      // the hairline, 8px corners, 16px in, the faint lift every `.card` carries.
-      // `focus-within` marks the question the respondent is on. Colour only, and
-      // the browser's own focus ring still draws on the control inside it, so
-      // nothing depends on seeing the tint. `index.css` reduces every transition
-      // to 0.01ms under `prefers-reduced-motion`.
+      // The Respond board (Apple design, 12 Nov) sets the question straight on the
+      // page ground — no card around it: the question is the one thing on the screen,
+      // in the serif, with the scale under it. A card here was a box holding the only
+      // content there is. `rounded-xl` and the 8px pulled back out (`-m-2 p-2`) are for
+      // the programmatic focus (`tabIndex=-1` above): the global ring draws around the
+      // question with round corners and room to breathe, and the layout does not move.
       // `min-w-0` because this is a flex item of the question column, and its
       // automatic minimum size is its MIN-CONTENT width — which for a ranking
       // question is 300px (measured below), wider than the 262px the column has at a
@@ -104,7 +104,7 @@ export default function RespondQuestionField({
       // the column widens the page, and the document scrolls sideways: 9px at 320px,
       // measured in Chromium. With it the card fits and the one row that is genuinely
       // too wide scrolls inside its own container.
-      className="min-w-0 rounded-xl border border-line-default bg-surface-card p-panel shadow-sm transition-colors focus-within:border-accent-blue-ring"
+      className="-m-2 min-w-0 rounded-xl border-0 p-2"
     >
       {/* `float-left w-full` is not decoration. A `<legend>` in its default flow
           is cut out of the fieldset's own border, so the question text straddles
@@ -114,7 +114,7 @@ export default function RespondQuestionField({
           the card's frame closes; the block below clears the float. */}
       <legend id={legendId} className="float-left m-0 w-full p-0">
         {/* The canvas's meta row: the `2/6` chip, then the dimension in the label
-            face. The position is a reading — mono with tabular figures, so a column of
+            face. The position is a reading — tabular figures in the sans, so a column of
             them does not shift width from `1/24` to `10/24` — and the glyph form is
             `aria-hidden` with the sentence beside it as the accessible one, because
             "1/24" read aloud is not what "Question 1 of 24" says. */}
@@ -122,7 +122,7 @@ export default function RespondQuestionField({
           <span
             aria-hidden="true"
             data-slot="question-index"
-            className="inline-flex h-6 items-center rounded-lg border border-line-default bg-surface-icon-box px-2 font-mono text-respond-sm font-medium tabular-nums text-fg-secondary"
+            className="inline-flex h-6 items-center rounded-md bg-surface-fill-subtle px-2 text-xs font-semibold tabular-nums text-fg-secondary"
           >
             {`${position}/${total}`}
           </span>
@@ -130,7 +130,7 @@ export default function RespondQuestionField({
           {dimension ? (
             <span
               data-slot="question-dimension"
-              className="min-w-0 truncate text-sm font-bold uppercase tracking-label text-fg-secondary"
+              className="min-w-0 truncate text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary"
               title={dimension}
             >
               {dimension}
@@ -150,7 +150,7 @@ export default function RespondQuestionField({
         </span>
         <span
           data-slot="question-text"
-          className="mt-3.5 block text-question font-normal text-fg-primary md:text-respond-question"
+          className="mt-2.5 block font-display text-respond-display font-semibold tracking-title text-fg-primary"
         >
           {question.text ?? t('untitledQuestion')}
           {question.required ? <span className="sr-only"> {t('requiredMarker')}</span> : null}
@@ -558,10 +558,10 @@ function RankingAnswer({
             >
               {/* The rank, as a reading. It used to be `w-icon-box` — 28px, which
                   is narrower than "1 de 4" and wrapped every row onto two lines in
-                  Spanish. Sized by its content instead, and set in mono with
-                  tabular figures so the column of them does not shuffle sideways
+                  Spanish. Sized by its content instead, and set in tabular
+                  figures so the column of them does not shuffle sideways
                   as items move. */}
-              <span className="shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-fg-secondary">
+              <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-fg-secondary">
                 {t('rankingPosition', { position: index + 1, total: order.length })}
               </span>
               <span className="min-w-0 flex-1 text-base text-fg-primary">
