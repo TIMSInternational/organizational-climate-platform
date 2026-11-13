@@ -322,7 +322,7 @@ export function SurveyDetailView({
           <Note role="note" icon={<CalendarClock />} className="min-w-0 flex-1 py-2.5 text-sm" data-testid="status-end-passed">
             {copy('endPassedWarning')}
           </Note>
-          {/* The sentence above has always said "cambia primero las fechas"; this is where. A
+          {/* The sentence above has always said "cambie primero las fechas"; this is where. A
               duplicated survey keeps its source's past window, and this is how it gets run. */}
           {windowEditable && (
             <Button type="button" size="sm" variant="outline" disabled={pending !== null} onClick={() => setEditingWindow(true)}>
