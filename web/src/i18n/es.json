@@ -4457,7 +4457,54 @@
         "optionsIncomplete": "A las preguntas {positions} les faltan opciones: cada una necesita al menos dos, con su texto y sin repetirse.",
         "optionsIncompleteOne": "A la pregunta {positions} le faltan opciones: necesita al menos dos, cada una con su texto y sin repetirse.",
         "previewNoOptions": "Todavía no tiene opciones.",
-        "previewOptionBlank": "Opción {position}"
+        "previewOptionBlank": "Opción {position}",
+        "scaleGeneric": "Escala",
+        "scalePreset": {
+          "agreement": "Acuerdo",
+          "frequency": "Frecuencia",
+          "satisfaction": "Satisfacción",
+          "quality": "Calidad",
+          "likelihood": "Probabilidad",
+          "custom": "Palabras propias"
+        },
+        "scalePresetHint": "Elija qué mide la escala y sus cinco respuestas se escriben en cada idioma de la encuesta. Abajo puede cambiar las palabras.",
+        "scaleWords": {
+          "agreement": {
+            "p1": "Totalmente en desacuerdo",
+            "p2": "En desacuerdo",
+            "p3": "Ni de acuerdo ni en desacuerdo",
+            "p4": "De acuerdo",
+            "p5": "Totalmente de acuerdo"
+          },
+          "frequency": {
+            "p1": "Nunca",
+            "p2": "Casi nunca",
+            "p3": "Algunas veces",
+            "p4": "Casi siempre",
+            "p5": "Siempre"
+          },
+          "satisfaction": {
+            "p1": "Muy insatisfecho",
+            "p2": "Insatisfecho",
+            "p3": "Ni satisfecho ni insatisfecho",
+            "p4": "Satisfecho",
+            "p5": "Muy satisfecho"
+          },
+          "quality": {
+            "p1": "Muy malo",
+            "p2": "Malo",
+            "p3": "Regular",
+            "p4": "Bueno",
+            "p5": "Excelente"
+          },
+          "likelihood": {
+            "p1": "Nada probable",
+            "p2": "Poco probable",
+            "p3": "Algo probable",
+            "p4": "Muy probable",
+            "p5": "Totalmente probable"
+          }
+        }
       },
       "template": {
         "eyebrow": "Plantilla de encuesta · {category}",

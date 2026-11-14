@@ -4457,7 +4457,54 @@
         "optionsIncomplete": "Questions {positions} are missing options: each needs at least two, with words and none repeated.",
         "optionsIncompleteOne": "Question {positions} is missing options: it needs at least two, each with words and none repeated.",
         "previewNoOptions": "No options yet.",
-        "previewOptionBlank": "Option {position}"
+        "previewOptionBlank": "Option {position}",
+        "scaleGeneric": "Scale",
+        "scalePreset": {
+          "agreement": "Agreement",
+          "frequency": "Frequency",
+          "satisfaction": "Satisfaction",
+          "quality": "Quality",
+          "likelihood": "Likelihood",
+          "custom": "Own words"
+        },
+        "scalePresetHint": "Choose what the scale measures and its five answers are written in every language of the survey. You can change the words below.",
+        "scaleWords": {
+          "agreement": {
+            "p1": "Strongly disagree",
+            "p2": "Disagree",
+            "p3": "Neither agree nor disagree",
+            "p4": "Agree",
+            "p5": "Strongly agree"
+          },
+          "frequency": {
+            "p1": "Never",
+            "p2": "Almost never",
+            "p3": "Sometimes",
+            "p4": "Almost always",
+            "p5": "Always"
+          },
+          "satisfaction": {
+            "p1": "Very dissatisfied",
+            "p2": "Dissatisfied",
+            "p3": "Neither satisfied nor dissatisfied",
+            "p4": "Satisfied",
+            "p5": "Very satisfied"
+          },
+          "quality": {
+            "p1": "Very poor",
+            "p2": "Poor",
+            "p3": "Fair",
+            "p4": "Good",
+            "p5": "Excellent"
+          },
+          "likelihood": {
+            "p1": "Not at all likely",
+            "p2": "Slightly likely",
+            "p3": "Somewhat likely",
+            "p4": "Very likely",
+            "p5": "Extremely likely"
+          }
+        }
       },
       "template": {
         "eyebrow": "Survey template · {category}",
