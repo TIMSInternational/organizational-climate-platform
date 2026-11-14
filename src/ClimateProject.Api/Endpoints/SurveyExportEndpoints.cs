@@ -212,7 +212,7 @@ public static class SurveyExportEndpoints
     /// "Antigüedad" and "Femenino" rather than the keys the aggregation works in. Inactive
     /// fields too: a response keeps the value it was given after a field is retired.
     /// </summary>
-    private static async Task<SurveyExportLabels> LoadLabelsAsync(
+    internal static async Task<SurveyExportLabels> LoadLabelsAsync(
         Guid companyId,
         string locale,
         ClimateProjectDbContext db,

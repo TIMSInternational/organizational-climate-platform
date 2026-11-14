@@ -4,10 +4,10 @@ namespace ClimateProject.Application.Exports;
 /// Which of the two base-14 faces a run of text is drawn in.
 /// </summary>
 /// <remarks>
-/// Two, not fourteen. A climate report is headings, prose and tables; italic and the serif
-/// families would be more resource dictionary entries and more width tables for no reader
-/// benefit. Adding one later is an entry in <see cref="PdfStandardFontMetrics"/> and a
-/// resource name, not a redesign.
+/// Three, not fourteen. A climate report is headings, prose and tables; italic would be more
+/// resource dictionary entries and more width tables for no reader benefit. Times-Bold was
+/// added on 14 Nov 2026 for the survey report's display titles, exactly as this note said one
+/// would be: an entry in <see cref="PdfStandardFontMetrics"/> and a resource name.
 /// </remarks>
 public enum PdfStandardFont
 {
@@ -16,10 +16,22 @@ public enum PdfStandardFont
 
     /// <summary>Helvetica-Bold. Headings, table headers, emphasised values.</summary>
     Bold = 1,
+
+    /// <summary>
+    /// Times-Bold. Display titles only -- the survey report's cover title and section titles
+    /// (the wizard design of 14 Nov 2026). Never body text: a serif in an 8.5pt table cell
+    /// reads worse than Helvetica on screen, and the report's numbers are all set in Helvetica.
+    /// </summary>
+    /// <remarks>
+    /// A base-14 face like the other two, so still no font program in the file. The writer
+    /// adds its font dictionary only to a document that draws with it, which keeps every
+    /// existing PDF byte-for-byte what it was (<c>PdfDocument.ToBytes</c>).
+    /// </remarks>
+    SerifBold = 2,
 }
 
 /// <summary>
-/// Character widths for the two Helvetica faces, and the Unicode -> WinAnsiEncoding mapping
+/// Character widths for the two Helvetica faces and Times-Bold, and the Unicode -> WinAnsiEncoding mapping
 /// that decides which byte a character is written as.
 ///
 /// <para>
@@ -170,6 +182,103 @@ public static class PdfStandardFontMetrics
     };
 
     /// <summary>
+    /// Widths for codes 32..126, in 1/1000 em, Times-Bold -- read off Adobe's
+    /// <c>ptmb8a.afm</c> (Times-Bold, version 001.007) by glyph NAME, not by code: the AFM is
+    /// in StandardEncoding, where 39 and 96 are the curly quotes, while WinAnsi puts
+    /// <c>quotesingle</c> and <c>grave</c> there. Generated from the AFM, not typed.
+    /// </summary>
+    private static readonly short[] SerifBoldAscii =
+    [
+        250, 333, 555, 500, 500, 1000, 833, 278, 333, 333, 500, 570, 250, 333, 250, 278,
+        500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 333, 333, 570, 570, 570, 500,
+        930, 722, 667, 722, 722, 667, 611, 778, 778, 389, 500, 778, 667, 944, 722, 778,
+        611, 778, 722, 556, 667, 722, 722, 1000, 722, 722, 667, 333, 278, 333, 581, 500,
+        333, 500, 556, 444, 556, 444, 333, 500, 556, 278, 333, 556, 278, 833, 556, 500,
+        556, 556, 444, 389, 333, 556, 500, 722, 500, 500, 444, 394, 220, 394, 520,
+    ];
+
+    /// <summary>
+    /// Times-Bold widths for the WinAnsi codes above 126 that do not fold onto an ASCII letter,
+    /// from the same AFM. Accented letters fold exactly as in Helvetica: the AFM gives every
+    /// acute, grave, diaeresis, circumflex and tilde its base letter's advance.
+    /// </summary>
+    private static readonly Dictionary<int, short> SerifBoldSymbolWidths = new()
+    {
+        // The 1990 AFM predates the euro and names no glyph for it. Charged a digit's width,
+        // which is what later Times-Bold metric files give it.
+        [0x80] = 500, // Euro
+        [0x82] = 333, // quotesinglbase
+        [0x83] = 500, // florin
+        [0x84] = 500, // quotedblbase
+        [0x85] = 1000, // ellipsis
+        [0x86] = 500, // dagger
+        [0x87] = 500, // daggerdbl
+        [0x88] = 333, // circumflex
+        [0x89] = 1000, // perthousand
+        [0x8A] = 556, // Scaron
+        [0x8B] = 333, // guilsinglleft
+        [0x8C] = 1000, // OE
+        [0x8E] = 667, // Zcaron
+        [0x91] = 333, // quoteleft
+        [0x92] = 333, // quoteright
+        [0x93] = 500, // quotedblleft
+        [0x94] = 500, // quotedblright
+        [0x95] = 350, // bullet
+        [0x96] = 500, // endash
+        [0x97] = 1000, // emdash
+        [0x98] = 333, // tilde
+        [0x99] = 1000, // trademark
+        [0x9A] = 389, // scaron
+        [0x9B] = 333, // guilsinglright
+        [0x9C] = 722, // oe
+        [0x9E] = 444, // zcaron
+        [0x9F] = 722, // Ydieresis
+        [0xA0] = 250, // space
+        [0xA1] = 333, // exclamdown
+        [0xA2] = 500, // cent
+        [0xA3] = 500, // sterling
+        [0xA4] = 500, // currency
+        [0xA5] = 500, // yen
+        [0xA6] = 220, // brokenbar
+        [0xA7] = 500, // section
+        [0xA8] = 333, // dieresis
+        [0xA9] = 747, // copyright
+        [0xAA] = 300, // ordfeminine
+        [0xAB] = 500, // guillemotleft
+        [0xAC] = 570, // logicalnot
+        [0xAD] = 333, // hyphen
+        [0xAE] = 747, // registered
+        [0xAF] = 333, // macron
+        [0xB0] = 400, // degree
+        [0xB1] = 570, // plusminus
+        [0xB2] = 300, // twosuperior
+        [0xB3] = 300, // threesuperior
+        [0xB4] = 333, // acute
+        [0xB5] = 556, // mu
+        [0xB6] = 540, // paragraph
+        [0xB7] = 250, // periodcentered
+        [0xB8] = 333, // cedilla
+        [0xB9] = 300, // onesuperior
+        [0xBA] = 330, // ordmasculine
+        [0xBB] = 500, // guillemotright
+        [0xBC] = 750, // onequarter
+        [0xBD] = 750, // onehalf
+        [0xBE] = 750, // threequarters
+        [0xBF] = 500, // questiondown
+        [0xC6] = 1000, // AE
+        [0xD0] = 722, // Eth
+        [0xD7] = 570, // multiply
+        [0xD8] = 778, // Oslash
+        [0xDE] = 611, // Thorn
+        [0xDF] = 556, // germandbls
+        [0xE6] = 722, // ae
+        [0xF0] = 500, // eth
+        [0xF7] = 570, // divide
+        [0xF8] = 500, // oslash
+        [0xFE] = 556, // thorn
+    };
+
+    /// <summary>
     /// The WinAnsi codes for the characters outside Latin-1 that the encoding can still name.
     /// </summary>
     /// <remarks>
@@ -190,11 +299,20 @@ public static class PdfStandardFontMetrics
     };
 
     /// <summary>The PostScript name of a face, as it appears in the font dictionary.</summary>
-    public static string BaseFontName(PdfStandardFont font)
-        => font == PdfStandardFont.Bold ? "Helvetica-Bold" : "Helvetica";
+    public static string BaseFontName(PdfStandardFont font) => font switch
+    {
+        PdfStandardFont.Bold => "Helvetica-Bold",
+        PdfStandardFont.SerifBold => "Times-Bold",
+        _ => "Helvetica",
+    };
 
     /// <summary>The resource name a content stream selects a face by.</summary>
-    public static string ResourceName(PdfStandardFont font) => font == PdfStandardFont.Bold ? "F2" : "F1";
+    public static string ResourceName(PdfStandardFont font) => font switch
+    {
+        PdfStandardFont.Bold => "F2",
+        PdfStandardFont.SerifBold => "F3",
+        _ => "F1",
+    };
 
     /// <summary>
     /// One character as its WinAnsiEncoding byte, or <see cref="Replacement"/> when the
@@ -282,7 +400,15 @@ public static class PdfStandardFontMetrics
     /// </summary>
     private static bool TryMeasure(int code, PdfStandardFont font, out short width)
     {
-        if (SymbolWidths.TryGetValue(code, out var symbol))
+        if (font == PdfStandardFont.SerifBold)
+        {
+            if (SerifBoldSymbolWidths.TryGetValue(code, out var serifSymbol))
+            {
+                width = serifSymbol;
+                return true;
+            }
+        }
+        else if (SymbolWidths.TryGetValue(code, out var symbol))
         {
             width = font == PdfStandardFont.Bold ? symbol.Bold : symbol.Regular;
             return true;
@@ -301,7 +427,12 @@ public static class PdfStandardFontMetrics
             code = Replacement;
         }
 
-        var table = font == PdfStandardFont.Bold ? BoldAscii : RegularAscii;
+        var table = font switch
+        {
+            PdfStandardFont.Bold => BoldAscii,
+            PdfStandardFont.SerifBold => SerifBoldAscii,
+            _ => RegularAscii,
+        };
         width = table[code - 32];
         return measured;
     }

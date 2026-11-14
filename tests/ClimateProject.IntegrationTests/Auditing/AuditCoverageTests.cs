@@ -99,6 +99,8 @@ public class AuditCoverageTests : IAsyncLifetime
         "GET /surveys/{id:guid}/export",
         "GET /surveys/{id:guid}/export/csv",
         "GET /surveys/{id:guid}/export/pdf",
+        // 2026-11-14. The «Generar informe» PDF: the survey's results with crosses, built on demand.
+        "GET /surveys/{id:guid}/export/report",
         "GET /surveys/{id:guid}/results",
         // G20. The roster as a file: every invited person by name and email, with whether they
         // have answered. Never an answer, but a list of named people leaving the server is the
@@ -112,6 +114,9 @@ public class AuditCoverageTests : IAsyncLifetime
         // server answered. Super admin only and never sent to the client; marked for the same
         // reason the status workbook above is, with more in it.
         "GET /admin/companies/{companyId:guid}/delivery-audit",
+        // 2026-11-14. The «Descargar en Excel» wizard: any of the four workbooks for a
+        // company's surveys in one file, the response workbook among them for super admins.
+        "GET /admin/companies/{companyId:guid}/exports/bundle",
         // 2026-11-03. One company's climate against a group computed from other companies'
         // climates: confidential employee opinion read across tenants, super admin only.
         "GET /admin/benchmark-groups/{id:guid}/reading",

@@ -31,9 +31,11 @@ anything for a document with no images and no charts.
 
 ## What the choice costs, stated
 
-- **No images, no charts, no font embedding.** A chart in a report needs a raster image and
-  an `/XObject`. That is the point at which this decision should be **revisited**, not
-  extended — a hand-rolled image pipeline is a different and much worse trade.
+- **No images, no font embedding.** A raster image — a logo, a photograph — needs an
+  `/XObject` and an image decoder. That is still the point at which this decision should be
+  **revisited**, not extended — a hand-rolled image pipeline is a different and much worse
+  trade.
+- ~~No charts.~~ **Charts turned out not to need an image** (14 Nov 2026, below).
 - **Only what WinAnsiEncoding can name.** That covers Spanish completely — á é í ó ú ü ñ,
   their capitals, ¿ ¡ « » º ª ° and the typographic quotes and dashes a word processor
   substitutes — which is the reason the limitation is acceptable rather than merely cheap. A
@@ -85,3 +87,38 @@ a gate, because it is not available in CI.
 `CsvWriter` and `CsvStreamWriter` precisely so the next one — report download (#91), which
 today returns JSON metadata rather than a file, and the microclimate PDF route #131 dropped —
 uses it instead of making this decision again.
+
+## Amended 2026-11-14: charts are vector paths, so the writer was extended
+
+Federico ruled on 14 Nov 2026, in a Q/A, that the «Generar informe» report's charts be drawn
+by **extending** `PdfDocument` rather than adding a dependency. The line above said a chart
+would need a raster image and an `/XObject`, and so mark the point to revisit rather than
+extend. Measured against the charts the report actually draws, that was wrong: every one
+(the climate bar, the climate map, the cross matrix with its locked cells, the stacked answer
+distribution, the comparison bars) is made of rectangles, lines, circles and text. Those are
+the path operators a PDF 1.4 reader has always had (`re`, `m`/`l`, `c` for Bézier curves,
+`f`/`S`, `rg`/`RG` for DeviceRGB colour). No image, no `/XObject`, no decoder, and the chart
+stays sharp at any zoom for a few hundred bytes.
+
+What was added, and what it costs:
+
+- **Positioned drawing** on the current page: `FillRectangle` (with rounded corners),
+  `StrokeRectangle`, `StrokeLine`, `FillCircle`/`StrokeCircle` (four Béziers), `FillPolygon`,
+  `DrawString` with alignment, and `Fit` to shorten a label with an ellipsis. Each wraps
+  itself in `q … Q`, so a colour never leaks into the next operator. Uncoloured text is
+  written exactly as before, byte for byte.
+- **Times-Bold as a third base-14 face**, for display titles only. Its widths are read off
+  Adobe's `ptmb8a.afm` by glyph name (the AFM is in StandardEncoding, so codes 39 and 96 are
+  the curly quotes there, while WinAnsi puts `quotesingle` and `grave` in those slots). The
+  font dictionary is written **only** into a document that draws with it, so every PDF made
+  before the report keeps its objects, its numbering and its bytes.
+- **A running header** ("OCC Clima · company · survey", "Página n de N"), written at
+  serialisation like the credit line, because only `ToBytes` knows the page count.
+
+Still true: base-14 only, WinAnsi only. The report's copy avoids `≥`, `→` and `−`, which have no
+WinAnsi code and would print as `?` (`SurveyReportPdfTests.No_character_outside_the_encoding_is_printed_as_a_question_mark`).
+The proofs are `PdfDrawingTests` (operators, the serif font object, offsets with three fonts,
+header numbering) and `SurveyReportPdfTests` (the report reads back as the strings the model
+says it prints, and every cross-reference offset lands on its object). The pages were checked
+by eye by rendering a generated report with `pdftoppm`, which is a manual check, not a gate.
+

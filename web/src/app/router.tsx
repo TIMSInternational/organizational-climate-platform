@@ -40,6 +40,8 @@ import SurveyDistributionNextPage from '../features/surveys/next/authoring/Surve
 import BenchmarksNextPage from '../features/analytics/next/benchmarks/BenchmarksNextPage'
 import AIInsightsNextPage from '../features/analytics/next/AIInsightsNextPage'
 import ReportsListNextPage from '../features/reports/next/ReportsListNextPage'
+import ReportWizardPage from '../features/reports/wizard/ReportWizardPage'
+import ExportWizardPage from '../features/surveys/exports/ExportWizardPage'
 import SharedReportNextPage from '../features/reports/next/shared/SharedReportNextPage'
 import SurveyResultsNextPage from '../features/surveys/next/SurveyResultsNextPage'
 import ClimateTrendsNextPage from '../features/surveys/next/trends/ClimateTrendsNextPage'
@@ -388,6 +390,10 @@ export const router = createBrowserRouter([
                   // The redesigned Informes replaced `ReportsListPage` here (ruled 10 Sep, the
                   // same swap as `/surveys`); the old page stays unrouted as the wiring reference.
                   { path: '/admin/companies/:companyId/reports', element: <ReportsListNextPage /> },
+                  // «Generar informe» (the wizard of 14 Nov 2026): the charted survey report, built on
+                  // demand by `GET /surveys/{id}/export/report`. Ungated at the route like Informes:
+                  // every route behind it answers the two admin roles and 403s the rest.
+                  { path: '/admin/companies/:companyId/reports/new', element: <ReportWizardPage /> },
                   { path: '/admin/companies/:companyId/analytics', element: <AnalyticsNextPage /> },
                   // The redesigned Configuración del Sistema and Estado del sistema (the per-role
                   // canvas, 10 Sep) replaced SystemSettingsPage and SystemHealthPage here; the old
@@ -467,6 +473,10 @@ export const router = createBrowserRouter([
                   // The redesigned builder replaced the step-by-step wizard here (ruled 10 Sep); the old
                   // `pages/SurveyCreatePage.tsx` stays unrouted as the wiring reference.
                   { path: '/surveys/import', element: <ClimateWorkbookPage /> },
+                  // «Descargar en Excel» (the wizard of 14 Nov 2026): any of the four workbooks for any
+                  // of a company's surveys, in one file. Flat like `/surveys`: TIMS picks the company
+                  // inside the wizard, a client's administrator is in their own.
+                  { path: '/surveys/exports', element: <ExportWizardPage /> },
                   { path: '/surveys/new', element: <SurveyBuilderNextPage /> },
                   // Before `/surveys/:id` for readability only -- react-router ranks a
                   // static segment above a dynamic one regardless of declaration order,

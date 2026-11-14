@@ -688,6 +688,8 @@ app.MapCompanyDeletionEndpoints();
 app.MapSurveyDraftEndpoints();
 app.MapSurveyResultsEndpoints();
 app.MapSurveyExportEndpoints();
+app.MapSurveyReportEndpoints();
+app.MapCompanyExportEndpoints();
 // Literal segment, so it cannot collide with /surveys/{id:guid} however these are ordered.
 app.MapSurveyClimateTrendsEndpoints();
 app.MapSurveyHistoryEndpoints();

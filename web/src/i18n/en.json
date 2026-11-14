@@ -3072,10 +3072,10 @@
       "opensOne": "1 open",
       "opens": "{count} opens",
       "moreActions": "More actions for {title}",
-      "floorNote": "A report applies the same floor as the screen: a group with fewer than {floor} responses prints no number in any format, and open text is never included.",
+      "floorNote": "A report applies the same rules as the screen: the whole survey and any cross of variables with fewer than {floor} responses print no number in any format; a department or a demographic value is shown to administrators from 1 response (client ruling, 15 Oct 2026). Open text is never included.",
       "noAccessTitle": "This company's reports belong to its administrators",
       "noAccessDescription": "Reports, their public links and their schedule are managed by a company administrator.",
-      "newReportDescription": "Choose the title, the type and the format. The report applies the floor of {floor} responses.",
+      "newReportDescription": "Choose the title, the type and the format. The report applies the same privacy rules as the screen, with the floor of {floor} responses for the whole survey.",
       "shareHeading": "Share with a public link",
       "shareSub": "Whoever has the link opens the report without signing in.",
       "shareEyebrow": "{title} · {format}",
@@ -8676,6 +8676,8 @@
       "admin__departments__create": "Created a department",
       "admin__departments__update": "Updated a department",
       "admin__exports__responses__export": "Exported climate responses",
+      "admin__companies__exports__bundle__export": "Downloaded Excel files of a company's surveys",
+      "surveys__export__report__export": "Downloaded a survey's PDF report",
       "admin__invitations__create": "Sent invitations",
       "admin__invitations__resend__create": "Resent an invitation",
       "admin__invitations__shareable-link__create": "Created a shareable invitation link",
@@ -8818,6 +8820,278 @@
     "state": {
       "loading": "Loading…",
       "retry": "Try again"
+    }
+  },
+  "reportWizard": {
+    "open": "Generate report",
+    "title": "Generate report",
+    "crumbReports": "Reports",
+    "description": "Choose the survey, who it covers and which crosses to see. The report comes out as a PDF with charts, and no group of fewer than 3 people in a cross shows a number.",
+    "cancel": "Cancel",
+    "stepList": "Report steps",
+    "progress": "Step {current} of {total}",
+    "submit": "Generate PDF",
+    "submitting": "Generating…",
+    "steps": {
+      "survey": {
+        "label": "Survey",
+        "description": "Which survey? Only surveys with responses are listed: a draft has nothing to tell yet."
+      },
+      "scope": {
+        "label": "Scope",
+        "description": "Which departments get a row? The whole organisation, or only the ones you choose."
+      },
+      "crosses": {
+        "label": "Crosses",
+        "description": "A cross combines two variables. Every cell needs 3 people, and a cell that would let another be worked out by subtraction is protected too."
+      },
+      "content": {
+        "label": "Contents",
+        "description": "Each section is one or more pages with its chart. Leave out the ones you do not need."
+      },
+      "review": {
+        "label": "Review",
+        "description": "The report is computed when it is generated, from the responses at that moment."
+      }
+    },
+    "survey": {
+      "legend": "Survey",
+      "loading": "Loading the surveys…",
+      "loadFailed": "The company's surveys could not be loaded.",
+      "none": "This company has no survey with responses yet.",
+      "untitled": "Untitled survey",
+      "responses": "{count} responses",
+      "responsesOf": "{count} responses of {total}",
+      "optionsFailed": "The chosen survey could not be read.",
+      "suppressed": "This survey has fewer than 3 complete responses: the report will show participation only.",
+      "compare": "Compare with",
+      "compareNone": "None",
+      "compareHint": "Adds the change in each dimension. Surveys of the same company only.",
+      "language": "Report language",
+      "spanish": "Español",
+      "english": "English"
+    },
+    "scope": {
+      "label": "Scope",
+      "all": "The whole organisation",
+      "chosen": "Chosen departments",
+      "includeColumn": "Include",
+      "include": "Include {name}",
+      "department": "Department",
+      "respondents": "Responses",
+      "headcount": "Of",
+      "unnamed": "Unnamed department",
+      "noDepartments": "No response to this survey carries a department.",
+      "summary": "{count} of {total} departments.",
+      "note": "The organisation's figures are always those of everyone who answered; the chosen departments are the ones that get a row in the map and in the crosses.",
+      "floor": "A department is shown to administrators from 1 response (client ruling, 15 Oct 2026). Inside a cross, every group needs 3."
+    },
+    "crosses": {
+      "variable": "Variable",
+      "crossedWith": "Crossed with",
+      "alone": "None (the first one alone)",
+      "add": "Add cross",
+      "suggested": "Suggested:",
+      "none": "No crosses. The report can go out without any.",
+      "noVariables": "This survey's responses carry no variable with two or more values to cross.",
+      "remove": "Remove",
+      "limit": "A report carries up to {max} crosses.",
+      "aloneTitle": "{name}, not crossed",
+      "groups": "{count} groups",
+      "disclosed": "{count} with results",
+      "protected": "{count} protected",
+      "protectedOne": "1 protected",
+      "single": "from 1 response, for administrators only",
+      "counting": "Counting…",
+      "note": "A protected cell prints with a lock and «Protected», never a number, and its value cannot be worked out by subtracting the others either."
+    },
+    "content": {
+      "sections": {
+        "summary": {
+          "title": "Executive summary",
+          "body": "Overall mean, participation, strengths and opportunities, and the highest and lowest questions."
+        },
+        "dimensions": {
+          "title": "Climate by dimension",
+          "body": "Each dimension's climate bar, from the lowest department to the highest."
+        },
+        "map": {
+          "title": "Climate map",
+          "body": "Departments by dimensions, each cell in its area."
+        },
+        "comparison": {
+          "title": "Comparison",
+          "body": "The change in each dimension against the chosen survey."
+        },
+        "crosses": {
+          "title": "Crosses",
+          "body": "One table per chosen cross, with the protected cells in view."
+        },
+        "questions": {
+          "title": "Results by question",
+          "body": "How each question's answers were spread."
+        },
+        "highlights": {
+          "title": "Strengths and opportunities",
+          "body": "The 5 highest questions and the 5 lowest."
+        },
+        "comments": {
+          "title": "Comments",
+          "body": "The most frequent words of the open questions; never anyone's text."
+        }
+      },
+      "comparisonNeedsSurvey": "Choose a survey to compare with in the first step.",
+      "crossesNeedCross": "Add a cross in the previous step.",
+      "scale": "Scores read as {scale}, as in the company's settings.",
+      "scaleMean": "a mean from 1 to 5",
+      "scalePercent": "a percentage from 0 to 100"
+    },
+    "review": {
+      "survey": "Survey",
+      "scope": "Scope",
+      "crosses": "Crosses",
+      "sections": "Sections",
+      "compare": "Compared with",
+      "language": "Language and reading",
+      "size": "Size",
+      "none": "None",
+      "pages": "{count} A4 pages",
+      "protectedNote": "{count} cross cells will be protected. None prints a number, in the PDF or in its totals.",
+      "noProtected": "No cross cell is protected.",
+      "done": "The report was downloaded.",
+      "failed": "The report could not be generated. Please try again."
+    },
+    "aside": {
+      "previewTitle": "What it will look like",
+      "chooseSurvey": "Choose a survey to see the size of the report.",
+      "counting": "Calculating…",
+      "pages": "{count} pages, counted on the PDF that will be generated",
+      "privacyTitle": "Report privacy",
+      "disclosed": "Cross cells with results",
+      "protected": "Protected cells",
+      "verbatim": "Comment text",
+      "never": "Never"
+    },
+    "errors": {
+      "chooseSurvey": "Choose a survey.",
+      "loadingSurvey": "Wait for the survey to load.",
+      "chooseDepartment": "Tick at least one department.",
+      "chooseSection": "Keep at least one section."
+    }
+  },
+  "exportWizard": {
+    "open": "Download as Excel",
+    "title": "Download as Excel",
+    "eyebrow": "Surveys · downloads",
+    "crumbSurveys": "Surveys",
+    "description": "Choose the company, its surveys and which files you want. Every download is recorded in the audit log.",
+    "descriptionOwn": "Choose your surveys and which files you want. Every download is recorded in the audit log.",
+    "cancel": "Cancel",
+    "stepList": "Download steps",
+    "progress": "Step {current} of {total}",
+    "submit": "Download",
+    "submitZip": "Download (.zip)",
+    "submitting": "Preparing…",
+    "steps": {
+      "company": {
+        "label": "Company",
+        "description": "Which company? Only TIMS sees this step; a client's administrator starts at the next one, with their own company."
+      },
+      "surveys": {
+        "label": "Surveys",
+        "description": "All of them, or only the ones you tick. Each survey is a sheet in every file, in the order they were created."
+      },
+      "files": {
+        "label": "Files",
+        "description": "Tick one or more. Several arrive together in a .zip, one Excel workbook each."
+      },
+      "details": {
+        "label": "Details",
+        "description": "Only the files you ticked appear."
+      },
+      "download": {
+        "label": "Download",
+        "description": "It is built from the data as it is at this moment."
+      }
+    },
+    "company": {
+      "search": "Search companies",
+      "loading": "Loading the companies…",
+      "none": "No company matches the search."
+    },
+    "surveys": {
+      "label": "Surveys",
+      "all": "All ({count})",
+      "chosen": "The ones I choose",
+      "include": "Include",
+      "includeOne": "Include {title}",
+      "draftLabel": "{title}, a draft with no responses",
+      "draftNote": "Draft: nothing to download",
+      "survey": "Survey",
+      "status": "Status",
+      "responses": "Responses",
+      "dates": "Dates",
+      "untitled": "Untitled survey",
+      "loading": "Loading the surveys…",
+      "loadFailed": "The company's surveys could not be loaded."
+    },
+    "files": {
+      "responses": {
+        "title": "Responses by person",
+        "body": "Every answer of every person, a sheet per survey, with comments as they were written. An anonymous survey carries no names."
+      },
+      "questionnaire": {
+        "title": "Questionnaire",
+        "body": "The questions: number, dimension, type, the Spanish and English text and the answer options."
+      },
+      "status": {
+        "title": "Participation status",
+        "body": "Who finished, who started and who has not come in, person by person, with the totals."
+      },
+      "results": {
+        "title": "Aggregated results",
+        "body": "Mean and spread of answers by question and by dimension, by department or demographic. Never an individual answer."
+      },
+      "timsOnly": "TIMS only",
+      "responsesNote": "«Responses by person» is the only place in the product where comment text comes out, and only for TIMS (ruling of 16 Oct 2026). A client's administrator does not see this option."
+    },
+    "details": {
+      "responsesHint": "What each sheet carries",
+      "includeAnswers": "Include the answers",
+      "statusHint": "The sheet's layout",
+      "statusFormat": "Status layout",
+      "standard": "Standard",
+      "progress": "Progress percentage",
+      "groupsHint": "Which groups it is broken down by",
+      "department": "Department",
+      "language": "Language of the headings",
+      "languageHint": "The questionnaire always carries both languages",
+      "spanish": "Español",
+      "english": "English",
+      "resultsNote": "In «Aggregated results», a department or a demographic value is shown to administrators from 1 response (client ruling, 15 Oct 2026). To cross variables, use «Generate report» in Reports: there every group needs 3."
+    },
+    "download": {
+      "sheets": "One sheet per survey · {count} surveys",
+      "zipNote": "A .zip with {count} Excel workbooks.",
+      "oneNote": "One Excel workbook.",
+      "done": "The download has started.",
+      "failed": "The download could not be prepared. Please try again."
+    },
+    "aside": {
+      "title": "What you will download",
+      "company": "Company",
+      "ownCompany": "Yours",
+      "surveys": "Surveys",
+      "surveysCount": "{count} of {total} · {responses} responses",
+      "files": "Files",
+      "oneFile": "1 Excel workbook",
+      "zip": "{count} Excel workbooks in a .zip"
+    },
+    "errors": {
+      "chooseCompany": "Choose a company.",
+      "noSurveys": "This company has no distributed surveys yet.",
+      "chooseSurvey": "Tick at least one survey.",
+      "chooseFile": "Tick at least one file."
     }
   }
 }

@@ -171,6 +171,9 @@ public class ReportComparisonGenerationTests : IAsyncLifetime
         // it -- the reason this file's note shrinks rather than accumulating.
         Assert.DoesNotContain("period-over-period comparative analysis, report configuration",
             document.GenerationNote, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("report configuration/filters", document.GenerationNote, StringComparison.OrdinalIgnoreCase);
+        // Filters are built too (ReportFilters), so the note stopped naming them on 14 Nov 2026;
+        // this line used to pin the stale claim. What is still missing is templates.
+        Assert.DoesNotContain("report configuration/filters", document.GenerationNote, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("report templates", document.GenerationNote, StringComparison.OrdinalIgnoreCase);
     }
 }

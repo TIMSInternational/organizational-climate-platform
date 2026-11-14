@@ -161,6 +161,9 @@ function SurveysListForCompany() {
                 />
               )}
               <Button asChild variant="outline">
+                <Link to="/surveys/exports">{t('exportWizard.open')}</Link>
+              </Button>
+              <Button asChild variant="outline">
                 <Link to="/surveys/import">{t('climateWorkbook.title')}</Link>
               </Button>
             </>
