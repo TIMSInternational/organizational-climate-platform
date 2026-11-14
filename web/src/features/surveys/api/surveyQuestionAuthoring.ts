@@ -43,6 +43,13 @@ export interface AuthoringOption {
    */
   value: string
   label: Record<Locale, AuthoredText>
+  /**
+   * An option the author added in this editing session, whose `value` is only a placeholder
+   * (a React key) until the save settles it from the option's words — the same rule the server
+   * applies to an option sent without a value (`settleOptionValues`, `next/authoring/model.ts`).
+   * Never set on an option read from the server: those keep their stored value verbatim.
+   */
+  draft?: true
 }
 
 export interface AuthoringQuestion {

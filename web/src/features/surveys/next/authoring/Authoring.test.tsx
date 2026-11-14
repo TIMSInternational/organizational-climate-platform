@@ -14,15 +14,21 @@ import TemplateDetailNextPage from './TemplateDetailNextPage'
 import {
   applyAnswerLabels,
   canLabelAnswers,
+  blankQuestion,
   compatibleScaleTypes,
   hasAnswerLabels,
   isEditable,
+  isNewQuestion,
   isTextEditable,
   moveQuestion,
   questionsMissingAnswerLabels,
+  questionsWithIncompleteOptions,
   setAnswerLabel,
+  setOptionLabel,
+  settleOptionValues,
   withAnswerLabels,
   withoutAnswerLabels,
+  withQuestionType,
 } from './model'
 import type { QuestionLibraryItemDetail } from '../../../questions/api/questionLibrary'
 import en from '../../../../i18n/en.json'
@@ -471,6 +477,147 @@ describe('SurveyQuestionsEditorPage — answers as a list in words', () => {
     const sent = vi.mocked(saveSurveyQuestions).mock.calls[0][2]
     expect(sent[0].options).toBeNull()
     expect([sent[0].scaleLabelMin.es.text, sent[0].scaleLabelMax.es.text]).toEqual(['Nunca', 'Siempre'])
+  })
+})
+
+describe('SurveyQuestionsEditorPage — a new question of any type, and its preview', () => {
+  const both = (en: string, es: string) => ({ en: { text: en, authored: true }, es: { text: es, authored: true } })
+  const typeSelect = () => screen.getByRole('combobox', { name: new RegExp(`^${a.questionType}`) }) as HTMLSelectElement
+
+  it('lets only a question added in this session change type', () => {
+    expect(isNewQuestion(blankQuestion(2, ['en', 'es']))).toBe(true)
+    expect(isNewQuestion(q(0, 'Saved'))).toBe(false)
+    expect(isNewQuestion({ id: 'library-lib1-2-1731500000000' })).toBe(false)
+  })
+
+  it('carries over only what the new type uses', () => {
+    const scale = { ...q(0, 'First'), id: 'new-0-1', commentRequired: true }
+    const choice = withQuestionType(scale, 'multiple_choice')
+    expect([choice.scaleMin, choice.scaleMax, choice.scaleLabelMin.es.text, choice.scaleLabelMax.en.text]).toEqual([null, null, '', ''])
+    expect(choice.options?.map((o) => [o.draft, o.label.es.text])).toEqual([[true, ''], [true, '']])
+    expect(new Set(choice.options?.map((o) => o.value)).size).toBe(2)
+    const open = withQuestionType(scale, 'open_ended')
+    expect([open.options, open.scaleMin, open.commentRequired]).toEqual([null, null, false])
+    expect(withQuestionType(scale, 'yes_no').commentRequired).toBe(true)
+    // Likert <-> Valoración keeps the range and the words; from anything else a scale starts at 1–5.
+    expect(withQuestionType(scale, 'rating')).toEqual({ ...scale, type: 'rating' })
+    const back = withQuestionType(choice, 'likert')
+    expect([back.scaleMin, back.scaleMax, back.options]).toEqual([1, 5, null])
+  })
+
+  it('names the multiple-choice questions with too few options, an option without words, or two alike', () => {
+    const choice = (order: number, labels: [string, string][]) => ({
+      ...q(order, `Choice ${order}`),
+      type: 'multiple_choice', scaleMin: null, scaleMax: null,
+      options: labels.map(([en, es], i) => ({ value: `v${i}`, label: both(en, es) })),
+    })
+    const englishOnly = { ...choice(4, [['Yes', ''], ['No', '']]), text: { en: { text: 'Only English', authored: true }, es: { text: '', authored: false } } }
+    const questions = [
+      choice(0, [['Daily', 'Diario'], ['Weekly', 'Semanal']]),
+      choice(1, [['Daily', 'Diario']]),
+      choice(2, [['Daily', 'Diario'], ['Weekly', '']]),
+      choice(3, [['Daily', 'Diario'], ['daily ', 'Semanal']]),
+      // Its Spanish is the untranslated state the summary reports, not a blank option.
+      englishOnly,
+      q(5, 'A scale is not checked here'),
+    ]
+    expect(questionsWithIncompleteOptions(questions, ['en', 'es'])).toEqual([2, 3, 4])
+  })
+
+  it("settles a new option's value from its words by the server's rule, and leaves a saved option's value alone", () => {
+    const question = {
+      ...q(0, 'First'), type: 'multiple_choice', scaleMin: null, scaleMax: null,
+      options: [
+        { value: 'Office', label: both('At the office', 'En la oficina') },
+        { value: 'draft-a', label: both('Office', 'Oficina'), draft: true as const },
+        { value: 'draft-b', label: { en: { text: '', authored: false }, es: { text: '  Remoto ', authored: true } }, draft: true as const },
+      ],
+    }
+    const [settled] = settleOptionValues([question])
+    expect(settled.options?.map((o) => o.value)).toEqual(['Office', 'Office (2)', 'Remoto'])
+    expect(settled.options?.some((o) => 'draft' in o)).toBe(false)
+    // An option read from the server keeps its key even when its words change.
+    const renamed = setOptionLabel(question, 'Office', 'en', 'Head office')
+    expect(settleOptionValues([renamed])[0].options?.[0]).toEqual({ value: 'Office', label: { ...both('At the office', 'En la oficina'), en: { text: 'Head office', authored: true } } })
+  })
+
+  it('adds a blank question as «Opción múltiple», writes its options in both languages and saves them with their own words as keys', async () => {
+    arrangeSurvey('draft', 0)
+    vi.mocked(saveSurveyQuestions).mockResolvedValue()
+    renderAt('/surveys/s1/questions')
+    await userEvent.click(await screen.findByRole('button', { name: a.addBlankLink }))
+    expect([...typeSelect().options].map((o) => o.value)).toEqual(['likert', 'rating', 'multiple_choice', 'open_ended', 'yes_no'])
+    // A saved question is offered the Escala field, never the type.
+    expect(screen.getAllByRole('combobox', { name: new RegExp(`^${a.questionType}`) })).toHaveLength(1)
+    await userEvent.selectOptions(typeSelect(), 'multiple_choice')
+    for (const [loc, text] of [['en', 'Where?'], ['es', '¿Dónde?']] as const) {
+      await userEvent.type(screen.getByRole('textbox', { name: new RegExp(`^${a.textIn[loc].replace(/[()]/g, "\\$&")}`) }), text)
+    }
+    await userEvent.click(screen.getByRole('button', { name: a.addOption }))
+    const words = [['Office', 'Oficina'], ['Home', 'Casa'], ['Both', 'Ambas']]
+    for (const [n, [enText, esText]] of words.entries()) {
+      await userEvent.type(screen.getByRole('textbox', { name: a.optionIn.en.replace('{position}', String(n + 1)) }), enText)
+      await userEvent.type(screen.getByRole('textbox', { name: a.optionIn.es.replace('{position}', String(n + 1)) }), esText)
+    }
+    // The preview draws them as the respondent will meet them, in its own language.
+    expect([...screen.getByTestId('preview-answers').children].map((line) => line.textContent)).toEqual(['Office', 'Home', 'Both'])
+    await userEvent.click(screen.getByRole('button', { name: a.removeOption.replace('{position}', '2') }))
+    // Two left: the fewest the server accepts, so neither can be removed now.
+    expect(screen.queryByRole('button', { name: a.removeOption.replace('{position}', '1') })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    const added = vi.mocked(saveSurveyQuestions).mock.calls[0][2][2]
+    expect([added.type, added.scaleMin, added.scaleMax, added.order]).toEqual(['multiple_choice', null, null, 2])
+    expect(added.options).toEqual([
+      { value: 'Office', label: both('Office', 'Oficina') },
+      { value: 'Both', label: both('Both', 'Ambas') },
+    ])
+    // Ten typed fields: the SurveyRespondPage precedent for a long walk through a form.
+  }, 20000)
+
+  it('refuses to save an option left without words, names the question and opens it', async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    await userEvent.click(await screen.findByRole('button', { name: a.addBlankLink }))
+    await userEvent.selectOptions(typeSelect(), 'multiple_choice')
+    await userEvent.type(screen.getByRole('textbox', { name: a.optionIn.en.replace('{position}', '1') }), 'Yes')
+    await userEvent.click(screen.getByRole('button', { name: a.openQuestion.replace('{position}', '1') }))
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    expect(saveSurveyQuestions).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert').textContent).toBe(a.optionsIncompleteOne.replace('{positions}', '3'))
+    expect(screen.getByRole('button', { name: a.openQuestion.replace('{position}', '3') }).getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('previews «Sí / No» in the preview language, and an open question as a box with no comment to ask for', async () => {
+    arrangeSurvey('draft', 0)
+    renderAt('/surveys/s1/questions')
+    await userEvent.click(await screen.findByRole('button', { name: a.addBlankLink }))
+    await userEvent.selectOptions(typeSelect(), 'yes_no')
+    expect([...screen.getByTestId('preview-answers').children].map((line) => line.textContent)).toEqual(['Yes', 'No'])
+    await userEvent.click(screen.getByRole('button', { name: a.language.es }))
+    expect([...screen.getByTestId('preview-answers').children].map((line) => line.textContent)).toEqual(['Sí', 'No'])
+    expect(screen.getByRole('switch', { name: a.commentRequired })).toBeTruthy()
+    await userEvent.selectOptions(typeSelect(), 'open_ended')
+    expect(screen.getByTestId('preview-open-answer')).toBeTruthy()
+    expect(screen.queryByTestId('preview-answers')).toBeNull()
+    expect(screen.queryByRole('switch', { name: a.commentRequired })).toBeNull()
+  })
+
+  it("previews a library «Opción múltiple» question's options, and keeps their stored keys when their words change", async () => {
+    arrangeSurvey('draft', 0)
+    vi.mocked(saveSurveyQuestions).mockResolvedValue()
+    renderAt('/surveys/s1/questions')
+    await userEvent.click(await screen.findByRole('button', { name: new RegExp(`^${a.addQuestion}`) }))
+    await userEvent.click(screen.getByRole('button', { name: 'pick-from-library' }))
+    await userEvent.click(screen.getByRole('button', { name: a.openQuestion.replace('{position}', '3') }))
+    expect([...screen.getByTestId('preview-answers').children].map((line) => line.textContent)).toEqual(['Daily', 'Weekly'])
+    // A library question keeps the library's type.
+    expect(screen.queryByRole('combobox', { name: new RegExp(`^${a.questionType}`) })).toBeNull()
+    const first = screen.getByRole('textbox', { name: a.optionIn.en.replace('{position}', '1') })
+    await userEvent.clear(first)
+    await userEvent.type(first, 'Daily!')
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    const added = vi.mocked(saveSurveyQuestions).mock.calls[0][2][2]
+    expect(added.options?.map((o) => [o.value, o.label.en.text])).toEqual([['daily-key', 'Daily!'], ['weekly-key', 'Weekly']])
   })
 })
 

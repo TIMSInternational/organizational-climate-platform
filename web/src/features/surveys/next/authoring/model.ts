@@ -108,7 +108,7 @@ export function groupByDimension<T extends { category: string | null }>(question
   return groups
 }
 
-/** A new, blank Likert 1–5 question at the end — the only kind the editor adds in place. */
+/** A new, blank question at the end. It starts as Likert 1–5; «Tipo de pregunta» changes it (`withQuestionType`). */
 export function blankQuestion(order: number, locales: Locale[]): AuthoringQuestion {
   const empty = () =>
     Object.fromEntries(locales.map((locale) => [locale, { text: '', authored: false }])) as AuthoringQuestion['text']
@@ -348,3 +348,128 @@ export function questionFromLibraryItem(item: QuestionLibraryItemDetail, order: 
  * than the primary ink.
  */
 export const QUIET_DISABLED = 'disabled:opacity-100 disabled:text-fg-label'
+
+/**
+ * The types «Tipo de pregunta» offers a question added in this session, in the order the select
+ * lists them: the old TIMS platform's «Tipo de elección» minus the two the survey cannot store
+ * (several answers to one question, and a ranking nobody can author yet).
+ */
+export const NEW_QUESTION_TYPES = ['likert', 'rating', 'multiple_choice', 'open_ended', 'yes_no'] as const
+
+/**
+ * A question added blank in this editing session (`blankQuestion`'s id). Only such a question may
+ * change type: nothing is stored against it, and no earlier wave asked it, so the comparison the
+ * Escala field's hint promises for every other question cannot break. A library question keeps
+ * the library's type, and a saved question its own.
+ */
+export function isNewQuestion(question: Pick<AuthoringQuestion, 'id'>): boolean {
+  return question.id.startsWith('new-')
+}
+
+let draftSequence = 0
+
+/** An option with no words yet and a placeholder value no other option of the question holds. */
+function draftOption(existing: AuthoringOption[]): AuthoringOption {
+  let value: string
+  do {
+    draftSequence += 1
+    value = `draft-${draftSequence}`
+  } while (existing.some((option) => option.value === value))
+  return { value, label: blankByLocale(), draft: true }
+}
+
+/**
+ * The question as `type`, carrying over only what that type uses.
+ *
+ * A scale keeps its range and words when it only changes between Likert and Valoración, and
+ * starts at 1–5 otherwise. «Opción múltiple» starts with two empty options, the fewest the
+ * server accepts (`SurveyEndpoints.PrepareQuestion`). The others drop the range, the end words
+ * and the options, so nothing the respondent will never see is saved with them; a «Respuesta
+ * abierta» also drops «El comentario es obligatorio», because its answer already is the text and
+ * the respond screen shows it no comment box (`commentIsRequired`, `respondAnswers.ts`).
+ */
+export function withQuestionType(question: AuthoringQuestion, type: string): AuthoringQuestion {
+  if (type === question.type) return question
+  if (isScaleType(type)) {
+    if (isScaleType(question.type)) return { ...question, type }
+    return { ...question, type, scaleMin: 1, scaleMax: 5, options: null }
+  }
+  const unscaled: AuthoringQuestion = { ...question, type, scaleMin: null, scaleMax: null, scaleLabelMin: blankByLocale(), scaleLabelMax: blankByLocale() }
+  if (type === 'multiple_choice') {
+    const first = draftOption([])
+    return { ...unscaled, options: [first, draftOption([first])] }
+  }
+  return { ...unscaled, options: null, commentRequired: type === 'open_ended' ? false : question.commentRequired }
+}
+
+/** Whether the editor shows the question's own options to write: «Opción múltiple», one answer. */
+export function editsOptions(question: Pick<AuthoringQuestion, 'type'>): boolean {
+  return question.type === 'multiple_choice'
+}
+
+export function withOptionAdded(question: AuthoringQuestion): AuthoringQuestion {
+  const options = question.options ?? []
+  return { ...question, options: [...options, draftOption(options)] }
+}
+
+export function withoutOption(question: AuthoringQuestion, value: string): AuthoringQuestion {
+  return { ...question, options: (question.options ?? []).filter((option) => option.value !== value) }
+}
+
+/** One option's words in one language. Its value never moves: a saved option keeps the key its answers point at. */
+export function setOptionLabel(question: AuthoringQuestion, value: string, locale: Locale, text: string): AuthoringQuestion {
+  const entry: AuthoredText = { text, authored: text.trim() !== '' }
+  return {
+    ...question,
+    options: (question.options ?? []).map((option) => (option.value === value ? { ...option, label: { ...option.label, [locale]: entry } } : option)),
+  }
+}
+
+/**
+ * The 1-based positions of the «Opción múltiple» questions the server would refuse or the
+ * respondent could not read: fewer than two options, an option without words in a language the
+ * question is written in (the respondent would read its stored key), or two options with the same
+ * words in one language (a respondent cannot tell them apart, and saved they would share a key).
+ * A question written in no language yet is checked in every language of the survey.
+ */
+export function questionsWithIncompleteOptions(questions: AuthoringQuestion[], locales: Locale[]): number[] {
+  return questions.flatMap((question, index) => {
+    if (!editsOptions(question)) return []
+    const options = question.options ?? []
+    const written = authoredLocales(question, locales)
+    const checked = written.length > 0 ? written : locales
+    const blank = options.some((option) => checked.some((locale) => !option.label[locale]?.text.trim()))
+    const repeated = checked.some((locale) => {
+      const words = options.map((option) => (option.label[locale]?.text ?? '').trim().toLocaleLowerCase()).filter((word) => word !== '')
+      return new Set(words).size !== words.length
+    })
+    return options.length < 2 || blank || repeated ? [index + 1] : []
+  })
+}
+
+/**
+ * Give every option added in this session its stored value, by the server's own rule for an
+ * option that arrives without one (`SurveyValidation.DeriveOptionValue`): its English words,
+ * else its Spanish ones, trimmed. That is what a library question's options get too, so a new
+ * option reads as itself in the response workbook rather than as a number. A value another option
+ * of the question already holds gets " (2)", " (3)"…: the server refuses a duplicate. Options
+ * read from the server are returned untouched — their value is the key their answers point at.
+ */
+export function settleOptionValues(questions: AuthoringQuestion[]): AuthoringQuestion[] {
+  return questions.map((question) => {
+    const options = question.options
+    if (!options?.some((option) => option.draft)) return question
+    const used = new Set(options.filter((option) => !option.draft).map((option) => option.value))
+    return {
+      ...question,
+      options: options.map((option) => {
+        if (!option.draft) return option
+        const words = (option.label.en?.text.trim() || option.label.es?.text.trim() || option.value).slice(0, 480)
+        let value = words
+        for (let n = 2; used.has(value); n += 1) value = `${words} (${n})`
+        used.add(value)
+        return { value, label: option.label }
+      }),
+    }
+  })
+}
