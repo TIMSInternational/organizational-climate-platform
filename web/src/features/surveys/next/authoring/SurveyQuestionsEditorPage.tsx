@@ -19,7 +19,7 @@ import {
   authoredLocales,
   blankQuestion,
   canLabelAnswers,
-  compatibleScaleTypes,
+  canUsePresets,
   dimensionsWithout,
   editsOptions,
   hasAnswerLabels,
@@ -32,7 +32,9 @@ import {
   questionsMissingAnswerLabels,
   questionsWithIncompleteOptions,
   removeQuestion,
+  SCALE_PRESETS,
   scaleName,
+  scalePresetOf,
   setAnswerLabel,
   setOptionLabel,
   settleOptionValues,
@@ -42,6 +44,8 @@ import {
   withoutAnswerLabels,
   withoutOption,
   withQuestionType,
+  withScalePreset,
+  type ScalePreset,
 } from './model'
 import { byCount } from '../../../../i18n/plural'
 import { describeApiError } from '../../../../api/describeApiError'
@@ -348,7 +352,7 @@ export default function SurveyQuestionsEditorPage() {
                           // Grey with a glyph: amber is the Oportunidad area, never a warning.
                           <Chip icon={<CircleAlert aria-hidden="true" className="size-3" />} label={copy('noDimension')} />
                         )}
-                        <Chip tone="neutral" label={scaleChip(t, question)} />
+                        <Chip tone="neutral" label={scaleChip(t, question, locales)} />
                         {hasAnswerLabels(question) && <Chip tone="neutral" label={copy('answerLabelsChip')} />}
                         {locked && question.commentRequired && <Chip tone="neutral" label={copy('withComment')} />}
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-fg-secondary">
@@ -400,13 +404,13 @@ export default function SurveyQuestionsEditorPage() {
                             ))}
                           </select>
                         </EditorField>
-                        {isNewQuestion(question) ? (
+                        {isNewQuestion(question) && (
                           // A question added in this session may still be any type: nothing is
                           // stored against it and no earlier wave asked it (`isNewQuestion`).
                           <EditorField label={copy('questionType')} hint={copy('questionTypeHint')}>
                             <select
                               className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary"
-                              value={question.type}
+                              value={isScaleType(question.type) ? 'likert' : question.type}
                               onChange={(e) => {
                                 const type = e.target.value
                                 setQuestions((current) => current.map((q, i) => (i === index ? withQuestionType(q, type) : q)))
@@ -420,21 +424,45 @@ export default function SurveyQuestionsEditorPage() {
                               ))}
                             </select>
                           </EditorField>
-                        ) : (
-                          <EditorField label={copy('scale')} hint={copy('scaleHint')}>
+                        )}
+                        {canUsePresets(question) ? (
+                          // What the scale measures, as its five answers' words (`SCALE_PRESETS`).
+                          // Each choice is its name alone: «Acuerdo · Totalmente en desacuerdo …»
+                          // was cut at the select's edge, even at 1440, into a scale of one word,
+                          // and the words show right below anyway. «Palabras propias» is only
+                          // ever the reading of words that match no preset: choosing it would
+                          // have nothing to write, so it is not a choice.
+                          <EditorField label={copy('scale')} hint={copy('scalePresetHint')}>
                             <select
                               className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary"
-                              value={question.type}
-                              disabled={compatibleScaleTypes(question).length < 2}
-                              onChange={(e) => update(index, { type: e.target.value })}
+                              value={scalePresetOf(question, locales) ?? 'custom'}
+                              onChange={(e) => {
+                                const preset = e.target.value as ScalePreset
+                                setQuestions((current) => current.map((q, i) => (i === index ? withScalePreset(q, preset, locales) : q)))
+                                setApplied(null)
+                              }}
                             >
-                              {compatibleScaleTypes(question).map((type) => (
-                                <option key={type} value={type}>
-                                  {scaleLong(t, { ...question, type })}
+                              {SCALE_PRESETS.map((preset) => (
+                                <option key={preset} value={preset}>
+                                  {copy(`scalePreset.${preset}`)}
                                 </option>
                               ))}
+                              <option value="custom" disabled>
+                                {copy('scalePreset.custom')}
+                              </option>
                             </select>
                           </EditorField>
+                        ) : (
+                          !isNewQuestion(question) && (
+                            // Nothing to choose: an eNPS 0–10 or a 1–7 has no five words to take, a
+                            // library scale keyed by words keeps the words its keys were made from,
+                            // and a saved question keeps its type.
+                            <EditorField label={copy('scale')} hint={copy('scaleHint')}>
+                              <select className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary" value={question.type} disabled>
+                                <option value={question.type}>{scaleLong(t, question)}</option>
+                              </select>
+                            </EditorField>
+                          )
                         )}
                       </div>
                       {editsOptions(question) && (
@@ -819,19 +847,30 @@ function PreviewAnswers({ question, locale }: { question: AuthoringQuestion; loc
   )
 }
 
-function scaleChip(t: (key: string) => string, q: AuthoringQuestion): string {
-  const type = scaleName(t, q.type)
-  return q.scaleMin !== null && q.scaleMax !== null ? `${type} ${q.scaleMin}–${q.scaleMax}` : type
+/**
+ * What a scale is called on its chip and in «Escala»: the preset its words are («Frecuencia
+ * 1–5»), else plain «Escala». Never «Likert» against «Valoración»: they are one answer shape
+ * (`isScaleType`), and two names on two chips read as a difference that does not exist.
+ */
+function scaleTitle(t: (key: string) => string, q: AuthoringQuestion, locales: readonly Locale[]): string {
+  if (!isScaleType(q.type)) return scaleName(t, q.type)
+  const preset = scalePresetOf(q, locales)
+  return t(preset ? `surveys.next.authoring.scalePreset.${preset}` : 'surveys.next.authoring.scaleGeneric')
+}
+
+function scaleChip(t: (key: string) => string, q: AuthoringQuestion, locales: readonly Locale[]): string {
+  const name = scaleTitle(t, q, locales)
+  return q.scaleMin !== null && q.scaleMax !== null ? `${name} ${q.scaleMin}–${q.scaleMax}` : name
 }
 
 function scaleLong(t: (key: string, vars?: Record<string, string | number>) => string, q: AuthoringQuestion): string {
-  const type = scaleName(t, q.type)
+  const name = isScaleType(q.type) ? t('surveys.next.authoring.scaleGeneric') : scaleName(t, q.type)
   return q.scaleMin !== null && q.scaleMax !== null
-    ? `${type} · ${t('surveys.next.authoring.fromTo', { min: q.scaleMin, max: q.scaleMax })}`
-    : type
+    ? `${name} · ${t('surveys.next.authoring.fromTo', { min: q.scaleMin, max: q.scaleMax })}`
+    : name
 }
 
-/** One line of «Tipo de pregunta»: a scale names its range («Likert · del 1 al 5»), every other type its kind of answer. */
+/** One line of «Tipo de pregunta»: the scale names its range («Escala · de 1 a 5»), every other type its kind of answer. */
 function typeChoice(t: (key: string, vars?: Record<string, string | number>) => string, q: AuthoringQuestion, type: string): string {
   if (isScaleType(type)) {
     const scaled = isScaleType(q.type)

@@ -3,7 +3,7 @@ import type { AuthoredText } from '../../api/surveyInvitationCopy'
 import type { QuestionLibraryItemDetail } from '../../../questions/api/questionLibrary'
 import { questionTypeLabel } from '../../surveyVocabulary'
 import type { SurveyTemplateQuestion } from '../../api/surveyTemplates'
-import { LOCALES, type Locale } from '../../../../i18n'
+import { CATALOGUES, createTranslator, LOCALES, type Locale } from '../../../../i18n'
 
 /**
  * Editar preguntas and Detalle de plantilla, redesigned, as data.
@@ -129,20 +129,13 @@ export function blankQuestion(order: number, locales: Locale[]): AuthoringQuesti
   }
 }
 
-/** The two types that are a numeric scale — the only ones a scale can be swapped between. */
+/**
+ * The two types that are a numeric scale. They are one answer shape under two names
+ * (`QuestionTypes.NumericScale`: validated, rendered and averaged alike), which is why the editor
+ * no longer offers a choice between them -- see `SCALE_PRESETS` for what «Escala» chooses instead.
+ */
 export function isScaleType(type: string): boolean {
   return type === 'likert' || type === 'rating'
-}
-
-/**
- * The scale choices the Escala select may offer for one question: the scaled types at the
- * question's OWN range. A different range would change the answers' numbers and break the
- * comparison with earlier waves the field's hint promises, and a non-scaled type has no
- * compatible change at all — so it offers only itself and the select is disabled.
- */
-export function compatibleScaleTypes(question: Pick<AuthoringQuestion, 'type' | 'scaleMin' | 'scaleMax'>): string[] {
-  if (question.scaleMin === null || question.scaleMax === null || !isScaleType(question.type)) return [question.type]
-  return ['likert', 'rating']
 }
 
 /**
@@ -207,7 +200,9 @@ function copyByLocale(from: Record<Locale, AuthoredText>): Record<Locale, Author
  * every answer is stored exactly as it was as a number and the results, the mean and the
  * comparison with earlier waves do not move. The lowest and highest answers start with the
  * scale's two end words; the ones between start empty, for the author to write -- the editor
- * does not invent a client's wording.
+ * does not invent a client's wording. The one exception is ends that are exactly a preset's
+ * (`scalePresetOf`): the three between are then that preset's own words, wording TIMS chose
+ * in «Escala», not wording invented here.
  */
 export function withAnswerLabels(question: AuthoringQuestion): AuthoringQuestion {
   if (hasAnswerLabels(question) || !canLabelAnswers(question)) return question
@@ -221,7 +216,98 @@ export function withAnswerLabels(question: AuthoringQuestion): AuthoringQuestion
           ? copyByLocale(question.scaleLabelMax)
           : blankByLocale(),
   }))
-  return { ...question, options }
+  const listed = { ...question, options }
+  const preset = scalePresetOf(question, LOCALES)
+  return preset === null ? listed : withScalePreset(listed, preset, LOCALES.filter((locale) => shownWords(question, locale).some((word) => word !== '')))
+}
+
+/**
+ * «Escala»: what a five-point scale measures, as the words of its five answers (TIMS,
+ * 2026-11-14). Until then the field offered «Likert» and «Valoración», which are one question
+ * under two names (`isScaleType`). What does differ between two scales is what each answer
+ * says, so that is what the field now chooses. The answers stay their points, so a preset
+ * changes words and never a stored number, a mean or a comparison with an earlier wave.
+ *
+ * The words live in the catalogues (`surveys.next.authoring.scaleWords`, one set per language)
+ * and are read in the SURVEY's languages, never the reader's: an operator reading in English
+ * still writes a Spanish survey's answers in Spanish. «Frecuencia» is TIMS's own shipped
+ * scale (`scripts/fixtures/climate-workbook.template.xlsx`); «Acuerdo» ends on the two anchors
+ * ruled for PROCOMER on 2026-10-08 (`docs/runbooks/procomer-instrument-2026.md`).
+ */
+export const SCALE_PRESETS = ['agreement', 'frequency', 'satisfaction', 'quality', 'likelihood'] as const
+export type ScalePreset = (typeof SCALE_PRESETS)[number]
+
+/** Every preset is five answers: the shape clients label word by word (`MAX_LABELLED_POINTS`). */
+const PRESET_POINTS = 5
+
+/** One preset's five answers in one language, lowest first. */
+export function presetWords(preset: ScalePreset, locale: Locale): string[] {
+  const t = createTranslator(CATALOGUES[locale])
+  return Array.from({ length: PRESET_POINTS }, (_, i) => t(`surveys.next.authoring.scaleWords.${preset}.p${i + 1}`))
+}
+
+/**
+ * Whether «Escala» may offer the presets: a scale whose answers are its own five points
+ * (`canLabelAnswers`). An eNPS 0–10 or a 1–7 has no five words to take, and a library scale
+ * keyed by words keeps the words its keys were made from.
+ */
+export function canUsePresets(question: Pick<AuthoringQuestion, 'type' | 'scaleMin' | 'scaleMax' | 'options'>): boolean {
+  return canLabelAnswers(question) && scalePoints(question).length === PRESET_POINTS
+}
+
+/** The words a respondent reads on this scale in one language, lowest first: all of them as a list, else its two ends. */
+function shownWords(question: AuthoringQuestion, locale: Locale): string[] {
+  if (hasAnswerLabels(question)) {
+    return [...(question.options ?? [])]
+      .sort((x, y) => Number(x.value) - Number(y.value))
+      .map((option) => option.label[locale]?.text.trim() ?? '')
+  }
+  return [question.scaleLabelMin[locale]?.text.trim() ?? '', question.scaleLabelMax[locale]?.text.trim() ?? '']
+}
+
+/**
+ * The preset this scale's words are, or null when they are the author's own (or there are
+ * none yet). Every language the words are written in must read as the preset, in any case; a
+ * language left blank is the untranslated state, not a disagreement.
+ */
+export function scalePresetOf(question: AuthoringQuestion, locales: readonly Locale[]): ScalePreset | null {
+  if (!canUsePresets(question)) return null
+  const written = locales
+    .map((locale) => ({ locale, words: shownWords(question, locale) }))
+    .filter(({ words }) => words.some((word) => word !== ''))
+  if (written.length === 0) return null
+  const listed = hasAnswerLabels(question)
+  return (
+    SCALE_PRESETS.find((preset) =>
+      written.every(({ locale, words }) => {
+        const all = presetWords(preset, locale)
+        const expected = listed ? all : [all[0], all[PRESET_POINTS - 1]]
+        return words.length === expected.length && words.every((word, i) => word.toLocaleLowerCase(locale) === expected[i].toLocaleLowerCase(locale))
+      }),
+    ) ?? null
+  )
+}
+
+/**
+ * Write one preset's words into a scale in each of `locales`: the two ends always, and every
+ * answer when the scale is shown as a list -- each option by its point, so an instrument that
+ * lists the positives first (EAGLE) keeps its order. A language outside `locales` is left as it was.
+ */
+export function withScalePreset(question: AuthoringQuestion, preset: ScalePreset, locales: readonly Locale[]): AuthoringQuestion {
+  if (!canUsePresets(question)) return question
+  const points = scalePoints(question)
+  const entry = (text: string): AuthoredText => ({ text, authored: true })
+  return locales.reduce<AuthoringQuestion>((next, locale) => {
+    const words = presetWords(preset, locale)
+    return {
+      ...next,
+      scaleLabelMin: { ...next.scaleLabelMin, [locale]: entry(words[0]) },
+      scaleLabelMax: { ...next.scaleLabelMax, [locale]: entry(words[PRESET_POINTS - 1]) },
+      options: hasAnswerLabels(next)
+        ? (next.options ?? []).map((option) => ({ ...option, label: { ...option.label, [locale]: entry(words[points.indexOf(Number(option.value))]) } }))
+        : next.options,
+    }
+  }, question)
 }
 
 /** Back to a row of numbers. The two end words stay: they already hold the first and last answers' words. */
@@ -352,9 +438,11 @@ export const QUIET_DISABLED = 'disabled:opacity-100 disabled:text-fg-label'
 /**
  * The types «Tipo de pregunta» offers a question added in this session, in the order the select
  * lists them: the old TIMS platform's «Tipo de elección» minus the two the survey cannot store
- * (several answers to one question, and a ranking nobody can author yet).
+ * (several answers to one question, and a ranking nobody can author yet). One scale, not two:
+ * «Likert» and «Valoración» are the same answer shape (`isScaleType`), and «Escala» then says
+ * what the scale measures (`SCALE_PRESETS`).
  */
-export const NEW_QUESTION_TYPES = ['likert', 'rating', 'multiple_choice', 'open_ended', 'yes_no'] as const
+export const NEW_QUESTION_TYPES = ['likert', 'multiple_choice', 'open_ended', 'yes_no'] as const
 
 /**
  * A question added blank in this editing session (`blankQuestion`'s id). Only such a question may

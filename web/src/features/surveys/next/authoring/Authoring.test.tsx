@@ -14,8 +14,8 @@ import TemplateDetailNextPage from './TemplateDetailNextPage'
 import {
   applyAnswerLabels,
   canLabelAnswers,
+  canUsePresets,
   blankQuestion,
-  compatibleScaleTypes,
   hasAnswerLabels,
   isEditable,
   isNewQuestion,
@@ -23,12 +23,15 @@ import {
   moveQuestion,
   questionsMissingAnswerLabels,
   questionsWithIncompleteOptions,
+  SCALE_PRESETS,
+  scalePresetOf,
   setAnswerLabel,
   setOptionLabel,
   settleOptionValues,
   withAnswerLabels,
   withoutAnswerLabels,
   withQuestionType,
+  withScalePreset,
 } from './model'
 import type { QuestionLibraryItemDetail } from '../../../questions/api/questionLibrary'
 import en from '../../../../i18n/en.json'
@@ -279,23 +282,107 @@ describe('TemplateDetailNextPage', () => {
   })
 })
 
+// «Escala» (TIMS, 2026-11-14): it offered «Likert» and «Valoración», one answer shape under two
+// names. It now offers what the scale measures, as its five answers' words; the answers stay "1".."5".
 describe('SurveyQuestionsEditorPage — scale, library and dimension check', () => {
-  it('offers a non-scaled question no scale change at all', () => {
-    expect(compatibleScaleTypes({ type: 'open_ended', scaleMin: null, scaleMax: null })).toEqual(['open_ended'])
-    expect(compatibleScaleTypes({ type: 'likert', scaleMin: 1, scaleMax: 5 })).toEqual(['likert', 'rating'])
+  const both = (enText: string, esText: string) => ({ en: { text: enText, authored: true }, es: { text: esText, authored: true } })
+  const unwritten = { text: '', authored: false }
+  const scaleSelect = () => screen.getByRole('combobox', { name: new RegExp(`^${a.scale}`) }) as HTMLSelectElement
+
+  it('offers the presets only to a scale whose answers are its own five points', () => {
+    expect(canUsePresets(q(0, 'A'))).toBe(true)
+    expect(canUsePresets({ ...q(0, 'eNPS'), type: 'rating', scaleMin: 0, scaleMax: 10 })).toBe(false)
+    expect(canUsePresets({ ...q(0, 'Seven'), scaleMax: 7 })).toBe(false)
+    expect(canUsePresets({ ...q(0, 'Open'), type: 'open_ended', scaleMin: null, scaleMax: null })).toBe(false)
+    // A library scale keyed by words keeps the words its keys were made from.
+    expect(canUsePresets({ ...q(0, 'Keyed'), options: [1, 2, 3, 4, 5].map((n) => ({ value: `k${n}`, label: both(`${n}`, `${n}`) })) })).toBe(false)
   })
 
-  it("offers the Escala select only the scaled types at the question's own range, and saves the change", async () => {
+  it("reads which preset a scale's words are, in every language they are written in", () => {
+    const ends = (enEnds: [string, string], esEnds: [string, string]) => ({ ...q(0, 'A'), scaleLabelMin: both(enEnds[0], esEnds[0]), scaleLabelMax: both(enEnds[1], esEnds[1]) })
+    // «Muy en desacuerdo … Muy de acuerdo» is no preset's: the author's own words.
+    expect(scalePresetOf(q(0, 'A'), ['en', 'es'])).toBeNull()
+    expect(scalePresetOf(ends(['Never', 'Always'], ['nunca', 'SIEMPRE ']), ['en', 'es'])).toBe('frequency')
+    // A language left blank is the untranslated state, not a disagreement.
+    expect(scalePresetOf({ ...q(0, 'A'), scaleLabelMin: { en: unwritten, es: { text: 'Nunca', authored: true } }, scaleLabelMax: { en: unwritten, es: { text: 'Siempre', authored: true } } }, ['en', 'es'])).toBe('frequency')
+    // Two languages that read as two different presets are neither.
+    expect(scalePresetOf(ends(['Strongly disagree', 'Strongly agree'], ['Nunca', 'Siempre']), ['en', 'es'])).toBeNull()
+    expect(scalePresetOf(ends(['', ''], ['', '']), ['en', 'es'])).toBeNull()
+  })
+
+  it('writes a preset into the ends as numbers, into each answer by its point as a list, and only in the languages given', () => {
+    const numbers = withScalePreset(q(0, 'A'), 'agreement', ['en', 'es'])
+    expect([numbers.scaleLabelMin.es, numbers.scaleLabelMax.en]).toEqual([{ text: 'Totalmente en desacuerdo', authored: true }, { text: 'Strongly agree', authored: true }])
+    expect(numbers.options).toBeNull()
+    // EAGLE lists the positives first: each answer takes its own point's words, in the author's order.
+    const listed = withAnswerLabels(q(0, 'A'))
+    const list = withScalePreset({ ...listed, options: [...listed.options!].reverse() }, 'frequency', ['es'])
+    expect(list.options?.map((o) => [o.value, o.label.es.text])).toEqual([['5', 'Siempre'], ['4', 'Casi siempre'], ['3', 'Algunas veces'], ['2', 'Casi nunca'], ['1', 'Nunca']])
+    // English was not given, so it keeps what it had.
+    expect(list.options?.[0].label.en.text).toBe('Strongly agree')
+    expect(scalePresetOf(list, ['es'])).toBe('frequency')
+    const eNps = { ...q(0, 'eNPS'), type: 'rating', scaleMin: 0, scaleMax: 10 }
+    expect(withScalePreset(eNps, 'agreement', ['en', 'es'])).toBe(eNps)
+  })
+
+  it("fills the three answers between when a scale whose ends are a preset's becomes a list, in the languages written", () => {
+    const list = withAnswerLabels(withScalePreset(q(0, 'A'), 'frequency', ['en', 'es']))
+    expect(list.options?.map((o) => o.label.es.text)).toEqual(['Nunca', 'Casi nunca', 'Algunas veces', 'Casi siempre', 'Siempre'])
+    expect(list.options?.[1].label.en).toEqual({ text: 'Almost never', authored: true })
+    const spanishOnly = withAnswerLabels({ ...q(0, 'A'), scaleLabelMin: { en: unwritten, es: { text: 'Nunca', authored: true } }, scaleLabelMax: { en: unwritten, es: { text: 'Siempre', authored: true } } })
+    expect(spanishOnly.options?.[2].label).toEqual({ en: unwritten, es: { text: 'Algunas veces', authored: true } })
+  })
+
+  it('offers what the scale measures instead of two names for one scale, and saves the words under the points', async () => {
     arrangeSurvey('draft', 0)
     vi.mocked(saveSurveyQuestions).mockResolvedValue()
     renderAt('/surveys/s1/questions')
-    const select = (await screen.findAllByRole('combobox')).find((el) => (el as HTMLSelectElement).value === 'likert') as HTMLSelectElement
-    expect([...select.options].map((o) => o.value)).toEqual(['likert', 'rating'])
-    await userEvent.selectOptions(select, 'rating')
+    await screen.findAllByTestId('question-card')
+    expect([...scaleSelect().options].map((o) => o.value)).toEqual([...SCALE_PRESETS, 'custom'])
+    expect(scaleSelect().value).toBe('custom')
+    expect([...scaleSelect().options].map((o) => o.textContent)).toEqual([...SCALE_PRESETS.map((preset) => a.scalePreset[preset]), a.scalePreset.custom])
+    await userEvent.selectOptions(scaleSelect(), 'agreement')
+    expect(scaleSelect().value).toBe('agreement')
+    expect((screen.getByRole('textbox', { name: `${a.endsIn.es} 1` }) as HTMLInputElement).value).toBe('Totalmente en desacuerdo')
+    const cards = screen.getAllByTestId('question-card')
+    expect(within(cards[0]).getByText(`${a.scalePreset.agreement} 1–5`)).toBeTruthy()
+    expect(within(cards[1]).getByText(`${a.scaleGeneric} 1–5`)).toBeTruthy()
     await userEvent.click(screen.getByRole('button', { name: a.save }))
     const sent = vi.mocked(saveSurveyQuestions).mock.calls[0][2]
-    expect([sent[0].type, sent[0].scaleMin, sent[0].scaleMax]).toEqual(['rating', 1, 5])
-    expect(sent[1].type).toBe('likert')
+    expect([sent[0].scaleLabelMin.es.text, sent[0].scaleLabelMax.es.text, sent[0].scaleLabelMin.en.text, sent[0].scaleLabelMax.en.text]).toEqual(['Totalmente en desacuerdo', 'Totalmente de acuerdo', 'Strongly disagree', 'Strongly agree'])
+    expect([sent[0].type, sent[0].scaleMin, sent[0].scaleMax, sent[0].options]).toEqual(['likert', 1, 5, null])
+    expect(sent[1].scaleLabelMin.es.text).toBe('Muy en desacuerdo')
+  })
+
+  it("writes all five answers of a list, and reads «Palabras propias» once one of them is the author's", async () => {
+    arrangeSurvey('draft', 0)
+    vi.mocked(saveSurveyQuestions).mockResolvedValue()
+    renderAt('/surveys/s1/questions')
+    await screen.findAllByTestId('question-card')
+    await userEvent.selectOptions(scaleSelect(), 'frequency')
+    await userEvent.click(screen.getByRole('button', { name: a.answersAsList }))
+    // The ends were a preset's, so the three between are that preset's too.
+    expect((screen.getByRole('textbox', { name: `${a.answerLabelsIn.es} 2` }) as HTMLInputElement).value).toBe('Casi nunca')
+    expect((screen.getByRole('textbox', { name: `${a.answerLabelsIn.en} 4` }) as HTMLInputElement).value).toBe('Almost always')
+    await userEvent.selectOptions(scaleSelect(), 'satisfaction')
+    expect([...screen.getByTestId('preview-answers').children].map((line) => line.textContent)).toEqual(['Very dissatisfied', 'Dissatisfied', 'Neither satisfied nor dissatisfied', 'Satisfied', 'Very satisfied'])
+    const third = screen.getByRole('textbox', { name: `${a.answerLabelsIn.es} 3` })
+    await userEvent.clear(third)
+    await userEvent.type(third, 'Neutral')
+    expect(scaleSelect().value).toBe('custom')
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    const sent = vi.mocked(saveSurveyQuestions).mock.calls[0][2]
+    expect(sent[0].options?.map((o) => [o.value, o.label.es.text])).toEqual([['1', 'Muy insatisfecho'], ['2', 'Insatisfecho'], ['3', 'Neutral'], ['4', 'Satisfecho'], ['5', 'Muy satisfecho']])
+  })
+
+  it('offers an eNPS 0–10 no preset: its Escala names the range and does not change', async () => {
+    arrangeSurvey('draft', 0)
+    vi.mocked(getSurveyQuestionAuthoring).mockResolvedValue({ surveyId: 's1', title: 'Q4', language: 'both', status: 'draft', locales: ['en', 'es'], questions: [{ ...q(0, 'Recommend'), type: 'rating', scaleMin: 0, scaleMax: 10 }, q(1, 'Second')] })
+    renderAt('/surveys/s1/questions')
+    const cards = await screen.findAllByTestId('question-card')
+    expect(scaleSelect().disabled).toBe(true)
+    expect([...scaleSelect().options].map((o) => o.textContent)).toEqual([`${a.scaleGeneric} · ${a.fromTo.replace('{min}', '0').replace('{max}', '10')}`])
+    expect(within(cards[0]).getByText(`${a.scaleGeneric} 0–10`)).toBeTruthy()
   })
 
   it("adds a library question with each option's stored key, in the library's order, and saves it", async () => {
@@ -340,11 +427,11 @@ describe('SurveyQuestionsEditorPage — scale, library and dimension check', () 
     for (const control of switches) expect(control.closest('label')?.className.split(' ')).toContain('mb-0')
   })
 
-  it('prints the short scale name on the chips, as the board does', async () => {
+  it('prints the short scale name on the chips, as the board does: the preset, else plain «Escala»', async () => {
     arrangeSurvey('active', 1)
     renderAt('/surveys/s1/questions')
     const cards = await screen.findAllByTestId('question-card')
-    expect(within(cards[0]).getByText(`${a.scaleName.likert} 1–5`)).toBeTruthy()
+    expect(within(cards[0]).getByText(`${a.scaleGeneric} 1–5`)).toBeTruthy()
   })
 })
 
@@ -546,7 +633,10 @@ describe('SurveyQuestionsEditorPage — a new question of any type, and its prev
     vi.mocked(saveSurveyQuestions).mockResolvedValue()
     renderAt('/surveys/s1/questions')
     await userEvent.click(await screen.findByRole('button', { name: a.addBlankLink }))
-    expect([...typeSelect().options].map((o) => o.value)).toEqual(['likert', 'rating', 'multiple_choice', 'open_ended', 'yes_no'])
+    // One scale, not «Likert» beside «Valoración»; «Escala» below it says what the scale measures.
+    expect([...typeSelect().options].map((o) => o.value)).toEqual(['likert', 'multiple_choice', 'open_ended', 'yes_no'])
+    expect(typeSelect().options[0].textContent).toBe(`${a.scaleGeneric} · ${a.fromTo.replace('{min}', '1').replace('{max}', '5')}`)
+    expect((screen.getByRole('combobox', { name: new RegExp(`^${a.scale}`) }) as HTMLSelectElement).value).toBe('custom')
     // A saved question is offered the Escala field, never the type.
     expect(screen.getAllByRole('combobox', { name: new RegExp(`^${a.questionType}`) })).toHaveLength(1)
     await userEvent.selectOptions(typeSelect(), 'multiple_choice')
