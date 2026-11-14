@@ -13,6 +13,7 @@ import {
   RadioGroupItem,
   SegmentedControl,
   Switch,
+  Table,
 } from '../../../components/ui'
 import { downloadBlobFile } from '../../../lib/downloadBlobFile'
 import { useCompanyNameFor } from '../../../company-context'
@@ -331,7 +332,7 @@ export default function ReportWizardPage() {
             ) : (
               state.scope === 'chosen' && (
                 <div className="overflow-x-auto rounded-lg border border-line-light">
-                  <table className="w-full border-collapse text-sm">
+                  <Table className="border-collapse text-sm">
                     <thead>
                       <tr className="text-left text-fg-secondary">
                         <th scope="col" className="w-10 px-3 py-2">
@@ -362,7 +363,7 @@ export default function ReportWizardPage() {
                         )
                       })}
                     </tbody>
-                  </table>
+                  </Table>
                 </div>
               )
             )}
