@@ -4438,7 +4438,26 @@
         "appliedToAllOne": "This is the only {min}–{max} question.",
         "answerLabelsMissing": "Some answers have no words yet in questions {positions}.",
         "answerLabelsMissingOne": "Some answers have no words yet in question {positions}.",
-        "answerLabelsChip": "Answers as a list"
+        "answerLabelsChip": "Answers as a list",
+        "questionType": "Question type",
+        "questionTypeHint": "Choose how it is answered. It can change while the question is new; once saved, it stays.",
+        "typeChoice": {
+          "multiple_choice": "Multiple choice · one answer",
+          "open_ended": "Open answer",
+          "yes_no": "Yes / No"
+        },
+        "answerOptions": "Answer options",
+        "answerOptionsHint": "The respondent picks one option. At least two are needed.",
+        "optionIn": {
+          "es": "Option {position} in Spanish",
+          "en": "Option {position} in English"
+        },
+        "addOption": "Add option",
+        "removeOption": "Remove option {position}",
+        "optionsIncomplete": "Questions {positions} are missing options: each needs at least two, with words and none repeated.",
+        "optionsIncompleteOne": "Question {positions} is missing options: it needs at least two, each with words and none repeated.",
+        "previewNoOptions": "No options yet.",
+        "previewOptionBlank": "Option {position}"
       },
       "template": {
         "eyebrow": "Survey template · {category}",

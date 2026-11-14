@@ -4438,7 +4438,26 @@
         "appliedToAllOne": "Esta es la única pregunta de {min} a {max}.",
         "answerLabelsMissing": "Falta el texto de alguna respuesta en las preguntas {positions}.",
         "answerLabelsMissingOne": "Falta el texto de alguna respuesta en la pregunta {positions}.",
-        "answerLabelsChip": "Respuestas en lista"
+        "answerLabelsChip": "Respuestas en lista",
+        "questionType": "Tipo de pregunta",
+        "questionTypeHint": "Elija cómo se responde. Se puede cambiar mientras la pregunta sea nueva; al guardar, queda fijo.",
+        "typeChoice": {
+          "multiple_choice": "Opción múltiple · una sola respuesta",
+          "open_ended": "Respuesta abierta",
+          "yes_no": "Sí / No"
+        },
+        "answerOptions": "Opciones de respuesta",
+        "answerOptionsHint": "El encuestado elige una sola opción. Hacen falta al menos dos.",
+        "optionIn": {
+          "es": "Opción {position} (español)",
+          "en": "Opción {position} (inglés)"
+        },
+        "addOption": "Agregar opción",
+        "removeOption": "Quitar la opción {position}",
+        "optionsIncomplete": "A las preguntas {positions} les faltan opciones: cada una necesita al menos dos, con su texto y sin repetirse.",
+        "optionsIncompleteOne": "A la pregunta {positions} le faltan opciones: necesita al menos dos, cada una con su texto y sin repetirse.",
+        "previewNoOptions": "Todavía no tiene opciones.",
+        "previewOptionBlank": "Opción {position}"
       },
       "template": {
         "eyebrow": "Plantilla de encuesta · {category}",

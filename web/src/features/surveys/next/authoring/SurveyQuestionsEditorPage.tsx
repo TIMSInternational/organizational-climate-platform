@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, CircleAlert, Copy, GripVertical, Lock, MoreHorizontal, Plus } from 'lucide-react'
+import { Check, CircleAlert, Copy, GripVertical, Lock, MoreHorizontal, Plus, X } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { PageHeader } from '../../../../components/layout'
 import { Alert, AlertDescription, Button, Chip, ErrorState, Input, LoadingState, Switch, Textarea } from '../../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { useFollowCompany } from '../../../../company-context'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
-import { useTranslation, type Locale } from '../../../../i18n'
+import { CATALOGUES, createTranslator, useTranslation, type Locale } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import { getSurveyQuestionAuthoring, saveSurveyQuestions, type AuthoringQuestion, type SurveyQuestionAuthoring } from '../../api/surveyQuestionAuthoring'
 import { duplicateSurvey, getSurvey, type SurveyDetail } from '../../api/surveys'
@@ -21,17 +21,27 @@ import {
   canLabelAnswers,
   compatibleScaleTypes,
   dimensionsWithout,
+  editsOptions,
   hasAnswerLabels,
   isEditable,
+  isNewQuestion,
+  isScaleType,
   moveQuestion,
+  NEW_QUESTION_TYPES,
   questionFromLibraryItem,
   questionsMissingAnswerLabels,
+  questionsWithIncompleteOptions,
   removeQuestion,
   scaleName,
   setAnswerLabel,
+  setOptionLabel,
+  settleOptionValues,
   summarise,
   withAnswerLabels,
+  withOptionAdded,
   withoutAnswerLabels,
+  withoutOption,
+  withQuestionType,
 } from './model'
 import { byCount } from '../../../../i18n/plural'
 import { describeApiError } from '../../../../api/describeApiError'
@@ -151,10 +161,18 @@ export default function SurveyQuestionsEditorPage() {
       setOpenIndex(unlabelled[0] - 1)
       return
     }
+    // The server refuses «Opción múltiple» with fewer than two options; an option without words
+    // or a repeated one it would store, and the respondent would read a bare key or two equal lines.
+    const incomplete = questionsWithIncompleteOptions(questions, locales)
+    if (incomplete.length > 0) {
+      setActionError(copy(incomplete.length === 1 ? 'optionsIncompleteOne' : 'optionsIncomplete', { positions: incomplete.join(', ') }))
+      setOpenIndex(incomplete[0] - 1)
+      return
+    }
     setBusy(true)
     setActionError(null)
     try {
-      await saveSurveyQuestions(baseUrl, id, questions)
+      await saveSurveyQuestions(baseUrl, id, settleOptionValues(questions))
       void navigate(`/surveys/${id}`)
     } catch (error) {
       setActionError(describeApiError(error, t, 'common.error'))
@@ -382,21 +400,89 @@ export default function SurveyQuestionsEditorPage() {
                             ))}
                           </select>
                         </EditorField>
-                        <EditorField label={copy('scale')} hint={copy('scaleHint')}>
-                          <select
-                            className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary"
-                            value={question.type}
-                            disabled={compatibleScaleTypes(question).length < 2}
-                            onChange={(e) => update(index, { type: e.target.value })}
-                          >
-                            {compatibleScaleTypes(question).map((type) => (
-                              <option key={type} value={type}>
-                                {scaleLong(t, { ...question, type })}
-                              </option>
-                            ))}
-                          </select>
-                        </EditorField>
+                        {isNewQuestion(question) ? (
+                          // A question added in this session may still be any type: nothing is
+                          // stored against it and no earlier wave asked it (`isNewQuestion`).
+                          <EditorField label={copy('questionType')} hint={copy('questionTypeHint')}>
+                            <select
+                              className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary"
+                              value={question.type}
+                              onChange={(e) => {
+                                const type = e.target.value
+                                setQuestions((current) => current.map((q, i) => (i === index ? withQuestionType(q, type) : q)))
+                                setApplied(null)
+                              }}
+                            >
+                              {NEW_QUESTION_TYPES.map((type) => (
+                                <option key={type} value={type}>
+                                  {typeChoice(t, question, type)}
+                                </option>
+                              ))}
+                            </select>
+                          </EditorField>
+                        ) : (
+                          <EditorField label={copy('scale')} hint={copy('scaleHint')}>
+                            <select
+                              className="h-8 rounded-md border border-line-default bg-surface-card px-2 text-base text-fg-primary"
+                              value={question.type}
+                              disabled={compatibleScaleTypes(question).length < 2}
+                              onChange={(e) => update(index, { type: e.target.value })}
+                            >
+                              {compatibleScaleTypes(question).map((type) => (
+                                <option key={type} value={type}>
+                                  {scaleLong(t, { ...question, type })}
+                                </option>
+                              ))}
+                            </select>
+                          </EditorField>
+                        )}
                       </div>
+                      {editsOptions(question) && (
+                        // Not an EditorField, for the reason the list below gives: a <label>
+                        // around several inputs and buttons clicks the first of them.
+                        <EditorGroup label={copy('answerOptions')} hint={copy('answerOptionsHint')}>
+                          <ol data-testid="answer-options" className="m-0 flex list-none flex-col gap-1.5 p-0">
+                            {(question.options ?? []).map((option, n) => (
+                              <li key={option.value} className="flex items-center gap-2">
+                                <span aria-hidden="true" className="w-5 shrink-0 text-right text-sm text-fg-secondary tabular-nums">
+                                  {n + 1}
+                                </span>
+                                <span className={cn('grid min-w-0 flex-1 gap-2', locales.length > 1 && 'sm:grid-cols-2')}>
+                                  {locales.map((loc) => (
+                                    <Input
+                                      key={loc}
+                                      aria-label={copy(`optionIn.${loc}`, { position: n + 1 })}
+                                      placeholder={locales.length > 1 ? copy(`language.${loc}`) : undefined}
+                                      value={option.label[loc]?.text ?? ''}
+                                      onChange={(e) => {
+                                        const text = e.target.value
+                                        setQuestions((current) => current.map((q, i) => (i === index ? setOptionLabel(q, option.value, loc, text) : q)))
+                                      }}
+                                    />
+                                  ))}
+                                </span>
+                                {(question.options?.length ?? 0) > 2 && (
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    aria-label={copy('removeOption', { position: n + 1 })}
+                                    onClick={() => setQuestions((current) => current.map((q, i) => (i === index ? withoutOption(q, option.value) : q)))}
+                                  >
+                                    <X aria-hidden="true" />
+                                  </Button>
+                                )}
+                              </li>
+                            ))}
+                          </ol>
+                          <span>
+                            <Button type="button" variant="outline" onClick={() => setQuestions((current) => current.map((q, i) => (i === index ? withOptionAdded(q) : q)))}>
+                              <Plus aria-hidden="true" />
+                              {copy('addOption')}
+                            </Button>
+                          </span>
+                        </EditorGroup>
+                      )}
                       {canLabelAnswers(question) && (
                         // Not an EditorField: that is a <label>, and a label around buttons clicks
                         // the first of them whenever its text is clicked.
@@ -479,10 +565,13 @@ export default function SurveyQuestionsEditorPage() {
                           <Switch checked={question.required} onCheckedChange={(value) => update(index, { required: value === true })} />
                           {copy('answerRequired')}
                         </label>
-                        <label className="mb-0 inline-flex items-center gap-2 text-sm text-fg-secondary">
-                          <Switch checked={question.commentRequired} onCheckedChange={(value) => update(index, { commentRequired: value === true })} />
-                          {copy('commentRequired')}
-                        </label>
+                        {/* An open answer already is the text: the respond screen shows it no comment box. */}
+                        {question.type !== 'open_ended' && (
+                          <label className="mb-0 inline-flex items-center gap-2 text-sm text-fg-secondary">
+                            <Switch checked={question.commentRequired} onCheckedChange={(value) => update(index, { commentRequired: value === true })} />
+                            {copy('commentRequired')}
+                          </label>
+                        )}
                         <span className="ml-auto flex gap-2">
                           {index > 0 && (
                             <Button type="button" variant="outline" onClick={() => { setQuestions((c) => moveQuestion(c, index, index - 1)); setOpenIndex(index - 1) }}>
@@ -632,33 +721,8 @@ export default function SurveyQuestionsEditorPage() {
                         {openQuestion.required && <span className="font-sans text-sm font-normal text-fg-secondary">{copy('requiredParen')}</span>}
                       </span>
                     </p>
-                    {hasAnswerLabels(openQuestion) ? (
-                      // The respond screen's list (`ChoiceAnswer`): one line per answer, in the
-                      // author's order. A blank answer shows its number, which is what the
-                      // respondent would read if it were saved blank.
-                      <div data-testid="preview-answers" aria-hidden="true" className="mt-3 flex flex-col gap-1.5">
-                        {(openQuestion.options ?? []).map((option) => (
-                          <span key={option.value} className="flex min-h-9 select-none items-center rounded-md bg-surface-fill-subtle px-3 py-1.5 text-base text-fg-secondary">
-                            {option.label[shownLocale]?.text || option.value}
-                          </span>
-                        ))}
-                      </div>
-                    ) : openQuestion.scaleMin !== null && openQuestion.scaleMax !== null && (
-                      <>
-                        <div aria-hidden="true" className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${openQuestion.scaleMax - openQuestion.scaleMin + 1}, minmax(0, 1fr))` }}>
-                          {Array.from({ length: openQuestion.scaleMax - openQuestion.scaleMin + 1 }, (_, i) => (
-                            <span key={i} className="flex h-9 select-none items-center justify-center rounded-md bg-surface-fill-subtle text-base tabular-nums text-fg-secondary">
-                              {openQuestion.scaleMin! + i}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="mt-1.5 flex justify-between text-xs text-fg-secondary">
-                          <span>{openQuestion.scaleLabelMin[shownLocale]?.text}</span>
-                          <span>{openQuestion.scaleLabelMax[shownLocale]?.text}</span>
-                        </div>
-                      </>
-                    )}
-                    {openQuestion.commentRequired && (
+                    <PreviewAnswers question={openQuestion} locale={shownLocale} />
+                    {openQuestion.commentRequired && openQuestion.type !== 'open_ended' && (
                       <div className="mt-3">
                         <p className="m-0 text-xs font-semibold text-fg-secondary">
                           {copy('comment')} <span className="font-normal text-fg-secondary">{copy('requiredParenMasc')}</span>
@@ -700,6 +764,61 @@ export default function SurveyQuestionsEditorPage() {
   )
 }
 
+/**
+ * The open question's answers as the respondent meets them (`RespondQuestionField`), one branch
+ * per answer shape. Before 13 Nov only the two scale shapes drew anything, so an «Opción
+ * múltiple», a «Sí / No» or an open question previewed as its text with nothing to answer.
+ *
+ * In the PREVIEW's language, not the reader's: «Sí» and «No» come from that language's
+ * catalogue, as the respond screen takes them from the respondent's.
+ */
+function PreviewAnswers({ question, locale }: { question: AuthoringQuestion; locale: Locale }) {
+  const { t } = useTranslation()
+  const lines = (texts: string[]) => (
+    <div data-testid="preview-answers" aria-hidden="true" className="mt-3 flex flex-col gap-1.5">
+      {texts.map((text, i) => (
+        <span key={i} className="flex min-h-9 select-none items-center rounded-md bg-surface-fill-subtle px-3 py-1.5 text-base text-fg-secondary">
+          {text}
+        </span>
+      ))}
+    </div>
+  )
+  if (question.type === 'yes_no') {
+    const inPreview = createTranslator(CATALOGUES[locale])
+    return lines([inPreview('surveyRespond.yes'), inPreview('surveyRespond.no')])
+  }
+  if (question.type === 'open_ended') {
+    return <div data-testid="preview-open-answer" aria-hidden="true" className="mt-3 h-16 rounded-md bg-surface-fill-subtle" />
+  }
+  const options = question.options ?? []
+  if (options.length > 0) {
+    // The respond screen's list (`ChoiceAnswer`): any question with options shows one line per
+    // option, in the author's order — a scale too, whether its options are its points or a library's
+    // own keys. A scale's blank answer shows its value, which is what the respondent would read if
+    // it were saved blank; an «Opción múltiple» option still without words shows where it stands,
+    // and the save refuses it before a respondent could see it.
+    return lines(options.map((option, n) => option.label[locale]?.text || (isScaleType(question.type) ? option.value : t('surveys.next.authoring.previewOptionBlank', { position: n + 1 }))))
+  }
+  if (!isScaleType(question.type)) return <p className="mb-0 mt-3 text-sm text-fg-secondary">{t('surveys.next.authoring.previewNoOptions')}</p>
+  if (question.scaleMin === null || question.scaleMax === null) return null
+  const min = question.scaleMin
+  return (
+    <>
+      <div aria-hidden="true" className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${question.scaleMax - min + 1}, minmax(0, 1fr))` }}>
+        {Array.from({ length: question.scaleMax - min + 1 }, (_, i) => (
+          <span key={i} className="flex h-9 select-none items-center justify-center rounded-md bg-surface-fill-subtle text-base tabular-nums text-fg-secondary">
+            {min + i}
+          </span>
+        ))}
+      </div>
+      <div className="mt-1.5 flex justify-between text-xs text-fg-secondary">
+        <span>{question.scaleLabelMin[locale]?.text}</span>
+        <span>{question.scaleLabelMax[locale]?.text}</span>
+      </div>
+    </>
+  )
+}
+
 function scaleChip(t: (key: string) => string, q: AuthoringQuestion): string {
   const type = scaleName(t, q.type)
   return q.scaleMin !== null && q.scaleMax !== null ? `${type} ${q.scaleMin}–${q.scaleMax}` : type
@@ -710,6 +829,15 @@ function scaleLong(t: (key: string, vars?: Record<string, string | number>) => s
   return q.scaleMin !== null && q.scaleMax !== null
     ? `${type} · ${t('surveys.next.authoring.fromTo', { min: q.scaleMin, max: q.scaleMax })}`
     : type
+}
+
+/** One line of «Tipo de pregunta»: a scale names its range («Likert · del 1 al 5»), every other type its kind of answer. */
+function typeChoice(t: (key: string, vars?: Record<string, string | number>) => string, q: AuthoringQuestion, type: string): string {
+  if (isScaleType(type)) {
+    const scaled = isScaleType(q.type)
+    return scaleLong(t, { ...q, type, scaleMin: scaled ? q.scaleMin : 1, scaleMax: scaled ? q.scaleMax : 5 })
+  }
+  return t(`surveys.next.authoring.typeChoice.${type}`)
 }
 
 /** A titled block of several controls: `EditorField`'s look without its `<label>`. */
