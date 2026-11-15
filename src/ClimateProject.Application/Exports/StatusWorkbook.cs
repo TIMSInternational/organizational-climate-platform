@@ -395,7 +395,7 @@ public static class StatusWorkbook
     /// characters Excel refuses and capped at its limit, made unique by a numbered prefix when
     /// two surveys share the first 31 characters of a name — which ESPH's did.
     /// </summary>
-    private static string SheetName(string title, int index, XLWorkbook book)
+    internal static string SheetName(string title, int index, XLWorkbook book)
     {
         var cleaned = new string((title ?? string.Empty)
             .Where(c => !ForbiddenInSheetName.Contains(c))

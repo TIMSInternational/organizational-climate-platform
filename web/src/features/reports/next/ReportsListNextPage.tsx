@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useSearchParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { useCompanyNameFor } from '../../../company-context'
 import { Check, Download, MoreHorizontal, Plus, Shield } from 'lucide-react'
 import { useTranslation, type TranslateFn } from '../../../i18n'
@@ -149,6 +149,16 @@ export default function ReportsListNextPage() {
                 { label: t('navigation.reports') },
               ]
             : undefined
+        }
+        actions={
+          // The charted survey report with crosses (the wizard of 14 Nov 2026). Beside, not in
+          // place of, «Nuevo informe»: that one saves a company report with share links and a
+          // schedule; the wizard builds one survey's PDF on demand and stores nothing.
+          mayRead ? (
+            <Button asChild variant="outline" size="canvas">
+              <Link to={`/admin/companies/${companyId}/reports/new`}>{t('reportWizard.open')}</Link>
+            </Button>
+          ) : undefined
         }
         primaryAction={
           mayRead ? (

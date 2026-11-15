@@ -98,15 +98,50 @@ public static class ResponseExportEndpoints
 
         audit.Describe(ExportAction, ExportResource);
 
+        var bytes = await BuildWorkbookAsync(
+            actor,
+            companyId,
+            surveyId is { } single ? [single] : null,
+            includeAnswers != false,
+            db,
+            configuration,
+            cancellationToken);
+        if (bytes is null)
+        {
+            return Results.NotFound(new { message = "No surveys matched." });
+        }
+
+        return Results.File(
+            bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "respuestas-clima.xlsx");
+    }
+
+    /// <summary>
+    /// The response workbook as bytes, or null when no survey matched -- the route above, and
+    /// the download wizard's bundle (<c>CompanyExportEndpoints</c>), which asks for a list of
+    /// surveys of one company (<paramref name="chosenSurveys"/>). The caller has already checked the role: this method trusts
+    /// <paramref name="actor"/> to be a super administrator and reads verbatim text for one.
+    /// </summary>
+    internal static async Task<byte[]?> BuildWorkbookAsync(
+        CurrentUser actor,
+        Guid? companyId,
+        IReadOnlyList<Guid>? chosenSurveys,
+        bool includeAnswers,
+        ClimateProjectDbContext db,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
         var surveyQuery = db.Surveys.AsNoTracking();
         if (companyId is { } company)
         {
             surveyQuery = surveyQuery.Where(s => s.CompanyId == company);
         }
 
-        if (surveyId is { } single)
+        if (chosenSurveys is { Count: > 0 })
         {
-            surveyQuery = surveyQuery.Where(s => s.Id == single);
+            var chosen = chosenSurveys.ToList();
+            surveyQuery = surveyQuery.Where(s => chosen.Contains(s.Id));
         }
 
         var surveys = await surveyQuery
@@ -128,7 +163,7 @@ public static class ResponseExportEndpoints
 
         if (surveys.Count == 0)
         {
-            return Results.NotFound(new { message = "No surveys matched." });
+            return null;
         }
 
         var surveyIds = surveys.Select(s => s.Id).ToList();
@@ -329,15 +364,11 @@ public static class ResponseExportEndpoints
             notes.Add($"Se alcanzó el límite de {MaxResponses} respuestas; faltan respuestas más recientes. Filtre por clima.");
         }
 
-        var bytes = ResponseWorkbook.Build(
+        return ResponseWorkbook.Build(
             model,
             DateTimeOffset.UtcNow,
             notes.Count == 0 ? null : string.Join(" ", notes),
-            includeAnswers: includeAnswers != false);
-        return Results.File(
-            bytes,
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "respuestas-clima.xlsx");
+            includeAnswers: includeAnswers);
     }
 
     /// <summary>A company's demographic fields and options, in both languages.</summary>

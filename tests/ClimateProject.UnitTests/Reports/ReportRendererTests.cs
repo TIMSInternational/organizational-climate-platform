@@ -275,6 +275,32 @@ public class ReportRendererTests
     }
 
     /// <summary>
+    /// A demographic heading and its rows print the company's own words, not the stored keys.
+    /// </summary>
+    /// <remarks>
+    /// Until 14 Nov 2026 the PDF printed «Dimension: nationality» over a table whose header
+    /// read «nationality» -- the field key the respondent form stores -- because the renderer
+    /// had nothing else to print. The download route now loads the company's labels and passes
+    /// them in; the stored key is the fallback when there is no label.
+    /// </remarks>
+    [Fact]
+    public void A_demographic_prints_the_companys_name_for_the_field_and_its_values()
+    {
+        var labels = new SurveyExportLabels(
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["nationality"] = "Nacionalidad" },
+            new Dictionary<(string Field, string Value), string> { [("nationality", "Venezolana")] = "Venezuela" });
+        var drawn = DrawnStrings(ReportRenderer.BuildPdf(Context() with { Labels = labels }));
+
+        Assert.Contains(drawn, s => s.EndsWith(": Nacionalidad", StringComparison.Ordinal));
+        Assert.DoesNotContain(drawn, s => s.EndsWith(": nationality", StringComparison.Ordinal));
+        Assert.Contains("Venezuela", drawn);
+        Assert.Contains("Costarricense", drawn);
+
+        // Without labels, the key is what there is to print.
+        Assert.Contains(DrawnStrings(ReportRenderer.BuildPdf(Context())), s => s.EndsWith(": nationality", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// The counters under a demographic breakdown must name the kind of group they are about.
     /// </summary>
     /// <remarks>

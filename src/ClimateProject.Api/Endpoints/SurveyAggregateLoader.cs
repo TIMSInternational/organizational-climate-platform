@@ -42,6 +42,23 @@ internal static class SurveyAggregateLoader
         CancellationToken cancellationToken,
         SurveyResultsFilter? filter = null)
     {
+        var inputs = await LoadInputsAsync(db, survey, locale, fallbackFields, cancellationToken);
+        return inputs.Compute(filter);
+    }
+
+    /// <summary>
+    /// The rows <see cref="ComputeAsync"/> aggregates, loaded and projected but not yet
+    /// aggregated -- for a caller that asks the aggregation more than one question about the
+    /// same survey (the survey report's cross tables: one filtered aggregate per cell, every
+    /// one of them the same <see cref="SurveyAggregation.Compute"/> the results screen runs).
+    /// </summary>
+    public static async Task<SurveyAggregationInputs> LoadInputsAsync(
+        ClimateProjectDbContext db,
+        Survey survey,
+        string locale,
+        List<string> fallbackFields,
+        CancellationToken cancellationToken)
+    {
         var questions = await db.Questions
             .AsNoTracking()
             .Where(q => q.SurveyId == survey.Id)
@@ -141,13 +158,12 @@ internal static class SurveyAggregateLoader
 
         var departments = await LoadDepartmentsAsync(db, survey.CompanyId, cancellationToken);
 
-        return SurveyAggregation.Compute(
+        return new SurveyAggregationInputs(
             aggregationQuestions,
             aggregationResponses,
             aggregationAnswers,
             departments,
-            survey.TargetAudienceCount,
-            filter);
+            survey.TargetAudienceCount);
     }
 
     private static List<AggregationOption> ToAggregationOptions(

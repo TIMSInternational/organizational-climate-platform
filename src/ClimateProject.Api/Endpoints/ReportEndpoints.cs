@@ -295,6 +295,15 @@ public static class ReportEndpoints
             // the 1-5 mean, and the file converts at download.
             await CompanyScoreScale.LoadAsync(db, report.CompanyId, cancellationToken));
 
+        // The company's names for its demographic fields and their values, in the document's
+        // own language, so a heading reads «Género» and a row «Mujer» -- not the stored keys
+        // «gender» and «mujer», which is all the PDF printed until 14 Nov 2026. Loaded as the
+        // labels are NOW, like the scale above: a renamed field prints its current name.
+        context = context with
+        {
+            Labels = await SurveyExportEndpoints.LoadLabelsAsync(report.CompanyId, context.ChromeLocale, db, cancellationToken),
+        };
+
         var bytes = csv
             ? ReportRenderer.BuildCsv(context).ToBytes()
             : ReportRenderer.BuildPdf(context).ToBytes();

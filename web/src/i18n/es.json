@@ -3072,10 +3072,10 @@
       "opensOne": "1 apertura",
       "opens": "{count} aperturas",
       "moreActions": "Más acciones para {title}",
-      "floorNote": "Un informe aplica el mismo umbral que la pantalla: un grupo con menos de {floor} respuestas no imprime número en ningún formato, y el texto libre nunca se incluye.",
+      "floorNote": "Un informe aplica las mismas reglas que la pantalla: la encuesta completa y cualquier cruce de variables con menos de {floor} respuestas no imprimen número en ningún formato; un departamento o un valor demográfico se muestra a la administración desde 1 respuesta (decisión del cliente, 15 oct 2026). El texto libre nunca se incluye.",
       "noAccessTitle": "Los informes de esta empresa son de su administración",
       "noAccessDescription": "Los informes, sus enlaces públicos y su programación los gestiona un administrador de la empresa.",
-      "newReportDescription": "Elija el título, el tipo y el formato. El informe aplica el umbral de {floor} respuestas.",
+      "newReportDescription": "Elija el título, el tipo y el formato. El informe aplica las mismas reglas de privacidad que la pantalla, con el umbral de {floor} respuestas para la encuesta completa.",
       "shareHeading": "Compartir con un enlace público",
       "shareSub": "Quien tenga el enlace abre el informe sin iniciar sesión.",
       "shareEyebrow": "{title} · {format}",
@@ -8676,6 +8676,8 @@
       "admin__departments__create": "Creó un departamento",
       "admin__departments__update": "Modificó un departamento",
       "admin__exports__responses__export": "Descargó las respuestas de los climas",
+      "admin__companies__exports__bundle__export": "Descargó archivos de Excel de las encuestas de una empresa",
+      "surveys__export__report__export": "Descargó el informe PDF de una encuesta",
       "admin__invitations__create": "Envió invitaciones",
       "admin__invitations__resend__create": "Reenvió una invitación",
       "admin__invitations__shareable-link__create": "Creó un enlace de invitación para compartir",
@@ -8818,6 +8820,278 @@
     "state": {
       "loading": "Cargando…",
       "retry": "Reintentar"
+    }
+  },
+  "reportWizard": {
+    "open": "Generar informe",
+    "title": "Generar informe",
+    "crumbReports": "Informes",
+    "description": "Elija la encuesta, a quién incluye y qué cruces quiere ver. El informe sale en PDF, con gráficos, y ningún grupo de menos de 3 personas en un cruce muestra un número.",
+    "cancel": "Cancelar",
+    "stepList": "Pasos del informe",
+    "progress": "Paso {current} de {total}",
+    "submit": "Generar PDF",
+    "submitting": "Generando…",
+    "steps": {
+      "survey": {
+        "label": "Encuesta",
+        "description": "¿De qué encuesta? Solo aparecen las que tienen respuestas: un borrador todavía no tiene nada que contar."
+      },
+      "scope": {
+        "label": "Alcance",
+        "description": "¿Qué departamentos tienen fila? Toda la organización, o solo los que elija."
+      },
+      "crosses": {
+        "label": "Cruces",
+        "description": "Un cruce combina dos variables. Cada celda necesita 3 personas, y una celda que permitiría deducir otra por resta también se protege."
+      },
+      "content": {
+        "label": "Contenido",
+        "description": "Cada sección es una o varias páginas con su gráfico. Puede quitar las que no necesite."
+      },
+      "review": {
+        "label": "Revisar",
+        "description": "El informe se calcula al generarlo, con las respuestas de este momento."
+      }
+    },
+    "survey": {
+      "legend": "Encuesta",
+      "loading": "Cargando las encuestas…",
+      "loadFailed": "No se pudieron cargar las encuestas de la empresa.",
+      "none": "Esta empresa todavía no tiene encuestas con respuestas.",
+      "untitled": "Encuesta sin título",
+      "responses": "{count} respuestas",
+      "responsesOf": "{count} respuestas de {total}",
+      "optionsFailed": "No se pudo leer la encuesta elegida.",
+      "suppressed": "Esta encuesta tiene menos de 3 respuestas completas: el informe solo mostrará la participación.",
+      "compare": "Comparar con",
+      "compareNone": "Ninguna",
+      "compareHint": "Agrega la diferencia por dimensión. Solo encuestas de la misma empresa.",
+      "language": "Idioma del informe",
+      "spanish": "Español",
+      "english": "English"
+    },
+    "scope": {
+      "label": "Alcance",
+      "all": "Toda la organización",
+      "chosen": "Departamentos elegidos",
+      "includeColumn": "Incluir",
+      "include": "Incluir {name}",
+      "department": "Departamento",
+      "respondents": "Respuestas",
+      "headcount": "De",
+      "unnamed": "Departamento sin nombre",
+      "noDepartments": "Ninguna respuesta de esta encuesta tiene departamento.",
+      "summary": "{count} de {total} departamentos.",
+      "note": "Las cifras de la organización son siempre las de todas las personas que respondieron; los departamentos elegidos son los que tienen fila en el mapa y en los cruces.",
+      "floor": "Un departamento se muestra a la administración desde 1 respuesta (decisión del cliente, 15 oct 2026). Dentro de un cruce, cada grupo necesita 3."
+    },
+    "crosses": {
+      "variable": "Variable",
+      "crossedWith": "Cruzada con",
+      "alone": "Ninguna (solo la primera)",
+      "add": "Agregar cruce",
+      "suggested": "Sugeridos:",
+      "none": "Sin cruces. El informe puede salir sin ninguno.",
+      "noVariables": "Las respuestas de esta encuesta no traen ninguna variable con dos valores o más para cruzar.",
+      "remove": "Quitar",
+      "limit": "Un informe lleva hasta {max} cruces.",
+      "aloneTitle": "{name}, sin cruzar",
+      "groups": "{count} grupos",
+      "disclosed": "{count} con resultados",
+      "protected": "{count} protegidos",
+      "protectedOne": "1 protegido",
+      "single": "desde 1 respuesta, solo para la administración",
+      "counting": "Contando…",
+      "note": "Una celda protegida se imprime con un candado y «Protegida», nunca con un número, y su valor tampoco se puede despejar restando las demás."
+    },
+    "content": {
+      "sections": {
+        "summary": {
+          "title": "Resumen ejecutivo",
+          "body": "Media general, participación, fortalezas y oportunidades, y las preguntas más altas y más bajas."
+        },
+        "dimensions": {
+          "title": "Clima por dimensión",
+          "body": "La barra de clima de cada dimensión, del departamento más bajo al más alto."
+        },
+        "map": {
+          "title": "Mapa de clima",
+          "body": "Departamentos por dimensiones, cada celda con su área."
+        },
+        "comparison": {
+          "title": "Comparación",
+          "body": "La diferencia por dimensión frente a la encuesta elegida."
+        },
+        "crosses": {
+          "title": "Cruces",
+          "body": "Un cuadro por cada cruce elegido, con las celdas protegidas a la vista."
+        },
+        "questions": {
+          "title": "Resultados por pregunta",
+          "body": "Cómo se repartieron las respuestas de cada pregunta."
+        },
+        "highlights": {
+          "title": "Fortalezas y oportunidades",
+          "body": "Las 5 preguntas más altas y las 5 más bajas."
+        },
+        "comments": {
+          "title": "Comentarios",
+          "body": "Las palabras más frecuentes de las preguntas abiertas; nunca el texto de una persona."
+        }
+      },
+      "comparisonNeedsSurvey": "Elija en el primer paso una encuesta con la que comparar.",
+      "crossesNeedCross": "Agregue un cruce en el paso anterior.",
+      "scale": "Los puntajes se leen como {scale}, como en la configuración de la empresa.",
+      "scaleMean": "media de 1 a 5",
+      "scalePercent": "porcentaje de 0 a 100"
+    },
+    "review": {
+      "survey": "Encuesta",
+      "scope": "Alcance",
+      "crosses": "Cruces",
+      "sections": "Secciones",
+      "compare": "Compara con",
+      "language": "Idioma y lectura",
+      "size": "Tamaño",
+      "none": "Ninguno",
+      "pages": "{count} páginas A4",
+      "protectedNote": "{count} celdas de cruce quedarán protegidas. Ninguna imprime un número, en el PDF ni en sus totales.",
+      "noProtected": "Ninguna celda de cruce queda protegida.",
+      "done": "El informe se descargó.",
+      "failed": "No se pudo generar el informe. Inténtelo de nuevo."
+    },
+    "aside": {
+      "previewTitle": "Así quedará",
+      "chooseSurvey": "Elija una encuesta para ver el tamaño del informe.",
+      "counting": "Calculando…",
+      "pages": "{count} páginas, contadas sobre el PDF que se va a generar",
+      "privacyTitle": "Privacidad del informe",
+      "disclosed": "Celdas de cruce con resultados",
+      "protected": "Celdas protegidas",
+      "verbatim": "Comentarios textuales",
+      "never": "Nunca"
+    },
+    "errors": {
+      "chooseSurvey": "Elija una encuesta.",
+      "loadingSurvey": "Espere a que cargue la encuesta.",
+      "chooseDepartment": "Marque al menos un departamento.",
+      "chooseSection": "Deje al menos una sección."
+    }
+  },
+  "exportWizard": {
+    "open": "Descargar en Excel",
+    "title": "Descargar en Excel",
+    "eyebrow": "Encuestas · descargas",
+    "crumbSurveys": "Encuestas",
+    "description": "Elija la empresa, sus encuestas y qué archivos quiere. Cada descarga queda registrada en la bitácora de auditoría.",
+    "descriptionOwn": "Elija sus encuestas y qué archivos quiere. Cada descarga queda registrada en la bitácora de auditoría.",
+    "cancel": "Cancelar",
+    "stepList": "Pasos de la descarga",
+    "progress": "Paso {current} de {total}",
+    "submit": "Descargar",
+    "submitZip": "Descargar (.zip)",
+    "submitting": "Preparando…",
+    "steps": {
+      "company": {
+        "label": "Empresa",
+        "description": "¿De qué empresa? Solo TIMS ve este paso; la administración de un cliente empieza en el siguiente, con su propia empresa."
+      },
+      "surveys": {
+        "label": "Encuestas",
+        "description": "Todas, o solo las que marque. Cada encuesta es una hoja en cada archivo, en el orden en que se crearon."
+      },
+      "files": {
+        "label": "Archivos",
+        "description": "Marque uno o varios. Varios llegan juntos en un .zip, un libro de Excel cada uno."
+      },
+      "details": {
+        "label": "Detalles",
+        "description": "Solo aparecen los archivos que marcó."
+      },
+      "download": {
+        "label": "Descargar",
+        "description": "Se arma con los datos de este momento."
+      }
+    },
+    "company": {
+      "search": "Buscar empresa",
+      "loading": "Cargando las empresas…",
+      "none": "Ninguna empresa coincide con la búsqueda."
+    },
+    "surveys": {
+      "label": "Encuestas",
+      "all": "Todas ({count})",
+      "chosen": "Las que elija",
+      "include": "Incluir",
+      "includeOne": "Incluir {title}",
+      "draftLabel": "{title}, borrador sin respuestas",
+      "draftNote": "Borrador: no hay nada que descargar",
+      "survey": "Encuesta",
+      "status": "Estado",
+      "responses": "Respuestas",
+      "dates": "Fechas",
+      "untitled": "Encuesta sin título",
+      "loading": "Cargando las encuestas…",
+      "loadFailed": "No se pudieron cargar las encuestas de la empresa."
+    },
+    "files": {
+      "responses": {
+        "title": "Respuestas por persona",
+        "body": "Cada respuesta de cada persona, una hoja por encuesta, con los comentarios tal como se escribieron. En una encuesta anónima no hay nombres."
+      },
+      "questionnaire": {
+        "title": "Cuestionario",
+        "body": "Las preguntas: número, dimensión, tipo, el texto en español e inglés y sus opciones de respuesta."
+      },
+      "status": {
+        "title": "Estado de participación",
+        "body": "Quién terminó, quién empezó y quién no ha entrado, persona por persona, con los totales."
+      },
+      "results": {
+        "title": "Resultados agregados",
+        "body": "Media y reparto de respuestas por pregunta y por dimensión, por departamento o por demográfico. Nunca una respuesta individual."
+      },
+      "timsOnly": "Solo TIMS",
+      "responsesNote": "«Respuestas por persona» es el único lugar del producto donde salen los comentarios textuales, y solo para TIMS (decisión del 16 oct 2026). La administración de un cliente no ve esta opción."
+    },
+    "details": {
+      "responsesHint": "Qué lleva cada hoja",
+      "includeAnswers": "Incluir las respuestas",
+      "statusHint": "El formato de la hoja",
+      "statusFormat": "Formato del estado",
+      "standard": "Estándar",
+      "progress": "Porcentaje de avance",
+      "groupsHint": "Por qué grupos se desglosa",
+      "department": "Departamento",
+      "language": "Idioma de los títulos",
+      "languageHint": "El cuestionario trae siempre los dos idiomas",
+      "spanish": "Español",
+      "english": "English",
+      "resultsNote": "En «Resultados agregados», un departamento o un valor demográfico se muestra a la administración desde 1 respuesta (decisión del cliente, 15 oct 2026). Para cruzar variables, use «Generar informe» en Informes: ahí cada grupo necesita 3."
+    },
+    "download": {
+      "sheets": "Una hoja por encuesta · {count} encuestas",
+      "zipNote": "Un .zip con {count} libros de Excel.",
+      "oneNote": "Un libro de Excel.",
+      "done": "La descarga empezó.",
+      "failed": "No se pudo preparar la descarga. Inténtelo de nuevo."
+    },
+    "aside": {
+      "title": "Lo que va a descargar",
+      "company": "Empresa",
+      "ownCompany": "La suya",
+      "surveys": "Encuestas",
+      "surveysCount": "{count} de {total} · {responses} respuestas",
+      "files": "Archivos",
+      "oneFile": "1 libro de Excel",
+      "zip": "{count} libros de Excel en un .zip"
+    },
+    "errors": {
+      "chooseCompany": "Elija una empresa.",
+      "noSurveys": "Esta empresa todavía no tiene encuestas distribuidas.",
+      "chooseSurvey": "Marque al menos una encuesta.",
+      "chooseFile": "Marque al menos un archivo."
     }
   }
 }

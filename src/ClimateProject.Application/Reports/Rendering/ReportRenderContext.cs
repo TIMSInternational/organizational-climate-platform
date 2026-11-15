@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ClimateProject.Application.Exports;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.Surveys;
 
 namespace ClimateProject.Application.Reports.Rendering;
 
@@ -26,7 +27,8 @@ public sealed record ReportRenderContext(
     string Type,
     DateTimeOffset GeneratedAt,
     ReportOutputDocument? Document,
-    ScoreScale Scale = ScoreScale.Mean)
+    ScoreScale Scale = ScoreScale.Mean,
+    SurveyExportLabels? Labels = null)
 {
     /// <summary>
     /// The locale the document's own chrome -- headings, table headers, the privacy notice --

@@ -186,7 +186,7 @@ public static class ReportRenderer
 
         foreach (var section in stored.Surveys)
         {
-            WriteSurveySection(document, section, context.Scale);
+            WriteSurveySection(document, section, context.Scale, context.Labels);
         }
 
         WriteInsights(document, copy, stored.AiInsights);
@@ -206,7 +206,7 @@ public static class ReportRenderer
     /// on the section header, because a reader of a mixed-language document has no other way to
     /// know which language they are looking at.
     /// </remarks>
-    private static void WriteSurveySection(PdfDocument document, ReportSurveySection section, ScoreScale scale)
+    private static void WriteSurveySection(PdfDocument document, ReportSurveySection section, ScoreScale scale, SurveyExportLabels? labels)
     {
         var copy = ReportRenderCopy.For(section.ResolvedLocale);
         var participation = section.Participation;
@@ -302,7 +302,7 @@ public static class ReportRenderer
         }
 
         WriteDepartments(document, copy, section);
-        WriteDemographics(document, copy, section);
+        WriteDemographics(document, copy, section, labels);
     }
 
     private static void WriteDepartments(PdfDocument document, ReportRenderCopy copy, ReportSurveySection section)
@@ -364,7 +364,7 @@ public static class ReportRenderer
     /// is small and what one of its members wrote. The counters below are what a reader
     /// balances the table against.
     /// </remarks>
-    private static void WriteDemographics(PdfDocument document, ReportRenderCopy copy, ReportSurveySection section)
+    private static void WriteDemographics(PdfDocument document, ReportRenderCopy copy, ReportSurveySection section, SurveyExportLabels? labels)
     {
         foreach (var breakdown in section.Demographics)
         {
@@ -374,18 +374,28 @@ public static class ReportRenderer
                 continue;
             }
 
-            document.Heading($"{copy.Dimension}: {breakdown.Dimension}");
+            // The company's own words for the field and its values when the caller loaded them
+            // -- «Género: Mujer», not «gender: mujer». The stored key is the fallback, as it
+            // was the only thing printed before the labels were passed in (14 Nov 2026).
+            var dimensionName = labels is not null && labels.Dimensions.TryGetValue(breakdown.Dimension, out var named)
+                ? named
+                : breakdown.Dimension;
+            document.Heading($"{copy.Dimension}: {dimensionName}");
 
             if (visible.Count > 0)
             {
                 document.Table(
                     [
-                        new PdfTableColumn(breakdown.Dimension, 4),
+                        new PdfTableColumn(dimensionName, 4),
                         new PdfTableColumn(copy.Respondents, 1.5, RightAligned: true),
                     ],
                     [.. visible.Select(s => new string?[]
                     {
-                        string.IsNullOrWhiteSpace(s.Label) ? s.Key : s.Label,
+                        !string.IsNullOrWhiteSpace(s.Label)
+                            ? s.Label
+                            : labels is not null && labels.Options.TryGetValue((breakdown.Dimension, s.Key), out var valueName)
+                                ? valueName
+                                : s.Key,
                         copy.Count(s.RespondentCount),
                     })]);
             }
@@ -394,7 +404,7 @@ public static class ReportRenderer
             // says "Withheld departments", which under the heading "Dimension: nationality"
             // names the wrong kind of group while reading as correct.
             document.Paragraph(copy.SegmentsWithheldCounts(
-                breakdown.Dimension,
+                dimensionName,
                 breakdown.SuppressedSegmentCount,
                 breakdown.SuppressedRespondentCount,
                 breakdown.UnsegmentedRespondentCount,

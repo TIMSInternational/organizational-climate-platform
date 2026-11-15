@@ -107,9 +107,40 @@ public static class SurveyParticipationEndpoints
         IConfiguration configuration,
         CancellationToken cancellationToken)
     {
+        var (workbook, failure) = await BuildCompanyWorkbookAsync(
+            companyId, surveyIds, format, spanishOverride: null, principal, db, configuration, cancellationToken);
+        if (failure is not null)
+        {
+            return failure;
+        }
+
+        return Results.File(
+            workbook!.Bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            workbook.FileName);
+    }
+
+    internal sealed record CompanyStatusWorkbook(byte[] Bytes, string FileName);
+
+    /// <summary>
+    /// The company status workbook, or the response that refuses it -- the route above, and the
+    /// download wizard's bundle (<c>CompanyExportEndpoints</c>), which builds the same file into
+    /// a zip. <paramref name="spanishOverride"/> is the wizard's language choice; null keeps the
+    /// company's own language, as the route always has.
+    /// </summary>
+    internal static async Task<(CompanyStatusWorkbook? Workbook, IResult? Failure)> BuildCompanyWorkbookAsync(
+        Guid companyId,
+        IReadOnlyCollection<Guid>? surveyIds,
+        string? format,
+        bool? spanishOverride,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        IConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
         if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), companyId))
         {
-            return Results.Forbid();
+            return (null, Results.Forbid());
         }
 
         var company = await db.Companies
@@ -119,10 +150,10 @@ public static class SurveyParticipationEndpoints
             .FirstOrDefaultAsync(cancellationToken);
         if (company is null)
         {
-            return Results.Json(new { message = "Company not found" }, statusCode: 404);
+            return (null, Results.Json(new { message = "Company not found" }, statusCode: 404));
         }
 
-        var spanish = SurveyRosterCsv.IsSpanish(company.Language);
+        var spanish = spanishOverride ?? SurveyRosterCsv.IsSpanish(company.Language);
         // `?format=progress` is ESPH's layout (walkthrough 2026-11-08); absent is the standard one,
         // which is what every caller sent before the choice existed. Anything else is refused
         // rather than quietly read as standard: this file goes to a client.
@@ -137,7 +168,7 @@ public static class SurveyParticipationEndpoints
         }
         else
         {
-            return Results.Json(new { message = "format must be 'standard' or 'progress'" }, statusCode: 400);
+            return (null, Results.Json(new { message = "format must be 'standard' or 'progress'" }, statusCode: 400));
         }
 
         var distributed = await db.Surveys
@@ -148,16 +179,16 @@ public static class SurveyParticipationEndpoints
             .ToListAsync(cancellationToken);
 
         var ids = distributed;
-        if (surveyIds is { Length: > 0 })
+        if (surveyIds is { Count: > 0 })
         {
             var asked = surveyIds.ToHashSet();
             if (asked.Any(id => !distributed.Contains(id)))
             {
-                return Results.Json(
+                return (null, Results.Json(
                     new { message = spanish
                         ? "Alguna de las encuestas seleccionadas ya no está disponible. Actualice la página e inténtelo de nuevo."
                         : "One of the selected surveys is no longer available. Reload the page and try again." },
-                    statusCode: 400);
+                    statusCode: 400));
             }
 
             // `distributed` is the company's own list in its own order, so filtering it keeps
@@ -171,7 +202,7 @@ public static class SurveyParticipationEndpoints
             var (loaded, failure) = await LoadAsync(id, principal, db, configuration, cancellationToken);
             if (failure is not null)
             {
-                return failure;
+                return (null, failure);
             }
 
             var survey = loaded!;
@@ -186,10 +217,11 @@ public static class SurveyParticipationEndpoints
         var today = DateOnly.FromDateTime(
             SchedulingTimeZone.ToLocal(DateTimeOffset.UtcNow, SchedulingTimeZone.Resolve(company.Timezone)));
 
-        return Results.File(
-            StatusWorkbook.Build(sheets, today, spanish, layout),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            StatusWorkbookFileName(company.Name, today, spanish));
+        return (
+            new CompanyStatusWorkbook(
+                StatusWorkbook.Build(sheets, today, spanish, layout),
+                StatusWorkbookFileName(company.Name, today, spanish)),
+            null);
     }
 
     /// <summary>

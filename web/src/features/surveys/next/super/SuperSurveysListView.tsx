@@ -158,6 +158,11 @@ export default function SuperSurveysListView() {
                 t={t}
               />
             )}
+            {/* The download wizard (14 Nov 2026): any of the four workbooks for any client, its
+                company chosen inside -- so it needs no company picked here first. */}
+            {readViewerClaims().role === 'super_admin' && (
+              <Button asChild variant="outline"><Link to="/surveys/exports">{t('exportWizard.open')}</Link></Button>
+            )}
             <Button asChild variant="outline"><Link to="/surveys/import">{t('climateWorkbook.title')}</Link></Button>
             </>
           ) : undefined

@@ -181,7 +181,10 @@ internal static class ReportGeneration
                 // still true -- a note that keeps claiming a gap it no longer has teaches a
                 // consumer to stop reading it, which is the whole reason it shrinks rather than
                 // accumulating.
-                "Sections not yet generated: report configuration/filters, report templates. "
+                // The filter model is built (ReportFilters, read back above), so this note no
+                // longer names it: the 14 Nov 2026 review found every report PDF claiming
+                // "report configuration/filters" were not generated, months after they were.
+                "Sections not yet generated: report templates (docs/decisions/report-templates.md). "
                 + "The stored `format` IS rendered on download: pdf and csv are produced from this document. "
                 + "Period-over-period comparison IS generated, across the two most recent closed surveys.",
                 sections,
