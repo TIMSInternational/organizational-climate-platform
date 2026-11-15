@@ -130,8 +130,15 @@ public static class ResponseExportEndpoints
         bool includeAnswers,
         ClimateProjectDbContext db,
         IConfiguration configuration,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WorkbookBrand? brand = null)
     {
+        // One company's file wears its brand; a file across companies wears the product's.
+        if (brand is null && companyId is { } brandedCompany)
+        {
+            brand = await WorkbookBrandLoader.LoadAsync(db, brandedCompany, configuration, cancellationToken);
+        }
+
         var surveyQuery = db.Surveys.AsNoTracking();
         if (companyId is { } company)
         {
@@ -368,7 +375,8 @@ public static class ResponseExportEndpoints
             model,
             DateTimeOffset.UtcNow,
             notes.Count == 0 ? null : string.Join(" ", notes),
-            includeAnswers: includeAnswers);
+            includeAnswers: includeAnswers,
+            brand: brand);
     }
 
     /// <summary>A company's demographic fields and options, in both languages.</summary>

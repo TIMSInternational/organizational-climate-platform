@@ -20,7 +20,8 @@ public class QuestionnaireWorkbookTests
     private static IXLWorksheet Sheet(byte[] bytes, out XLWorkbook book)
     {
         book = new XLWorkbook(new MemoryStream(bytes));
-        return book.Worksheet(1);
+        // The first sheet is the cover; the questionnaire starts on the second.
+        return book.Worksheet(2);
     }
 
     [Fact]

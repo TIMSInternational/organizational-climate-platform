@@ -32,6 +32,22 @@ public sealed record SurveyReportBands(
     /// The area <paramref name="mean"/> falls in. Rounded to the two decimals it is printed
     /// with first, so a reading printed "4,00" is never coloured as an opportunity.
     /// </summary>
+    /// <summary>
+    /// The company's areas as «Resultados» configures them, each unnamed area falling back to the
+    /// report's own word for it in <paramref name="locale"/>.
+    /// </summary>
+    public static SurveyReportBands From(ClimateProject.Domain.Entities.CompanySettings? settings, string? locale)
+    {
+        settings ??= new ClimateProject.Domain.Entities.CompanySettings();
+        var (critical, opportunity, strength) = SurveyReportCopy.For(locale).DefaultBandNames;
+        return new SurveyReportBands(
+            settings.ResultBandOpportunityMin,
+            settings.ResultBandStrengthMin,
+            string.IsNullOrWhiteSpace(settings.ResultBandCriticalName) ? critical : settings.ResultBandCriticalName,
+            string.IsNullOrWhiteSpace(settings.ResultBandOpportunityName) ? opportunity : settings.ResultBandOpportunityName,
+            string.IsNullOrWhiteSpace(settings.ResultBandStrengthName) ? strength : settings.ResultBandStrengthName);
+    }
+
     public SurveyReportBand Of(double mean)
     {
         var printed = (decimal)Math.Round(mean, 2, MidpointRounding.AwayFromZero);

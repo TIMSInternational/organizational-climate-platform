@@ -154,9 +154,11 @@ public static class ResponseWorkbook
         IReadOnlyList<ResponseExportSurvey> surveys,
         DateTimeOffset generatedAt,
         string? truncation = null,
-        bool includeAnswers = true)
+        bool includeAnswers = true,
+        WorkbookBrand? brand = null)
     {
         ArgumentNullException.ThrowIfNull(surveys);
+        brand ??= WorkbookBrand.Product(surveys.Select(s => s.CompanyName).Distinct(StringComparer.Ordinal).Count() == 1 ? surveys[0].CompanyName : null);
 
         using var book = new XLWorkbook();
         var summary = book.AddWorksheet("RESUMEN");
@@ -280,8 +282,43 @@ public static class ResponseWorkbook
         // contents and leave the identity block scrolling away with the answers.
         foreach (var (sheet, layout) in surveySheets)
         {
-            Finish(sheet, layout);
+            Finish(sheet, layout, brand);
+            WorkbookStyle.Print(sheet, brand, spanish: true, 1);
         }
+
+        // The three index sheets: the brand header and a hairline per row. Values untouched.
+        foreach (var index in new[] { summary, questions, pending })
+        {
+            if (index?.LastColumnUsed() is not { } lastColumn)
+            {
+                continue;
+            }
+
+            var columns = lastColumn.ColumnNumber();
+            WorkbookStyle.Header(index.Range(1, 1, 1, columns), brand);
+            index.Row(1).Height = WorkbookStyle.HeaderRowHeight - 6;
+            var lastRow = index == summary ? summaryRow - 1 : index.LastRowUsed()!.RowNumber();
+            if (lastRow >= 2)
+            {
+                WorkbookStyle.Body(index.Range(2, 1, lastRow, columns));
+            }
+
+            WorkbookStyle.Print(index, brand, spanish: true, 1);
+        }
+
+        if (questions is not null && questions.LastRowUsed()?.RowNumber() is > 1 and var lastQuestion)
+        {
+            questions.Column(5).Width = 80;
+            questions.Range(2, 5, lastQuestion, 5).Style.Alignment.WrapText = true;
+            WorkbookStyle.Rows(questions, 2, lastQuestion, 1, 5);
+        }
+
+        for (var r = 2; r < pendingRow; r++)
+        {
+            PendingTone(pending.Cell(r, 7));
+        }
+
+        WorkbookCover.Insert(book, brand, Cover(surveys, generatedAt, includeAnswers, truncation, brand, book), spanish: true);
 
         using var stream = new MemoryStream();
         book.SaveAs(stream);
@@ -416,11 +453,20 @@ public static class ResponseWorkbook
     /// The reading aids: header fills, dimension bands with the question as a note, scale
     /// colours, the freeze and the filter. Styles only — no value is written here.
     /// </summary>
-    private static void Finish(IXLWorksheet sheet, SurveySheetLayout layout)
+    private static void Finish(IXLWorksheet sheet, SurveySheetLayout layout, WorkbookBrand brand)
     {
         var header = sheet.Range(1, 1, 1, layout.LastColumn);
-        header.Style.Fill.BackgroundColor = XLColor.FromHtml("#" + NeutralHeaderFill);
-        header.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        WorkbookStyle.Header(header, brand);
+        header.Style.Alignment.WrapText = false;
+        sheet.Row(1).Height = WorkbookStyle.HeaderRowHeight - 6;
+        if (layout.LastRow >= 2)
+        {
+            WorkbookStyle.Body(sheet.Range(2, 1, layout.LastRow, layout.LastColumn));
+            // «completa» and «minutos», the last two fixed columns, centred under their headers.
+            sheet.Range(1, layout.FixedColumns - 1, layout.LastRow, layout.FixedColumns).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        }
+
+        var bands = DimensionBandsFor(brand);
 
         // Bands run per CONTIGUOUS dimension, so a dimension that returns later in the order gets
         // a band of its own rather than a colour shared with a block it is not beside.
@@ -436,8 +482,9 @@ public static class ResponseWorkbook
             }
 
             var cell = sheet.Cell(1, column);
-            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#" + DimensionBands[band % DimensionBands.Length]);
-            cell.Style.Font.FontColor = XLColor.White;
+            var bandFill = bands[band % bands.Length];
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#" + bandFill);
+            cell.Style.Font.FontColor = XLColor.FromHtml(WorkbookPalette.InkOn("#" + bandFill));
             cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             cell.CreateComment().AddText(
                 string.IsNullOrWhiteSpace(question.Category) ? question.Text : $"{question.Category}\n{question.Text}");
@@ -502,6 +549,103 @@ public static class ResponseWorkbook
     /// <c>@</c> is left to Excel's own handling of a text cell rather than being evaluated:
     /// the value is written through <see cref="XLCellValue"/> as a string, never as a formula.
     /// </summary>
+    /// <summary>
+    /// The question headers' two alternating tones. The product's own blues without a brand (and in a
+    /// file across companies); with one, a lighter and a darker step of the brand colour, so a
+    /// question header is never the same tone as the identity block's header beside it.
+    /// </summary>
+    internal static string[] DimensionBandsFor(WorkbookBrand brand)
+        => brand.Accent == WorkbookBrand.ProductAccent
+            ? DimensionBands
+            : [WorkbookPalette.Lighten(brand.Accent, 0.5).TrimStart('#'), WorkbookPalette.Darken(brand.Accent, 0.35).TrimStart('#')];
+
+    /// <summary>The PENDIENTES state painted as the status workbook paints it.</summary>
+    private static void PendingTone(IXLCell cell)
+    {
+        var (fill, ink) = cell.GetString() switch
+        {
+            "started" or "not_completed" => ("#" + StatusWorkbook.InProgressFill, "#" + StatusWorkbook.InProgressInk),
+            _ => (WorkbookPalette.Protected, WorkbookPalette.Secondary),
+        };
+        WorkbookStyle.Tone(cell, fill, ink);
+    }
+
+    private static WorkbookCoverContent Cover(
+        IReadOnlyList<ResponseExportSurvey> surveys, DateTimeOffset generatedAt, bool includeAnswers, string? truncation, WorkbookBrand brand, XLWorkbook book)
+    {
+        var sheets = new List<WorkbookCoverSheet>
+        {
+            new("RESUMEN", "Cada encuesta en una fila: ventana, respuestas, pendientes y si es anónima."),
+        };
+        if (includeAnswers)
+        {
+            sheets.Add(new("PREGUNTAS", "El texto de cada código P01, P02… y su dimensión."));
+        }
+
+        sheets.Add(new("PENDIENTES", "Quien fue invitado y no ha terminado, de todas las encuestas del archivo."));
+        foreach (var (survey, i) in surveys.Select((s, i) => (s, i)))
+        {
+            var code = "R" + (i + 1).ToString("00", CultureInfo.InvariantCulture);
+            var name = book.Worksheets.Select(w => w.Name).FirstOrDefault(n => n.StartsWith(code, StringComparison.Ordinal)) ?? code;
+            var complete = survey.Rows.Count(r => r.IsComplete).ToString(CultureInfo.InvariantCulture);
+            sheets.Add(new(name, $"{survey.Rows.Count.ToString(CultureInfo.InvariantCulture)} respuestas, {complete} completas · {(survey.Anonymous ? "anónima: sin identidad por fila" : "con nombre, correo y usuario")}."));
+        }
+
+        var count = surveys.Count.ToString(CultureInfo.InvariantCulture);
+        var company = string.IsNullOrWhiteSpace(brand.CompanyName) ? "Varias empresas · " : brand.CompanyName + " · ";
+        var legend = new List<WorkbookCoverLegend>();
+        if (includeAnswers)
+        {
+            (string Word, string Meaning)[] steps =
+            [
+                ("Extremo bajo", "Una respuesta en el quinto más bajo de la escala de su pregunta: lo más desfavorable."),
+                ("Bajo", "El segundo quinto de la escala."),
+                ("Centro", "El quinto central."),
+                ("Alto", "El cuarto quinto."),
+                ("Extremo alto", "El quinto más alto: lo más favorable."),
+            ];
+            for (var i = 0; i < ScaleFills.Length; i++)
+            {
+                legend.Add(new("#" + ScaleFills[i], WorkbookPalette.Ink, steps[i].Word, steps[i].Meaning));
+            }
+
+            var bands = DimensionBandsFor(brand);
+            legend.Add(new("#" + bands[0], WorkbookPalette.InkOn("#" + bands[0]), "P01, P02…",
+                "Encabezado de pregunta: un tono por dimensión, alternado entre dimensiones vecinas. Pase el cursor sobre el código para leer la pregunta."));
+        }
+
+        legend.Add(new("#" + StatusWorkbook.InProgressFill, "#" + StatusWorkbook.InProgressInk, "started",
+            "En PENDIENTES: empezó y no ha enviado."));
+        legend.Add(new(WorkbookPalette.Protected, WorkbookPalette.Secondary, "not_started",
+            "En PENDIENTES: todavía no la abre."));
+
+        var notes = new List<string>
+        {
+            "Las fechas y horas están en UTC (Costa Rica es UTC−6).",
+            "Una celda vacía en una respuesta es una pregunta que esa persona no contestó.",
+        };
+        if (!includeAnswers)
+        {
+            notes.Insert(0, "Solo demográficos: una fila por respuesta, sin las respuestas a las preguntas.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(truncation))
+        {
+            notes.Insert(0, "Incompleto: " + truncation);
+        }
+
+        return new WorkbookCoverContent(
+            includeAnswers ? "Respuestas por persona" : "Respuestas: solo demográficos",
+            company + $"{count} encuesta{(surveys.Count == 1 ? string.Empty : "s")}",
+            "Generado el " + generatedAt.UtcDateTime.ToString("d 'de' MMMM 'de' yyyy, HH:mm 'UTC'", CultureInfo.GetCultureInfo("es-CR")),
+            sheets,
+            legend,
+            notes,
+            includeAnswers
+                ? "Confidencial: contiene la respuesta de cada persona y el texto de sus comentarios. Solo para TIMS; no se comparte con el cliente."
+                : "Confidencial: contiene datos de cada persona. Solo para TIMS.");
+    }
+
     private static void WriteAnswer(IXLCell cell, string? value)
     {
         if (string.IsNullOrEmpty(value))

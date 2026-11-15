@@ -22,6 +22,9 @@ namespace ClimateProject.IntegrationTests.Surveys;
 [Collection("Postgres")]
 public class CompanyStatusExportTests : IAsyncLifetime
 {
+    /// <summary>The sheets after the cover (#666 follow-up), which every file now opens on.</summary>
+    private static IEnumerable<string> DataSheetNames(XLWorkbook book) => book.Worksheets.Select(w => w.Name).Where(n => n != "Portada");
+
     private readonly SurveyTestHarness _harness;
     private Guid _companyId;
 
@@ -77,7 +80,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var book = await WorkbookOfAsync(response);
-        Assert.Equal(["Clima", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
+        Assert.Equal(["Clima", "Teletrabajo"], DataSheetNames(book));
         // The header row is the CSV export's own, asserted against the method rather than a copy.
         var sheet = book.Worksheet("Clima");
         var headers = SurveyRosterCsv.Headers(spanish: true, perSurvey: false, showState: true);
@@ -102,7 +105,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
         var response = await ExportAsync(admin, _companyId);
 
         using var book = await WorkbookOfAsync(response);
-        Assert.Equal(["Clima"], book.Worksheets.Select(w => w.Name));
+        Assert.Equal(["Clima"], DataSheetNames(book));
     }
 
     /// <summary>A survey that has closed is still reported: dropping it would read as never having run.</summary>
@@ -117,7 +120,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
         var response = await ExportAsync(admin, _companyId);
 
         using var book = await WorkbookOfAsync(response);
-        Assert.Contains("Cerrada", book.Worksheets.Select(w => w.Name));
+        Assert.Contains("Cerrada", DataSheetNames(book));
     }
 
     [Fact]
@@ -173,7 +176,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var book = await WorkbookOfAsync(response);
-        Assert.Single(book.Worksheets);
+        Assert.Single(book.Worksheets, w => w.Name != "Portada");
     }
 
     /// <summary>
@@ -208,7 +211,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var book = await WorkbookOfAsync(response);
-        Assert.Equal(["Clima", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
+        Assert.Equal(["Clima", "Teletrabajo"], DataSheetNames(book));
     }
 
     /// <summary>
@@ -226,7 +229,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
         var response = await ExportAsync(admin, _companyId, teletrabajo, clima);
 
         using var book = await WorkbookOfAsync(response);
-        Assert.Equal(["Clima", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
+        Assert.Equal(["Clima", "Teletrabajo"], DataSheetNames(book));
     }
 
     [Fact]
@@ -239,7 +242,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
         var response = await ExportAsync(admin, _companyId, clima, clima);
 
         using var book = await WorkbookOfAsync(response);
-        Assert.Equal(["Clima"], book.Worksheets.Select(w => w.Name));
+        Assert.Equal(["Clima"], DataSheetNames(book));
     }
 
     /// <summary>
@@ -256,7 +259,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
 
         using var book = await WorkbookOfAsync(await ExportAsync(admin, _companyId));
 
-        Assert.Equal(["Clima", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
+        Assert.Equal(["Clima", "Teletrabajo"], DataSheetNames(book));
     }
 
     /// <summary>
@@ -358,7 +361,7 @@ public class CompanyStatusExportTests : IAsyncLifetime
             $"/admin/companies/{_companyId}/participation/export?survey={teletrabajo}&format=progress");
 
         using var book = await WorkbookOfAsync(response);
-        Assert.Equal(["Teletrabajo"], book.Worksheets.Select(w => w.Name));
+        Assert.Equal(["Teletrabajo"], DataSheetNames(book));
         Assert.Equal("Nombre completo", book.Worksheet("Teletrabajo").Cell(4, 1).GetString());
     }
 

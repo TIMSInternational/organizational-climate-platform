@@ -105,10 +105,14 @@ public static class SurveyParticipationEndpoints
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         IConfiguration configuration,
+        ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
+        var brand = SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), companyId)
+            ? await WorkbookBrandLoader.LoadAsync(db, companyId, configuration, cancellationToken, loggers.CreateLogger(nameof(WorkbookBrandLoader)))
+            : null;
         var (workbook, failure) = await BuildCompanyWorkbookAsync(
-            companyId, surveyIds, format, spanishOverride: null, principal, db, configuration, cancellationToken);
+            companyId, surveyIds, format, spanishOverride: null, principal, db, configuration, cancellationToken, brand);
         if (failure is not null)
         {
             return failure;
@@ -136,7 +140,8 @@ public static class SurveyParticipationEndpoints
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         IConfiguration configuration,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WorkbookBrand? brand = null)
     {
         if (!SurveyEndpoints.CanAdminister(principal.GetCurrentUser(), companyId))
         {
@@ -219,7 +224,7 @@ public static class SurveyParticipationEndpoints
 
         return (
             new CompanyStatusWorkbook(
-                StatusWorkbook.Build(sheets, today, spanish, layout),
+                StatusWorkbook.Build(sheets, today, spanish, layout, brand ?? WorkbookBrand.Product(company.Name)),
                 StatusWorkbookFileName(company.Name, today, spanish)),
             null);
     }
