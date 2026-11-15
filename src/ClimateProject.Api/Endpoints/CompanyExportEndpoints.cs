@@ -7,6 +7,7 @@ using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Exports;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.Reports.SurveyReports;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -72,6 +73,7 @@ public static class CompanyExportEndpoints
         ClimateProjectDbContext db,
         IConfiguration configuration,
         AuditEntry audit,
+        ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
         var actor = principal.GetCurrentUser();
@@ -101,7 +103,7 @@ public static class CompanyExportEndpoints
         var company = await db.Companies
             .AsNoTracking()
             .Where(c => c.Id == companyId)
-            .Select(c => new { c.Name, c.Settings.Language, c.Settings.Timezone, c.Settings.ResultScale })
+            .Select(c => new { c.Name, c.Settings.Language, c.Settings.Timezone, c.Settings.ResultScale, c.Settings })
             .FirstOrDefaultAsync(cancellationToken);
         if (company is null)
         {
@@ -171,6 +173,9 @@ public static class CompanyExportEndpoints
         var slug = Slug(company.Name);
         var date = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
+        // One brand for every file in the download: the client's logo and colour (#666 follow-up).
+        var brand = await WorkbookBrandLoader.LoadAsync(db, companyId, configuration, cancellationToken, loggers.CreateLogger(nameof(WorkbookBrandLoader)));
+
         var built = new List<(string Name, byte[] Bytes)>();
         foreach (var file in Files.Where(f => wanted.Contains(f, StringComparer.Ordinal)))
         {
@@ -180,7 +185,7 @@ public static class CompanyExportEndpoints
                 {
                     audit.Describe(ResponseExportEndpoints.ExportAction, ResponseExportEndpoints.ExportResource);
                     var bytes = await ResponseExportEndpoints.BuildWorkbookAsync(
-                        actor, companyId, ids, includeAnswers != false, db, configuration, cancellationToken);
+                        actor, companyId, ids, includeAnswers != false, db, configuration, cancellationToken, brand);
                     if (bytes is not null)
                     {
                         built.Add((FileName(spanish ? "respuestas" : "responses", slug, date, "xlsx"), bytes));
@@ -192,14 +197,14 @@ public static class CompanyExportEndpoints
                 case QuestionnaireFile:
                 {
                     var surveys = await LoadQuestionnairesAsync(db, chosen.Select(s => (s.Id, Title(s.TitleEs, s.TitleEn, spanish), s.Status, (DateTimeOffset?)s.StartDate, (DateTimeOffset?)s.EndDate)).ToList(), cancellationToken);
-                    built.Add((FileName(spanish ? "cuestionario" : "questionnaire", slug, date, "xlsx"), QuestionnaireWorkbook.Build(surveys, spanish)));
+                    built.Add((FileName(spanish ? "cuestionario" : "questionnaire", slug, date, "xlsx"), QuestionnaireWorkbook.Build(surveys, spanish, brand)));
                     break;
                 }
 
                 case StatusFile:
                 {
                     var (workbook, failure) = await SurveyParticipationEndpoints.BuildCompanyWorkbookAsync(
-                        companyId, ids, statusFormat, spanish, principal, db, configuration, cancellationToken);
+                        companyId, ids, statusFormat, spanish, principal, db, configuration, cancellationToken, brand);
                     if (failure is not null)
                     {
                         return failure;
@@ -230,7 +235,7 @@ public static class CompanyExportEndpoints
 
                     built.Add((
                         FileName(spanish ? "resultados" : "results", slug, date, "xlsx"),
-                        ResultsWorkbook.Build(sheets, ScoreScales.Parse(company.ResultScale), spanish, today)));
+                        ResultsWorkbook.Build(sheets, ScoreScales.Parse(company.ResultScale), spanish, today, SurveyReportBands.From(company.Settings, locale), brand)));
                     break;
                 }
             }

@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
@@ -81,6 +82,35 @@ public class CompanyExportEndpointsTests : IAsyncLifetime
         var sheet = book.Worksheet("Clima");
         Assert.Equal("Mi jefatura me respeta.", sheet.Cell(5, 5).GetString());
         Assert.Equal("My manager respects me.", sheet.Cell(5, 6).GetString());
+    }
+
+    /// <summary>
+    /// The redesign (after #666): the client's logo on a cover sheet and their colour on every
+    /// header, measured through the endpoint a download actually calls, with the logo uploaded
+    /// and the colour set through the product's own endpoints.
+    /// </summary>
+    [Fact]
+    public async Task Every_file_wears_the_companys_logo_and_colour()
+    {
+        var survey = await SeedSurveyAsync("Clima");
+        var operatorClient = await _harness.ClientAsync(Roles.SuperAdmin, companyId: null);
+        var logo = new ByteArrayContent(Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="));
+        logo.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        (await operatorClient.PutAsync($"/admin/companies/{_companyId}/logo", logo)).EnsureSuccessStatusCode();
+        (await operatorClient.PutAsJsonAsync($"/admin/companies/{_companyId}/settings", new ClimateProject.Application.OrgStructure.UpdateCompanySettingsRequest(
+            null, null, null, null, null, null, null, null, "#0B6E4F", null, null, null))).EnsureSuccessStatusCode();
+        var admin = await _harness.ClientAsync(Roles.CompanyAdmin, _companyId);
+
+        var response = await BundleAsync(admin, $"survey={survey}&file=questionnaire");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var book = new XLWorkbook(new MemoryStream(await response.Content.ReadAsByteArrayAsync()));
+        var cover = book.Worksheet(1);
+        Assert.Equal("Portada", cover.Name);
+        Assert.Single(cover.Pictures);
+        Assert.Contains(cover.CellsUsed(), c => c.GetString().StartsWith("Cooperativa Austral", StringComparison.Ordinal));
+        Assert.Equal("FF0B6E4F", book.Worksheet("Clima").Cell(4, 1).Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
     }
 
     [Fact]

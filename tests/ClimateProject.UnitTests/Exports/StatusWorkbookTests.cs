@@ -44,6 +44,9 @@ public class StatusWorkbookTests
         bool showState = true)
         => new(title, perSurvey, showState, roster);
 
+    /// <summary>Every sheet but the cover.</summary>
+    private static IEnumerable<IXLWorksheet> DataSheets(XLWorkbook book) => book.Worksheets.Where(w => w.Name != "Portada");
+
     private static XLWorkbook Open(byte[] bytes)
     {
         var stream = new MemoryStream(bytes);
@@ -62,7 +65,8 @@ public class StatusWorkbookTests
             spanish: true);
 
         using var book = Open(bytes);
-        Assert.Equal(["Clima Organizacional", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
+        // The cover first (#666 follow-up), then one sheet per survey in order.
+        Assert.Equal(["Portada", "Clima Organizacional", "Teletrabajo"], book.Worksheets.Select(w => w.Name));
     }
 
     /// <summary>
@@ -202,8 +206,8 @@ public class StatusWorkbookTests
             spanish: true);
 
         using var book = Open(bytes);
-        Assert.Equal(2, book.Worksheets.Count);
-        Assert.Equal(2, book.Worksheets.Select(w => w.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(3, book.Worksheets.Count);
+        Assert.Equal(3, book.Worksheets.Select(w => w.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.All(book.Worksheets, w => Assert.True(w.Name.Length <= 31));
     }
 
@@ -214,7 +218,7 @@ public class StatusWorkbookTests
         var bytes = StatusWorkbook.Build([], Today, spanish: true);
 
         using var book = Open(bytes);
-        var sheet = Assert.Single(book.Worksheets);
+        var sheet = Assert.Single(DataSheets(book));
         Assert.Contains("encuestas", sheet.Cell(1, 1).GetString(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -227,7 +231,7 @@ public class StatusWorkbookTests
             spanish: true);
 
         using var book = Open(bytes);
-        var sheet = Assert.Single(book.Worksheets);
+        var sheet = Assert.Single(DataSheets(book));
         Assert.False(string.IsNullOrWhiteSpace(sheet.Name));
     }
 
@@ -260,7 +264,8 @@ public class StatusWorkbookTests
         var at = 5 + 3 + 1;
         Assert.Equal(3, sheet.Cell(at, 2).GetValue<int>());
         Assert.Equal(2, sheet.Cell(at + 1, 2).GetValue<int>());
-        Assert.Equal(2d / 3, sheet.Cell(at + 2, 2).GetValue<double>(), precision: 6);
+        // Cut down to the 0.1 % the cell prints, never rounded up: 66.6 %, not 66.7 %.
+        Assert.Equal(0.666d, sheet.Cell(at + 2, 2).GetValue<double>(), precision: 6);
         Assert.Contains(sheet.CellsUsed(), c => c.GetString() == "1 persona de la audiencia no recibió código para esta encuesta y no se cuenta.");
     }
 
@@ -297,7 +302,8 @@ public class StatusWorkbookTests
         var estado = Array.IndexOf(headers, "Estado") + 1;
         Assert.Equal("FF" + StatusWorkbook.FinishedFill, sheet.Cell(5, estado).Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
         Assert.Equal("FF" + StatusWorkbook.InProgressFill, sheet.Cell(6, estado).Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
-        Assert.Equal(XLFillPatternValues.None, sheet.Cell(7, estado).Style.Fill.PatternType);
+        // Not opened is grey now, a state of its own rather than the absence of one.
+        Assert.Equal("FF" + WorkbookPalette.Protected.TrimStart('#'), sheet.Cell(7, estado).Style.Fill.BackgroundColor.Color.ToArgb().ToString("X8"));
         Assert.True(sheet.AutoFilter.IsEnabled);
     }
 
