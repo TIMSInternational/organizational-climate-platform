@@ -6733,7 +6733,9 @@
       "scoreHeader": "Score",
       "answeredHeader": "Responses",
       "noScore": "No data",
-      "failed": "The cross could not be computed."
+      "failed": "The cross could not be computed.",
+      "variables": "Variables in this group: {count} of {max}.",
+      "variablesFull": "This group already combines {max} variables, the most one group can. To use another, set one back to “All”."
     },
     "description": "What this survey found, and how many people it reached.",
     "untitled": "Untitled survey",

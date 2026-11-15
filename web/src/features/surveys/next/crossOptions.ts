@@ -80,6 +80,22 @@ export function crossFieldsOf(
  * The chosen values as the selectors the API takes, in the order the fields were offered —
  * stable, so the same cross produces the same request and the same cache key.
  */
+/**
+ * How many variables one group may combine. This is the server's own limit,
+ * `SurveyResultsFilter.MaxSelectors` in `src/ClimateProject.Application/Surveys/SurveyResultsFilter.cs`,
+ * which refuses the WHOLE request past it with a 400. The builder used to offer one picker per
+ * field with no limit, so choosing a value in all six of ESPH's fields sent six selectors and the
+ * screen could only say "No se pudo calcular el cruce" (measured in production, 14 Nov 2026).
+ * `crossOptions.test.ts` reads the C# so the two cannot drift.
+ */
+export const MAX_VARIABLES = 3
+
+/**
+ * The picker item that puts one field back to "any value". Radix refuses an empty-string item, so
+ * this sentinel stands in for it and never leaves the panel: `selectorsOf` only sees real values.
+ */
+export const ANY_VALUE = '__any__'
+
 export function selectorsOf(
   fields: readonly CrossField[],
   chosen: Readonly<Record<string, string>>,

@@ -38,6 +38,8 @@ import {
   crossFieldsOf,
   crossKeyOf,
   labelFor,
+  ANY_VALUE,
+  MAX_VARIABLES,
   selectorsOf,
   weakestCategory,
   withCohort,
@@ -277,6 +279,9 @@ export default function SurveyCrossPanel({
   }, [baseUrl, surveyId, locale, crossable])
 
   const pending = useMemo(() => selectorsOf(fields, chosen), [fields, chosen])
+  // The server refuses a group of more than MAX_VARIABLES selectors outright (400), so the builder
+  // stops there instead of sending a request that can only fail.
+  const atVariableCap = pending.length >= MAX_VARIABLES
   // The builder's current selection counts as a cohort, so one group takes one click.
   const effective = useMemo(() => withCohort(cohorts, pending, MAX_COHORTS), [cohorts, pending])
 
@@ -459,11 +464,29 @@ export default function SurveyCrossPanel({
               label={fieldLabel(field.field)}
               placeholder={t('surveyResults.cross.anyValue')}
               value={chosen[field.field] ?? ''}
-              onChange={(value) => setChosen((previous) => ({ ...previous, [field.field]: value }))}
-              options={field.values.map((option) => ({ value: option.value, label: option.label }))}
+              // A full group locks only the pickers it does not use: the chosen ones stay open so a
+              // value can be changed, or put back to «Todos» to free a slot.
+              disabled={atVariableCap && !chosen[field.field]}
+              onChange={(value) =>
+                setChosen((previous) => {
+                  const next = { ...previous }
+                  if (value === ANY_VALUE) delete next[field.field]
+                  else next[field.field] = value
+                  return next
+                })
+              }
+              options={[
+                { value: ANY_VALUE, label: t('surveyResults.cross.anyValue') },
+                ...field.values.map((option) => ({ value: option.value, label: option.label })),
+              ]}
             />
           ))}
         </div>
+        <p className="mt-3 mb-0 text-sm text-fg-secondary" aria-live="polite">
+          {atVariableCap
+            ? t('surveyResults.cross.variablesFull', { max: MAX_VARIABLES })
+            : t('surveyResults.cross.variables', { count: pending.length, max: MAX_VARIABLES })}
+        </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button
