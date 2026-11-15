@@ -343,6 +343,43 @@ describe('SurveyCrossPanel — comparing', () => {
     expect(screen.queryByText('30')).toBeNull()
   })
 
+  it('stops a group at three variables, and frees a slot when one goes back to All', async () => {
+    const four = payload({
+      breakdowns: [
+        breakdown('department', [segment(FINANCE, 'Finanzas', 9), segment('d2', 'Ventas', 8)]),
+        breakdown('puesto', [segment('jefatura', 'Jefatura', 6), segment('operativo', 'Operativo', 17)]),
+        breakdown('sexo', [segment('f', 'Femenino', 11), segment('m', 'Masculino', 12)]),
+        breakdown('edad', [segment('25-34', '25 a 34', 10), segment('35-44', '35 a 44', 13)]),
+      ],
+    })
+    vi.mocked(resultsApi.getSurveyAnalytics).mockResolvedValue(payload({ dimensions: [dim('Confianza', 3.0)] }))
+    renderPanel(four)
+
+    await choose(copy.department, 'Finanzas')
+    await choose('puesto', 'Jefatura')
+    expect(screen.getByText('Variables in this group: 2 of 3.')).toBeTruthy()
+    await choose('sexo', 'Femenino')
+
+    // The fourth field is locked; the three in use stay open.
+    expect((screen.getByRole('combobox', { name: 'edad' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('combobox', { name: 'sexo' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByText(/already combines 3 variables/)).toBeTruthy()
+
+    // «All» clears just that field and unlocks the rest.
+    await choose('sexo', copy.anyValue)
+    expect((screen.getByRole('combobox', { name: 'edad' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByText('Variables in this group: 2 of 3.')).toBeTruthy()
+    await choose('edad', '25 a 34')
+
+    await userEvent.click(screen.getByRole('button', { name: copy.compare }))
+    await waitFor(() => expect(vi.mocked(resultsApi.getSurveyAnalytics)).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(resultsApi.getSurveyAnalytics).mock.calls[1]![3]).toEqual([
+      { field: 'department', value: FINANCE },
+      { field: 'puesto', value: 'jefatura' },
+      { field: 'edad', value: '25-34' },
+    ])
+  })
+
   it('cannot compare with nothing chosen', () => {
     renderPanel()
     expect((screen.getByRole('button', { name: copy.compare }) as HTMLButtonElement).disabled).toBe(true)

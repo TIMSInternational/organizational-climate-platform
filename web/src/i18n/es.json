@@ -6733,7 +6733,9 @@
       "scoreHeader": "Resultado",
       "answeredHeader": "Respuestas",
       "noScore": "Sin dato",
-      "failed": "No se pudo calcular el cruce."
+      "failed": "No se pudo calcular el cruce.",
+      "variables": "Variables en este grupo: {count} de {max}.",
+      "variablesFull": "Este grupo ya combina {max} variables, el máximo. Para usar otra, vuelva una a «Todos»."
     },
     "description": "Lo que encontró esta encuesta y a cuántas personas alcanzó.",
     "untitled": "Encuesta sin título",
