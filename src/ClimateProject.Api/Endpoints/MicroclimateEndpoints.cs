@@ -1617,9 +1617,10 @@ public static class MicroclimateEndpoints
     /// <b>This endpoint reads a table nothing writes.</b> #131 asked for insights to be
     /// "stubbed or deferred" because they depend on #67, the AI provider decision. #67 is
     /// closed and produced <c>docs/superpowers/specs/2026-08-02-ai-provider-decision.md</c>,
-    /// but no inference client was ever built -- there is no Bedrock or Anthropic call
-    /// anywhere in <c>src/</c>, and the only writer of <c>MicroclimateAiInsights</c> in the
-    /// repository is a persistence test. <c>SubmitResponseAsync</c> hard-codes
+    /// but no inference client was built for insights. (Corrected 2026-11-15: an Anthropic client
+    /// does exist in <c>src/</c> now -- <c>ClaudeIntakeMappingModel</c>, for mapping intake
+    /// workbooks -- but nothing calls a model for microclimate insights.) The only writer of
+    /// <c>MicroclimateAiInsights</c> in the repository is a persistence test. <c>SubmitResponseAsync</c> hard-codes
     /// <c>SentimentScore = 0</c> for the same reason.
     ///
     /// <para>

@@ -87,6 +87,8 @@ const settings: SettingsDraft = {
   credentialMode: 'shared',
   primaryColor: '#0d9488',
   logoUrl: '',
+  privacyNoticeEs: '',
+  privacyNoticeEn: '',
 }
 
 describe('profileChanges', () => {

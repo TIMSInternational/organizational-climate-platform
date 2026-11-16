@@ -334,7 +334,11 @@ builder.Services.AddOptions<CorsOptions>()
         options.AddPolicy("Frontend", policy => policy
             .SetIsOriginAllowed(matcher.IsAllowed)
             .AllowAnyHeader()
-            .AllowAnyMethod());
+            .AllowAnyMethod()
+            // A cross-origin fetch can read only the CORS-safelisted response headers unless
+            // the server names more. The web reads X-Request-Id to show and report it, so it
+            // is named here; without this line the header is sent and the browser hides it.
+            .WithExposedHeaders(RequestLogging.HeaderName));
     })
     // Belt-and-braces, and deliberately labelled as such rather than as a fix (#189).
     //
@@ -514,6 +518,11 @@ builder.WebHost.ConfigureKestrel((context, kestrelOptions) =>
 
 var app = builder.Build();
 
+// One line per request with its route template, status, duration and request id, and the id
+// returned as X-Request-Id (#158). FIRST, ahead of the exception handler, so the status it logs
+// is the one the caller received. See RequestLogging for what the line may and may not carry.
+app.UseClimateProjectRequestLogging();
+
 // Whole-repo previously had NO exception middleware anywhere in this pipeline, so
 // any unhandled exception (most commonly a DbUpdateException from a unique-index
 // violation the endpoint didn't pre-check for) reached the client as a bare 500
@@ -555,7 +564,11 @@ app.UseExceptionHandler(errorApp =>
         {
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = badRequest.StatusCode;
-            await context.Response.WriteAsJsonAsync(new { message = badRequest.Message });
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = badRequest.Message,
+                requestId = context.TraceIdentifier,
+            });
             return;
         }
 
@@ -591,7 +604,10 @@ app.UseExceptionHandler(errorApp =>
             : isUniqueViolation
                 ? "The request conflicts with existing data."
                 : "An unexpected error occurred.";
-        await context.Response.WriteAsJsonAsync(new { message });
+        // The request id goes in every body this handler writes, so a person reporting "it
+        // said an unexpected error occurred" can quote the one string that finds the request
+        // line (RequestLogging) and, for a 500, the exception logged beside it.
+        await context.Response.WriteAsJsonAsync(new { message, requestId = context.TraceIdentifier });
     });
 });
 
@@ -745,6 +761,7 @@ app.MapSystemStatusEndpoints();
 app.MapDashboardEndpoints();
 app.MapAuditEndpoints();
 app.MapGdprEndpoints();
+app.MapClientErrorEndpoints();
 
 app.Run();
 

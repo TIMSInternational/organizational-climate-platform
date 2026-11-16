@@ -14,7 +14,8 @@
     "check:contrast": "node scripts/check-seq-contrast.mjs",
     "shot": "node scripts/shot.mjs",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:respondent": "node scripts/respondent-smoke.mjs"
   },
   "dependencies": {
     "@fontsource/goudy-bookletter-1911": "^5.3.0",
@@ -61,7 +62,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "axe-core": "^4.13.0",
-    "happy-dom": "^20.11.1",
+    "happy-dom": "21.0.4",
     "oxlint": "^1.75.0",
     "playwright-core": "1.62.1",
     "tailwindcss": "^4.3.3",

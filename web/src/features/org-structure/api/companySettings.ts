@@ -36,6 +36,13 @@ export interface CompanyBranding {
   secondaryColor: string
   fontFamily: string
   customCss: string | null
+  /**
+   * The company's «Aviso de privacidad» (Ley 8968), plain text written by the CLIENT's legal
+   * team, one per language. Null when none is set. Optional only because an API older than the
+   * notice sends neither.
+   */
+  privacyNoticeEs?: string | null
+  privacyNoticeEn?: string | null
 }
 
 export interface CompanySettingsResponse {
@@ -59,6 +66,12 @@ export interface UpdateCompanySettingsInput {
   secondaryColor?: string
   fontFamily?: string
   customCss?: string
+  /**
+   * The privacy notice, per language. Omitted leaves it alone; `""` clears it; the server trims
+   * and refuses more than `PRIVACY_NOTICE_MAX_LENGTH` characters with a 400.
+   */
+  privacyNoticeEs?: string
+  privacyNoticeEn?: string
   /** The whole scale, replaced at once — the API refuses a scale with a gap or an overlap. */
   resultBands?: ResultBandsWire
   /** Applies only to surveys created after the change; each survey froze its own at create. */

@@ -14,9 +14,12 @@ name: db-backup
 
 on:
   schedule:
-    # 07:00 UTC = 01:00 in Costa Rica (UTC-6, no DST). GitHub may start a scheduled run late
-    # under load; the alarm allows two hours of slack for that.
-    - cron: "0 7 * * *"
+    # Costa Rica is UTC-6 with no DST. GitHub may start a scheduled run late under load; the
+    # alarm allows two hours of slack for that.
+    # Every 6 hours since 2026-11-15 (Federico): 01:00, 07:00, 13:00 and 19:00 in Costa Rica.
+    # A restore loses at most 6 hours of answers instead of 24; on a launch day hundreds of
+    # people answer within hours. Each dump is a few MB; the 26-hour "stopped" alarm still holds.
+    - cron: "0 1,7,13,19 * * *"
   workflow_dispatch:
 
 # Never two dumps at once, and never cancel one in flight: a cancelled run publishes no metric,

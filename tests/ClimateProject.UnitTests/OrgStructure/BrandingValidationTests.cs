@@ -168,4 +168,104 @@ public class BrandingValidationTests
         // and the reader that matters decides whether to render an <img> at all.
         Assert.Equal(expected, BrandingValidation.NormaliseLogoUrl(stored));
     }
+
+    // ---- The «Aviso de privacidad» (Ley 8968, ruled 2026-11-15) ---------------------------
+    // Plain text the client's legal team writes, shown to a respondent in a dialog. The rule:
+    // trimmed, at most 4000 characters, line breaks and tabs are text, any other control
+    // character is refused, and a blank is "not set".
+
+    private static UpdateCompanySettingsRequest Notice(string? es = null, string? en = null)
+        => new(null, null, null, null, null, null, null, null, null, null, null, null,
+            PrivacyNoticeEs: es, PrivacyNoticeEn: en);
+
+    [Fact]
+    public void A_spanish_notice_one_character_over_the_cap_is_refused_and_the_message_says_the_limit_in_words()
+    {
+        var refusal = BrandingValidation.Validate(Notice(es: new string('a', BrandingValidation.PrivacyNoticeMaxLength + 1)));
+
+        // An administrator pasting a legal text needs to know the limit AND how far over it
+        // they are, or the only move left is to delete paragraphs at random.
+        Assert.NotNull(refusal);
+        Assert.Contains("4000 characters or fewer", refusal, StringComparison.Ordinal);
+        Assert.Contains("Spanish", refusal, StringComparison.Ordinal);
+        Assert.Contains("4001", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_notice_of_exactly_the_cap_is_accepted_in_either_language()
+    {
+        var atTheCap = new string('a', BrandingValidation.PrivacyNoticeMaxLength);
+
+        Assert.Equal(4000, BrandingValidation.PrivacyNoticeMaxLength);
+        Assert.Null(BrandingValidation.Validate(Notice(es: atTheCap)));
+        Assert.Null(BrandingValidation.Validate(Notice(en: atTheCap)));
+    }
+
+    [Fact]
+    public void Surrounding_whitespace_is_not_counted_against_the_cap()
+    {
+        // What is stored is the trimmed text, so the trimmed text is what is measured.
+        var padded = "  \n\t" + new string('a', BrandingValidation.PrivacyNoticeMaxLength) + "\r\n  ";
+
+        Assert.Null(BrandingValidation.Validate(Notice(es: padded, en: padded)));
+    }
+
+    [Theory]
+    [InlineData("Primer párrafo.\nSegundo párrafo.")]
+    [InlineData("Primer párrafo.\r\n\r\nSegundo párrafo.")]
+    [InlineData("1.\tDatos recopilados")]
+    [InlineData("<b>Esto se muestra como texto</b>")]
+    public void Line_breaks_tabs_and_markup_are_plain_text_and_accepted(string notice)
+        => Assert.Null(BrandingValidation.Validate(Notice(es: notice, en: notice)));
+
+    [Theory]
+    [InlineData("Aviso\u0000")]
+    [InlineData("Aviso\u0007de privacidad")]
+    [InlineData("\u001B[31mAviso")]
+    [InlineData("Avi\u007Fso")]
+    // U+0085 mid-text: at either end it is whitespace to Trim() and is removed, not refused.
+    [InlineData("Aviso\u0085de privacidad")]
+    public void Any_other_control_character_is_refused_because_it_would_reach_the_respondent_unseen(string notice)
+    {
+        var refusal = BrandingValidation.Validate(Notice(es: notice));
+
+        Assert.NotNull(refusal);
+        Assert.Contains("control character", refusal, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\n\t\r\n")]
+    public void A_blank_notice_is_accepted_because_it_is_how_a_stored_one_is_cleared(string blank)
+        => Assert.Null(BrandingValidation.Validate(Notice(es: blank, en: blank)));
+
+    [Fact]
+    public void The_english_notice_is_held_to_the_same_rule_as_the_spanish_one()
+    {
+        // A valid Spanish notice beside it, so a validator that checked only the first
+        // field would pass this request.
+        var tooLong = BrandingValidation.Validate(Notice(es: "Aviso válido", en: new string('a', BrandingValidation.PrivacyNoticeMaxLength + 1)));
+        var control = BrandingValidation.Validate(Notice(es: "Aviso válido", en: "Notice\u0007"));
+
+        Assert.NotNull(tooLong);
+        Assert.Contains("English", tooLong, StringComparison.Ordinal);
+        Assert.Contains("4000 characters or fewer", tooLong, StringComparison.Ordinal);
+        Assert.NotNull(control);
+        Assert.Contains("English", control, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("\n\t\r\n", null)]
+    [InlineData("  Aviso de privacidad  ", "Aviso de privacidad")]
+    [InlineData("\n Primer párrafo.\nSegundo párrafo.\t ", "Primer párrafo.\nSegundo párrafo.")]
+    public void Normalisation_makes_not_set_exactly_one_stored_value_and_trims_the_rest(string? stored, string? expected)
+    {
+        // The respondent's screen shows the link only when a notice is set; one spelling of
+        // "not set" is one thing for it to test.
+        Assert.Equal(expected, BrandingValidation.NormalisePrivacyNotice(stored));
+    }
 }

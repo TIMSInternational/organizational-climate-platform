@@ -5108,6 +5108,16 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasDefaultValue("#3B82F6")
                                 .HasColumnName("branding_primary_color");
 
+                            b1.Property<string>("PrivacyNoticeEn")
+                                .HasMaxLength(4000)
+                                .HasColumnType("character varying(4000)")
+                                .HasColumnName("branding_privacy_notice_en");
+
+                            b1.Property<string>("PrivacyNoticeEs")
+                                .HasMaxLength(4000)
+                                .HasColumnType("character varying(4000)")
+                                .HasColumnName("branding_privacy_notice_es");
+
                             b1.Property<string>("SecondaryColor")
                                 .IsRequired()
                                 .ValueGeneratedOnAdd()

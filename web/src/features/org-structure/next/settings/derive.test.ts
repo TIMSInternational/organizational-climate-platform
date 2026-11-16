@@ -41,8 +41,27 @@ describe('changesOf', () => {
 
   it('holds only the settings something reads — never frequency, anonymity, retention, microclimates or AI (G18)', () => {
     const initial = draftOf(response)
-    expect(Object.keys(initial).sort()).toEqual(['credentialMode', 'language', 'logoUrl', 'primaryColor', 'timezone'])
+    // The two privacy notices are read: every respondent's form opens them (`pickPrivacyNotice`).
+    expect(Object.keys(initial).sort()).toEqual([
+      'credentialMode',
+      'language',
+      'logoUrl',
+      'primaryColor',
+      'privacyNoticeEn',
+      'privacyNoticeEs',
+      'timezone',
+    ])
     expect(changesOf(initial, { ...initial, language: 'es' })).toEqual({ language: 'es' })
+  })
+
+  it('reads an absent or null notice as empty, and sends a notice only when it changed — trimmed, "" to clear', () => {
+    const initial = draftOf(response)
+    expect([initial.privacyNoticeEs, initial.privacyNoticeEn]).toEqual(['', ''])
+    expect(changesOf(initial, { ...initial, privacyNoticeEs: '  Aviso\n\nDos  ' })).toEqual({ privacyNoticeEs: 'Aviso\n\nDos' })
+    expect(changesOf(initial, { ...initial, privacyNoticeEn: '   ' })).toEqual({})
+    const set = draftOf({ ...response, branding: { ...response.branding, privacyNoticeEs: 'Aviso', privacyNoticeEn: 'Notice' } })
+    expect(changesOf(set, { ...set, privacyNoticeEn: '' })).toEqual({ privacyNoticeEn: '' })
+    expect(changesOf(set, { ...set, privacyNoticeEs: 'Aviso ' })).toEqual({})
   })
 
   it('sends a time zone change, and only it', () => {

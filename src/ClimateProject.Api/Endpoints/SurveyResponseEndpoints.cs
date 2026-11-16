@@ -342,6 +342,13 @@ public static class SurveyResponseEndpoints
             .Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language)
             .ResolvedLocale ?? locale;
 
+        // The company's «Aviso de privacidad», and nothing else of the company: this view is
+        // served to anonymous link visitors too, so what it may carry is chosen here.
+        var privacyNotice = await db.Companies.AsNoTracking()
+            .Where(c => c.Id == survey.CompanyId)
+            .Select(c => new { c.Branding.PrivacyNoticeEs, c.Branding.PrivacyNoticeEn })
+            .FirstOrDefaultAsync(cancellationToken);
+
         return Results.Ok(new SurveyRespondView(
             survey.Id,
             SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields),
@@ -376,7 +383,9 @@ public static class SurveyResponseEndpoints
                 locale, survey.Language, "settings.respondentIntro", fallbackFields)),
             SurveyRespondentText.OrDefault(SurveyContent.Resolve(
                 survey.Settings.ClosingMessageEn, survey.Settings.ClosingMessageEs,
-                locale, survey.Language, "settings.closingMessage", fallbackFields))));
+                locale, survey.Language, "settings.closingMessage", fallbackFields)),
+            BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEs),
+            BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEn)));
     }
 
     // ------------------------------------------------------------------

@@ -4,6 +4,11 @@
 **Status: PROVEN IN PRODUCTION 2026-10-13** — first production dump taken (run 38331346883) and
 restored into a scratch database with 0 errors; see [Proven](#proven-in-production--2026-10-13).
 One item open: the alarm's first `OK` (it was `INSUFFICIENT_DATA`, "Initial alarm creation").
+**AMENDED 2026-11-15: every 6 hours, RPO 6 hours** (Federico, after #668). Same workflow, bucket and
+alarm; only the schedule changed (`db-backup.yml`, `0 1,7,13,19 * * *` = 01:00, 07:00, 13:00, 19:00 Costa
+Rica). The 26-hour `climate-project-db-backup-stopped` alarm still pages if dumps stop. Retention is
+unchanged at 35 days (about 140 dumps of a few MB). The alarm's first OK, listed as open below, was
+measured OK since 2026-10-13T02:36Z (DescribeAlarms, 2026-11-15).
 
 Raised OPEN 2026-09-28 against `5e95df7b`. The sections from "The measurement" to "What is not in
 question" are the record that led to the decision and are kept unedited; the decision and what

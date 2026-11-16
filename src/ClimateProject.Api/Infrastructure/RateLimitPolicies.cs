@@ -172,6 +172,27 @@ public static class RateLimitPolicies
     public const string PublicLink = "public-link";
 
     /// <summary>
+    /// <c>POST /client-errors</c>: the web's crash reports. Anonymous, because a respondent's
+    /// page crashes too and a respondent has no account; bucketed by the caller, because there
+    /// is no token to key on. See <see cref="ClientErrorPermitsPerWindow"/>.
+    /// </summary>
+    public const string ClientError = "client-error";
+
+    /// <summary>
+    /// Crash reports a minute from ONE caller address. The web sends at most five per page
+    /// load (<c>web/src/app/crashReporter.ts</c>), so thirty is six crashing page loads a
+    /// minute from one address -- an office behind one NAT on a broken build still sends far
+    /// more than the alarm's threshold. What it bounds is a script using an anonymous route
+    /// that writes a Warning line to flood the log group or trip the alarm on purpose. A report
+    /// refused here is lost, and that is acceptable: the alarm counts reports, it does not
+    /// need every one.
+    /// </summary>
+    public const int ClientErrorPermitsPerWindow = 30;
+
+    /// <summary>Window for <see cref="ClientErrorPermitsPerWindow"/>.</summary>
+    public static readonly TimeSpan ClientErrorWindow = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// Default for <see cref="RateLimitingOptions.AuthenticationPermitsPerMinute"/>: sign-in
     /// attempts a minute from ONE caller address.
     ///
@@ -339,6 +360,8 @@ public static class RateLimitPolicies
 
             options.AddPolicy(PublicLink, PartitionPublicLink);
 
+            options.AddPolicy(ClientError, PartitionClientError);
+
             options.OnRejected = OnRejectedAsync;
         });
     }
@@ -471,6 +494,17 @@ public static class RateLimitPolicies
             "public-link:" + ClientIpFor(httpContext),
             PublicLinkPermitsPerWindow,
             PublicLinkWindow);
+    }
+
+    /// <summary>Partitions <c>POST /client-errors</c> by caller address.</summary>
+    internal static RateLimitPartition<string> PartitionClientError(HttpContext httpContext)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        return FixedWindow(
+            "client-error:" + ClientIpFor(httpContext),
+            ClientErrorPermitsPerWindow,
+            ClientErrorWindow);
     }
 
     private static RateLimitPartition<string> FixedWindow(string key, int permitLimit, TimeSpan window)

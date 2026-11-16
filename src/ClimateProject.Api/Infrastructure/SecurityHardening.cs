@@ -51,6 +51,21 @@ public sealed class SecurityOptions
 public sealed class LargeRequestBodyMetadata;
 
 /// <summary>
+/// Endpoint metadata LOWERING the body ceiling for one route below
+/// <see cref="SecurityOptions.MaxRequestBodyBytes"/>. Attached with
+/// <c>.WithMetadata(new MaxRequestBodyBytesMetadata(n))</c>. Used by the anonymous crash-report
+/// route (<c>POST /client-errors</c>), whose honest body is a few hundred bytes and which has no
+/// business accepting the 4 MiB every other JSON route may. Takes precedence over
+/// <see cref="LargeRequestBodyMetadata"/>; a route carries one or the other.
+/// </summary>
+public sealed class MaxRequestBodyBytesMetadata(long maxBytes)
+{
+    public long MaxBytes { get; } = maxBytes > 0
+        ? maxBytes
+        : throw new ArgumentOutOfRangeException(nameof(maxBytes), "A body ceiling must be positive.");
+}
+
+/// <summary>
 /// The two pieces of pipeline hardening added by #146 that are not rate limiting: security
 /// response headers, and a request-body ceiling.
 /// </summary>
@@ -151,7 +166,11 @@ public static class SecurityHardening
             if (context.Request.ContentLength > limit)
             {
                 context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
-                await context.Response.WriteAsJsonAsync(new { message = "Request body is too large." });
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    message = "Request body is too large.",
+                    requestId = context.TraceIdentifier,
+                });
                 return;
             }
 
@@ -173,6 +192,11 @@ public static class SecurityHardening
     internal static long MaxBodyBytesFor(Endpoint? endpoint, SecurityOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        if (endpoint?.Metadata.GetMetadata<MaxRequestBodyBytesMetadata>() is { } explicitCeiling)
+        {
+            return explicitCeiling.MaxBytes;
+        }
 
         return endpoint?.Metadata.GetMetadata<LargeRequestBodyMetadata>() is not null
             ? options.MaxUploadBodyBytes
