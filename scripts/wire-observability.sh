@@ -28,6 +28,8 @@ REGION="${REGION:-us-east-2}"
 OBS_STACK=climate-project-observability-prod
 PROBE_STACK=climate-project-synthetic-probe-prod
 SERVICE_STACK=climate-project-api-prod
+# Overridable so the tests can hand the script a template of a chosen size and shape.
+OBS_TEMPLATE="${OBS_TEMPLATE:-infra/aws/climate-project-observability.yml}"
 # Prefer the repository variable over the literal: it is the same value the CI workflow reads,
 # so the two cannot drift into alerting two different addresses. The literal stays as the last
 # resort for a machine with no gh.
@@ -86,6 +88,67 @@ DEPLOY_FLAGS=(--no-fail-on-empty-changeset)
 [ "${DRY:-0}" = "1" ] && DEPLOY_FLAGS+=(--no-execute-changeset)
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+# ---------------------------------------------------------------------------------------------
+# CloudFormation takes a template inline only up to 51,200 bytes. Past that, `deploy` stops
+# before building any changeset: "Templates with a size greater than 51,200 bytes must be
+# deployed via an S3 Bucket". #673 (the website crash-report filter and alarm) took the
+# observability template to 53,941 bytes, and this account has no bucket for templates.
+#
+# About 16 KB of that template is comments. They are its documentation and they stay in the
+# repository; only the copy sent to CloudFormation drops them, and only when the file is over
+# the limit. Only whole-line comments are dropped. A line inside a block scalar (`|` or `>`) is
+# never touched, because a `#` line there is CONTENT: the Teams forwarder's inline Python and
+# every multi-line Description are block scalars. Measured 2026-11-16: the stripped copy of
+# every template in infra/aws parses to the same structure as the original (PyYAML, with the
+# CloudFormation `!` tags loaded as data). A copy that is still over the limit stops the run
+# here, rather than halfway through.
+# ---------------------------------------------------------------------------------------------
+INLINE_TEMPLATE_LIMIT=51200
+INLINE_TEMPLATES=()
+# The `+` form keeps an empty array legal under `set -u` on macOS's bash 3.2.
+trap 'rm -f ${INLINE_TEMPLATES[@]+"${INLINE_TEMPLATES[@]}"}' EXIT
+
+strip_template_comments() {
+  awk '
+    {
+      match($0, /^ */); ind = RLENGTH
+      if (inblock) {
+        if ($0 ~ /^[[:space:]]*$/ || ind > blockind) { print; next }
+        inblock = 0
+      }
+      if ($0 ~ /^[[:space:]]*#/) next
+      print
+      if ($0 ~ /(:|-)[[:space:]]*(![A-Za-z:]+[[:space:]]+)?[|>][-+0-9]*[[:space:]]*(#.*)?$/) {
+        inblock = 1; blockind = ind
+      }
+    }' "$1"
+}
+
+# Sets INLINE_TEMPLATE to a file CloudFormation will accept inline: the template itself when it
+# fits, otherwise a comment-free copy. A variable, not stdout, so the temp file is registered
+# for cleanup in this shell rather than in a subshell that forgets it.
+inline_template() {
+  local src="$1" size copy
+  size=$(wc -c < "$src" | tr -d '[:space:]')
+  if [ "$size" -le "$INLINE_TEMPLATE_LIMIT" ]; then
+    INLINE_TEMPLATE="$src"
+    return
+  fi
+  copy=$(mktemp "${TMPDIR:-/tmp}/cfn-inline.XXXXXX")
+  INLINE_TEMPLATES+=("$copy")
+  strip_template_comments "$src" > "$copy"
+  local stripped
+  stripped=$(wc -c < "$copy" | tr -d '[:space:]')
+  if [ "$stripped" -gt "$INLINE_TEMPLATE_LIMIT" ]; then
+    echo "Refusing to run: $src is $size bytes, and still $stripped without its comments --" >&2
+    echo "over CloudFormation's inline limit of $INLINE_TEMPLATE_LIMIT. Deploy it through an S3 bucket" >&2
+    echo "(aws cloudformation deploy --s3-bucket ...) or split the stack." >&2
+    exit 1
+  fi
+  echo "  $src: $size bytes; sending a comment-free copy of $stripped bytes (inline limit $INLINE_TEMPLATE_LIMIT)"
+  INLINE_TEMPLATE="$copy"
+}
 
 # ---------------------------------------------------------------------------------------------
 # The delivery path, and the three states it can be in.
@@ -225,10 +288,11 @@ echo "ServiceId $SERVICE_ID"
 
 echo
 echo "== 1/5  $OBS_STACK  (AlarmsEnabled=$ALARMS_ENABLED) =="
+inline_template "$OBS_TEMPLATE"
 aws cloudformation deploy \
   --region "$REGION" \
   --stack-name "$OBS_STACK" \
-  --template-file infra/aws/climate-project-observability.yml \
+  --template-file "$INLINE_TEMPLATE" \
   --capabilities CAPABILITY_NAMED_IAM \
   "${DEPLOY_FLAGS[@]}" \
   --parameter-overrides \
@@ -272,10 +336,11 @@ fi
 # 2.33.4). It is stripped only on a CREATE, where there is no previous value to use.
 echo
 echo "== 4/5  wire the three probe alarms, and point them at the host users actually use =="
+inline_template infra/aws/climate-project-synthetic-probe.yml
 aws cloudformation deploy \
   --region "$REGION" \
   --stack-name "$PROBE_STACK" \
-  --template-file infra/aws/climate-project-synthetic-probe.yml \
+  --template-file "$INLINE_TEMPLATE" \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset \
   --parameter-overrides \
