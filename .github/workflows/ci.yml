@@ -337,3 +337,131 @@ jobs:
       # the detection half is what makes the clean half mean anything.
       - name: Verify secret scanning
         run: ./scripts/verify-secret-scanning.sh
+
+  # One respondent, end to end, against the REAL API (web/scripts/respondent-smoke.mjs):
+  # open a public /s/ link signed out, answer, submit, and require the API's responseCount
+  # to grow by one. Every other web check answers the API from fixtures or a stubbed fetch,
+  # so a contract drift on the one path every employee walks was invisible to all of them.
+  # The script's count check is what has teeth: with the submit mutated to send
+  # isComplete:false the thank-you screen still rendered, and only the count went 0 -> 0.
+  respondent-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: climate_e2e_smoke
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      CONNECTION: Host=localhost;Port=5432;Database=climate_e2e_smoke;Username=postgres;Password=postgres
+      PGPASSWORD: postgres
+      API_URL: http://127.0.0.1:5180
+      APP_URL: http://127.0.0.1:4173
+      ADMIN_EMAIL: admin@e2e-smoke.test
+      # A throwaway value for a throwaway database that lives only inside this job.
+      ADMIN_PASSWORD: E2e-Smoke-1234!
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the API
+        run: dotnet build src/ClimateProject.Api/ClimateProject.Api.csproj --configuration Release
+
+      - name: Apply migrations
+        run: |
+          dotnet tool restore
+          dotnet dotnet-ef database update --project src/ClimateProject.Infrastructure \
+            --startup-project src/ClimateProject.Api --configuration Release --no-build \
+            --connection "$CONNECTION"
+
+      - name: Start the API
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: http://127.0.0.1:5180
+          Logging__LogLevel__Default: Warning
+          Email__Provider: none
+          TrackingJwtSecret: ci-respondent-smoke-signing-key-not-a-secret-0123456789
+          InternalApiKey: ci-respondent-smoke-internal-key-not-a-secret
+          Cors__AllowedOrigins__0: http://127.0.0.1:4173
+        run: |
+          export ConnectionStrings__ClimateProject="$CONNECTION"
+          nohup dotnet run --project src/ClimateProject.Api --configuration Release --no-build \
+            --no-launch-profile > api.log 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -fsS "$API_URL/ready" && exit 0
+            sleep 1
+          done
+          cat api.log
+          exit 1
+
+      # SQL here, and ONLY here, because this database is created and destroyed inside this
+      # job and the product has no endpoint that makes the first admin: POST /auth/signup
+      # needs an existing company for the email domain and always mints an employee. This is
+      # step 8 of docs/runbooks/staging-provisioning.md: insert one company, sign up through
+      # the API so the password is hashed by the code that verifies it, promote that one row.
+      # Everything after this goes through the endpoints the UI calls.
+      - name: Bootstrap the first admin
+        run: |
+          psql -h localhost -U postgres -d climate_e2e_smoke -v ON_ERROR_STOP=1 -c \
+            "INSERT INTO companies (\"Id\", name, email_domain, created_at) VALUES (gen_random_uuid(), 'E2E Smoke', 'e2e-smoke.test', now())"
+          curl -fsS -o /dev/null -X POST "$API_URL/auth/signup" -H 'content-type: application/json' \
+            -d "{\"email\":\"$ADMIN_EMAIL\",\"name\":\"E2E Admin\",\"password\":\"$ADMIN_PASSWORD\"}"
+          psql -h localhost -U postgres -d climate_e2e_smoke -v ON_ERROR_STOP=1 -c \
+            "UPDATE users SET role = 'company_admin', updated_at = now() WHERE email = '$ADMIN_EMAIL'"
+
+      - name: Install web dependencies and Chromium
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright-core install --with-deps chromium
+
+      - name: Build and serve the web app
+        working-directory: web
+        run: |
+          VITE_API_BASE_URL="$API_URL" npm run build
+          nohup node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173 --strictPort \
+            > ../preview.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS -o /dev/null "$APP_URL/" && exit 0
+            sleep 1
+          done
+          cat ../preview.log
+          exit 1
+
+      - name: Respondent smoke
+        working-directory: web
+        run: >-
+          npm run smoke:respondent --
+          --api "$API_URL" --app "$APP_URL"
+          --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD"
+          --out .respondent-smoke
+
+      - name: Failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: respondent-smoke-failure
+          path: |
+            web/.respondent-smoke/
+            api.log
+            preview.log
+          if-no-files-found: ignore
+          retention-days: 14
