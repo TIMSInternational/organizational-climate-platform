@@ -1,8 +1,31 @@
 # Secret rotation inventory — #70
 
-**Status: IN PROGRESS. One item of roughly sixteen is rotated.** `TrackingJwtSecret` is **done,
-both phases, 2026-09-28**. Everything else below is still `☐`, and the issue is titled *rotate
-every secret exposed by the incident* — so the JWT being finished is a start, not a close-out.
+**Status: IN PROGRESS. Two items of roughly sixteen are rotated.** `TrackingJwtSecret` is **done,
+both phases, 2026-09-28**, and `InternalApiKey` was rotated (one-sided) on **2026-11-16**, with E3
+partly and X1 done the same day (section below). Everything else is still `☐`, and the issue is
+titled *rotate every secret exposed by the incident* — so this is progress, not a close-out.
+
+## 2026-11-16 — C rotated, E3 partly, X1 done (no values recorded here)
+
+Done by the agent at Federico's instruction ("do it all yourself"). Every value was generated in
+the shell and written straight to its store; none was printed, pasted or committed.
+
+| Item | What was done | How it was verified |
+|---|---|---|
+| **C `InternalApiKey`** | New value, `openssl rand -hex 32` (64 chars, the old shape), put to `climate-project-api/prod/InternalApiKey` in 795965600143 us-east-2. AWSCURRENT is now version `ad13a585…`; the old one, `e15d08ab…`, is AWSPREVIOUS. One-sided, as the runbook allows: `climate-tracking-api-prod` does not exist (`DescribeStacks` → "does not exist"). Picked up by deploy-prod run 43954676280. | Deploy succeeded: the canary, then `/ready` returned 200 twenty times out of twenty. The application log since the deploy has 0 lines of `"Invalid or missing internal API key."`. |
+| **E3(a) `tims-ats-dev` …M75LO** | **The sender is the TIMS ATS app.** Its local `.env` / `.env.production.local` and Vercel project `tims-ats` (Production and Preview) hold the key as `AWS_ACCESS_KEY_ID` for SES. Steps: created a new key …JU5TL; wrote it to Vercel Production and Preview and to both local env files; redeployed the same ATS production build (`vercel redeploy`); then set …M75LO **Inactive**. | The new key authenticates as `user/tims-ats-dev` and `sesv2 get-account` answers. After the redeploy, `tims-ats.vercel.app` answers 307 → `/dashboard` → 200, as before. **To do:** delete …M75LO after a quiet period, and check `get-access-key-last-used` on …JU5TL once ATS has sent mail. |
+| **E3(b) `Federico` …IOGK** (747814092517) | Set **Inactive**. It was last used 2026-08-01 (bedrock). | `list-access-keys` shows it Inactive. Delete it later. |
+| **E3(b) `claude-code-agent` …W6UG** (747814092517) | **Not changed.** CloudTrail shows it in active use on 2026-11-15 and 16, by a Mac Node SDK making Bedrock `InvokeModel` and Transcribe calls, which is `tims-english-audio` (`agent-aws-permissions.md`). The local `[tims-ats]` profile also uses it. Cutting it to one key means moving that product to …MRCP first. | CloudTrail `LookupEvents` by access key. |
+| **E3(c) local profiles** | Out of scope by date: `[default]` …5AEN7 (2026-08-01), `[mep]` …4FAGS (2026-08-15), `[claude]` …MRCP (2026-08-18), `[tims-new]`. `[formmaps-deploy]` is `Federico` …2VPH, created 2026-07-26: one of the nine pre-window keys whose scoping is still open. | `list-access-keys` in each profile's own account. |
+| **X1 old-account copies** | All five `climate-project-api/prod/*` secrets in 747814092517 us-east-1 were scheduled for deletion, with a 7-day recovery window that ends 2026-11-23. They held the live JWT signing key and the live database connection string. No App Runner service exists in that account, and the secrets were last accessed 2026-10-12. The old account's SES identity and `climate-project-smtp` were **not** touched. | `delete-secret` returned each `DeletionDate`. |
+
+**New secret, not a rotation:** `climate-project-api/prod/totp-encryption-key` (795965600143 us-east-2) holds `Auth:TotpEncryptionKey`, the AES-256-GCM key for two-factor sign-in (#675). It is base64 of 32 bytes, verified by length only. It is wired through the `production` environment variable `TOTP_ENCRYPTION_KEY_SECRET_ARN` and was live from deploy-prod run 43954676280: the new instances logged no "two-factor sign-in is OFF" line. **Never rotate it casually:** every enrolled secret is encrypted with it.
+
+**Still open after this pass:**
+- B1 (database password) causes several minutes of failed database requests, so it needs a window with no live survey.
+- B2, D1, E2 and E4 need dashboard access (Supabase, Google Cloud, Vercel, Brevo).
+- D2, E1 and B3 are still blocked on the vendor's Coolify.
+- The nine pre-window keys in 747814092517 still need scoping.
 
 ## `TrackingJwtSecret` — phase 1 complete 2026-09-28, phase 2 OPEN
 
@@ -284,7 +307,7 @@ Consequences to plan for:
 
 | Item | Where | Notes | Rotated? |
 |---|---|---|---|
-| `InternalApiKey` | Secrets Manager (`InternalApiKeySecretArn`) → env `InternalApiKey` | Static bearer token guarding `/api/internal/*`; the intended caller is climate-tracking's backend, which reads the same value under the configuration key `ClimateProjectInternalApiKey` (**not deployed as of 2026-08-24 — see the correction above**). **Rotate on both sides together, once there are two sides.** Two distinct failure modes, worth keeping apart when planning the rotation: an **unset/empty** value now fails the host at *startup* (`.ValidateOnStart()`, added by #189), so a blank rotation means the service does not boot and the deploy fails outright — loud, not silent. A **mismatched** value (set on one side, stale on the other) is not a 500: `InternalApiKeyFilter` returns **401 `"Invalid or missing internal API key."`** per request, failing closed. The filter's 500 `"Internal API is not configured."` branch is now unreachable in a running service and is retained only as defence in depth. **Enumerated 2026-08-15:** secret name `climate-project-api/prod/InternalApiKey` (ARN suffix `-rILWWK`), account `747814092517` — ARN published as the `INTERNAL_API_KEY_SECRET_ARN` variable on the `production` environment. Click-by-click: runbook **C**. **CORRECTED 2026-11-15:** the secret the live API reads is in account `795965600143`, us-east-2 (`climate-project-api/prod/InternalApiKey-wggtub`, checked with `DescribeStacks`); the `-rILWWK` entry above is the old account's copy, which may still hold the same value (the account move copied secrets value-for-value). | ☐ |
+| `InternalApiKey` | Secrets Manager (`InternalApiKeySecretArn`) → env `InternalApiKey` | Static bearer token guarding `/api/internal/*`; the intended caller is climate-tracking's backend, which reads the same value under the configuration key `ClimateProjectInternalApiKey` (**not deployed as of 2026-08-24 — see the correction above**). **Rotate on both sides together, once there are two sides.** Two distinct failure modes, worth keeping apart when planning the rotation: an **unset/empty** value now fails the host at *startup* (`.ValidateOnStart()`, added by #189), so a blank rotation means the service does not boot and the deploy fails outright — loud, not silent. A **mismatched** value (set on one side, stale on the other) is not a 500: `InternalApiKeyFilter` returns **401 `"Invalid or missing internal API key."`** per request, failing closed. The filter's 500 `"Internal API is not configured."` branch is now unreachable in a running service and is retained only as defence in depth. **Enumerated 2026-08-15:** secret name `climate-project-api/prod/InternalApiKey` (ARN suffix `-rILWWK`), account `747814092517` — ARN published as the `INTERNAL_API_KEY_SECRET_ARN` variable on the `production` environment. Click-by-click: runbook **C**. **CORRECTED 2026-11-15:** the secret the live API reads is in account `795965600143`, us-east-2 (`climate-project-api/prod/InternalApiKey-wggtub`, checked with `DescribeStacks`); the `-rILWWK` entry above is the old account's copy, which may still hold the same value (the account move copied secrets value-for-value). **ROTATED 2026-11-16** (one-sided; tracking not deployed), and the old-account copy is scheduled for deletion — see the 2026-11-16 section at the top. | ☑ 2026-11-16 |
 
 ### D. Identity / OAuth
 
