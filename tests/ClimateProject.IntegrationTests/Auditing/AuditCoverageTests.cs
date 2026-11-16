@@ -208,6 +208,10 @@ public class AuditCoverageTests : IAsyncLifetime
         // 2026-11-02. Amazon SNS delivering SES bounces. Nobody signs in -- every message proves
         // itself by signature, topic and certificate host instead (SesWebhookEndpoints).
         "POST /webhooks/ses",
+        // 2026-11-15. The web's crash reports (#158). Anonymous because a respondent's page
+        // crashes too, and the web sends it without a bearer token on purpose
+        // (web/src/app/crashReporter.ts) -- so it writes a log line, never an audit row.
+        "POST /client-errors",
     ];
 
     /// <summary>

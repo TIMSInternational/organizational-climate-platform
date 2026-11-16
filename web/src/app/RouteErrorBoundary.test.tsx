@@ -4,9 +4,16 @@ import { createMemoryRouter, Outlet, RouterProvider } from 'react-router'
 import { TranslationProvider } from '../i18n'
 import es from '../i18n/es.json'
 import RouteErrorBoundary from './RouteErrorBoundary'
+import { installCrashReporting, routePatternFor } from './crashReporter'
 import { router } from './router'
 
-afterEach(cleanup)
+let uninstallReporter: () => void = () => undefined
+
+afterEach(() => {
+  cleanup()
+  uninstallReporter()
+  vi.unstubAllGlobals()
+})
 
 function Boom(): never {
   throw new Error('render failed')
@@ -14,38 +21,37 @@ function Boom(): never {
 
 /** The shell's shape, as router.tsx nests it: a layout, a pathless boundary, the pages. */
 function renderInShell() {
-  const memory = createMemoryRouter(
-    [
-      {
-        errorElement: <RouteErrorBoundary />,
-        children: [
-          {
-            element: (
-              <div>
-                <nav aria-label="rail">rail</nav>
-                <main>
-                  <Outlet />
-                </main>
-              </div>
-            ),
-            children: [
-              {
-                errorElement: <RouteErrorBoundary placement="shell" />,
-                children: [{ path: '/surveys/:id', element: <Boom /> }],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-    { initialEntries: ['/surveys/sv-1'] },
-  )
+  const memory = createMemoryRouter(SHELL_ROUTES, { initialEntries: ['/surveys/sv-1'] })
   return render(
     <TranslationProvider initialLocale="es">
       <RouterProvider router={memory} />
     </TranslationProvider>,
   )
 }
+
+const SHELL_ROUTES = [
+  {
+    errorElement: <RouteErrorBoundary />,
+    children: [
+      {
+        element: (
+          <div>
+            <nav aria-label="rail">rail</nav>
+            <main>
+              <Outlet />
+            </main>
+          </div>
+        ),
+        children: [
+          {
+            errorElement: <RouteErrorBoundary placement="shell" />,
+            children: [{ path: '/surveys/:id', element: <Boom /> }],
+          },
+        ],
+      },
+    ],
+  },
+]
 
 describe('RouteErrorBoundary', () => {
   it('keeps the shell when a page inside it throws, and offers a retry and a way home', () => {
@@ -58,6 +64,23 @@ describe('RouteErrorBoundary', () => {
     expect(within(alert).getByText(es.errors.route.title)).toBeTruthy()
     expect(within(alert).getByRole('button', { name: es.ui.state.retry })).toBeTruthy()
     expect(within(alert).getByRole('link', { name: es.errors.route.home }).getAttribute('href')).toBe('/')
+  })
+
+  it('reports the crash once, under the route pattern and never the path (#158)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    uninstallReporter = installCrashReporting({
+      baseUrl: 'https://api.example.test',
+      resolveRoute: (pathname) => routePatternFor(SHELL_ROUTES, pathname),
+    })
+
+    renderInShell()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const body = String(fetchMock.mock.calls[0][1]?.body)
+    expect(JSON.parse(body)).toMatchObject({ route: '/surveys/:id', message: 'Error: render failed' })
+    expect(body).not.toContain('sv-1')
   })
 
   it('speaks in usted, as the rest of the interface does', () => {

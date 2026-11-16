@@ -563,6 +563,25 @@ Resources:
           DefaultValue: 0
           Unit: Count
 
+  # The website's crash reports (2026-11-15). The web posts every caught render error, uncaught
+  # error and unhandled rejection to POST /client-errors, and the API writes ONE Warning line
+  # starting with this literal (ClientErrorEndpoints.LogLiteral). The literal is deliberately not
+  # a substring of the route, so the request line for the report itself
+  # ("api-request POST /client-errors 204 ...") is not counted as a second crash. Pinned by
+  # RequestLoggingAndClientErrorTests.The_alarm_counts_the_literal_the_endpoint_writes, which
+  # fails if the code's literal and this pattern drift apart.
+  WebCrashReportFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Sub /aws/apprunner/${ServiceName}/${ServiceId}/application
+      FilterPattern: '"web-crash-report"'
+      MetricTransformations:
+        - MetricNamespace: ClimateProject/Prod
+          MetricName: WebCrashReported
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
   # App Runner writes rollout and health-check events to a SECOND log group, /service, which
   # is where instance replacement is visible at all. THE PATTERN BELOW IS A GUESS -- it was
   # written without sight of a real replacement event, because nothing in this repository or
@@ -1091,6 +1110,34 @@ Resources:
       Period: 300
       EvaluationPeriods: 1
       Threshold: 100
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
+
+  WebCrashReportSpikeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ServiceName}-web-crash-reports
+      AlarmDescription: >-
+        5 or more website crash reports in 15 minutes. A screen is throwing for real people --
+        most often a deploy that broke a page, or a web build out of step with the API. Find the
+        lines with: aws logs filter-log-events --log-group-name <ApplicationLogGroup output>
+        --filter-pattern '"web-crash-report"' -- each names the ROUTE PATTERN, the build commit
+        and the request id, never the path or the person. Compare the build with the API's
+        /version.
+      # Five, not one: a single report can be a browser extension or one person's flaky
+      # network, and a channel whose first message is noise gets muted. Five distinct reports in
+      # fifteen minutes is several page loads failing (the web sends at most five per page load,
+      # one per distinct error, so one person reloading a broken page CAN reach it -- which is
+      # still a broken page). WARNING, not critical: nothing is lost while it rings; a person
+      # cannot complete a screen. Promote to CriticalTopic if a live survey window needs it.
+      # A guess, like every threshold here that has no production data behind it yet.
+      Namespace: ClimateProject/Prod
+      MetricName: WebCrashReported
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 5
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
       AlarmActions: !If [NotifyingEnabled, [!Ref WarningTopic], !Ref "AWS::NoValue"]
