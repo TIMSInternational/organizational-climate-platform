@@ -5,7 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.15" />
     <!--
       The first spreadsheet library in this repository, for TrackingSheetExport. MIT, and
       chosen over writing DocumentFormat.OpenXml (also MIT, and pulled in transitively by
@@ -30,7 +30,7 @@
       the base runtime. 8.0.1 is the version JwtBearer 10.0.0 already resolves in the Api, so
       the running dependency graph is unchanged.
     -->
-    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.23.0" />
   </ItemGroup>
 
   <PropertyGroup>
