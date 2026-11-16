@@ -30,6 +30,7 @@ dist-ssr
 # `*` covers a run given its own --out, e.g. `.e2e-demo/` or `.rehearsal-dark/`.
 .e2e*/
 .flows*/
+.respondent-smoke*/
 .rehearsal*/
 
 # `scripts/sweep.mjs` output: ~12 MB of PNGs, regenerated on demand. Added to main after
