@@ -50,6 +50,13 @@ public static class BrandingValidation
     public const int FontFamilyMaxLength = 64;
 
     /// <summary>
+    /// Matches the <c>branding_privacy_notice_es</c> / <c>_en</c> column width. A privacy
+    /// notice is a few paragraphs; 4000 characters is room for a long one and short enough
+    /// that the respondent's dialog stays readable.
+    /// </summary>
+    public const int PrivacyNoticeMaxLength = 4000;
+
+    /// <summary>
     /// Six hex digits with a leading hash, and nothing else -- not <c>#RGB</c>, not
     /// <c>rgb()</c>, not a named colour.
     ///
@@ -138,8 +145,51 @@ public static class BrandingValidation
                 + "Send an empty value to clear a previously stored one.";
         }
 
+        foreach (var (name, value) in new[] { ("Spanish", request.PrivacyNoticeEs), ("English", request.PrivacyNoticeEn) })
+        {
+            var refusal = ValidatePrivacyNotice(name, value);
+            if (refusal is not null)
+            {
+                return refusal;
+            }
+        }
+
         return null;
     }
+
+    /// <summary>
+    /// Plain text: line breaks and tabs are text, every other control character is refused,
+    /// because it would reach the respondent's dialog as an invisible character nobody wrote.
+    /// The screen renders it as text, never as markup, so a tag in it is shown, not run.
+    /// </summary>
+    private static string? ValidatePrivacyNotice(string language, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var notice = value.Trim();
+        if (notice.Length > PrivacyNoticeMaxLength)
+        {
+            return $"The {language} privacy notice must be {PrivacyNoticeMaxLength} characters or fewer; this one is {notice.Length}.";
+        }
+
+        if (notice.Any(c => char.IsControl(c) && c is not '\n' and not '\r' and not '\t'))
+        {
+            return $"The {language} privacy notice must be plain text; it contains a control character.";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Normalises a validated privacy notice for storage: a blank becomes null, so "not set"
+    /// is one value -- and the respondent's screen, which shows the link only when a notice
+    /// is set, has exactly one thing to test.
+    /// </summary>
+    public static string? NormalisePrivacyNotice(string? notice)
+        => string.IsNullOrWhiteSpace(notice) ? null : notice.Trim();
 
     private static string? ValidateLogoUrl(string logo)
     {

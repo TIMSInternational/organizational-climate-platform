@@ -40,6 +40,7 @@ import {
 import { estimatedMinutes, formatDayMonth, isUnderAMinute } from '../respondEstimate'
 import { respondFailureKey, respondFailureKind } from '../respondFailure'
 import { AnonymityNotice } from './AnonymityNotice'
+import { PrivacyNoticeLink } from './PrivacyNoticeLink'
 import RespondDemographicField from './RespondDemographicField'
 import RespondParticipantFields from './RespondParticipantFields'
 import { participantProblem, type ParticipantProblem } from './participantIdentity'
@@ -1085,6 +1086,8 @@ export default function SurveyRespondForm({
             disclosure. The question screens collapse it from question 2 on for vertical
             room, which is a different situation: by then the promise has been read. */}
         <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
+        {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
+        <PrivacyNoticeLink view={view} />
 
         <ContentLanguageNotice
           requested={locale}
@@ -1181,6 +1184,8 @@ export default function SurveyRespondForm({
         {/* Open, for the demographic screen's reason: this is the moment a name is given,
             and the promise about what happens to it is the consent. */}
         <AnonymityNotice anonymous={view.anonymous} recordsParticipation intro={view.respondentIntro} />
+        {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
+        <PrivacyNoticeLink view={view} />
 
         <ContentLanguageNotice
           requested={locale}
@@ -1270,6 +1275,8 @@ export default function SurveyRespondForm({
           the same characters, one tap away, costing ~40px instead of ~148px of an
           844px fold. `AnonymityNotice` carries the measurement and the reasoning. */}
       <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} intro={view.respondentIntro} />
+      {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
+      <PrivacyNoticeLink view={view} />
 
       <ContentLanguageNotice
         requested={locale}

@@ -21,6 +21,18 @@ public class CompanyBranding
     public string SecondaryColor { get; set; } = "#1F2937";
     public string FontFamily { get; set; } = "Inter";
     public string? CustomCss { get; set; }
+
+    /// <summary>
+    /// The company's own «Aviso de privacidad» -- how it processes the personal data of the
+    /// people who answer its surveys (Costa Rica, Ley 8968) -- in Spanish and in English.
+    /// Plain text written by the client's legal team, never by this product: null is "not
+    /// set", and a respondent's screen then shows nothing at all (ruled 2026-11-15). See
+    /// <c>BrandingValidation.PrivacyNoticeMaxLength</c>.
+    /// </summary>
+    public string? PrivacyNoticeEs { get; set; }
+
+    /// <inheritdoc cref="PrivacyNoticeEs"/>
+    public string? PrivacyNoticeEn { get; set; }
 }
 
 public class CompanySettings

@@ -32,6 +32,13 @@ export interface SettingsDraft {
    * emptying the field is a change the form may send — it is how a logo is removed.
    */
   logoUrl: string
+  /**
+   * The «Aviso de privacidad» respondents open before the first question, as the client's legal
+   * team wrote it, per language. Empty means none, and emptying a field is a change the form
+   * sends — `""` is how the API clears one.
+   */
+  privacyNoticeEs: string
+  privacyNoticeEn: string
 }
 
 /**
@@ -51,6 +58,8 @@ export const LOGO_PATH = /^\/[A-Za-z0-9._/-]+(\?[A-Za-z0-9._=-]*)?$/
 
 export const LOGO_DATA_URI = /^data:image\/(svg\+xml|png|jpeg|webp|avif|gif);base64,[A-Za-z0-9+/]+={0,2}$/
 
+/** `BrandingValidation.PrivacyNoticeMaxLength` on the API: longer is a 400. */
+export const PRIVACY_NOTICE_MAX_LENGTH = 4000
 export const LOGO_EXTENSIONS: readonly string[] = ['.svg', '.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif']
 
 /**
@@ -81,6 +90,8 @@ export function draftOf(response: CompanySettingsResponse): SettingsDraft {
     credentialMode: credentialModeOf(settings),
     primaryColor: branding.primaryColor,
     logoUrl: branding.logoUrl ?? '',
+    privacyNoticeEs: branding.privacyNoticeEs ?? '',
+    privacyNoticeEn: branding.privacyNoticeEn ?? '',
   }
 }
 
@@ -99,6 +110,11 @@ export function changesOf(initial: SettingsDraft, draft: SettingsDraft): UpdateC
   // rather than non-blank for this one field, so `""` is what clears a stored logo.
   // `NormaliseLogoUrl` on the API turns it into the single null the readers expect.
   if (draft.logoUrl.trim() !== initial.logoUrl.trim() && logoValid(draft.logoUrl)) changes.logoUrl = draft.logoUrl.trim()
+  // The notices the same way: trimmed (the server trims too), and a blank IS sent — omitted or
+  // null leaves a notice alone, `""` clears it. The text is sent as typed otherwise; inner line
+  // breaks are the legal team's and are kept.
+  if (draft.privacyNoticeEs.trim() !== initial.privacyNoticeEs.trim()) changes.privacyNoticeEs = draft.privacyNoticeEs.trim()
+  if (draft.privacyNoticeEn.trim() !== initial.privacyNoticeEn.trim()) changes.privacyNoticeEn = draft.privacyNoticeEn.trim()
   return changes
 }
 

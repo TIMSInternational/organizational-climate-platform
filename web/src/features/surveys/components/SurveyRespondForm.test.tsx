@@ -2140,3 +2140,111 @@ describe('SurveyRespondForm — Eagle corrections', () => {
     expect(alert.textContent).not.toContain(copy.es('surveyRespond.saveAndFinishLater'))
   })
 })
+
+// The company's «Aviso de privacidad» (Ley 8968, ruled 2026-11-15): a link before the first
+// question that opens the legal team's text, in the respondent's language. Information, never a
+// gate — and when no notice is set, nothing on this screen changes.
+describe('SurveyRespondForm privacy notice', () => {
+  const ES_NOTICE = 'Responsable: Empresa S.A.\nFinalidad: medir el clima.\n\n<b>Derechos</b>: acceso y rectificación.'
+  const EN_NOTICE = 'Controller: Empresa S.A.\nPurpose: measuring the climate.'
+  const linkEs = copy.es('surveyRespond.privacyNotice.link')
+  const linkEn = copy.en('surveyRespond.privacyNotice.link')
+  const area: SurveyRespondDemographicField = {
+    field: 'department',
+    label: '¿En qué área trabaja?',
+    options: [{ value: '7f6c1c8e-0000-4000-8000-000000000001', label: 'Operaciones' }],
+    required: true,
+    order: -1,
+  }
+
+  /**
+   * "Before" as a document-order fact rather than a claim. By the element list, not
+   * `compareDocumentPosition`, which happy-dom answered backwards here (2, PRECEDING, for a
+   * node the serialised body put after the link).
+   */
+  function precedes(first: Element, second: Element): boolean {
+    const all = Array.from(document.body.querySelectorAll('*'))
+    const [a, b] = [all.indexOf(first), all.indexOf(second)]
+    return a !== -1 && b !== -1 && a < b
+  }
+
+  it('shows the link before the first question, and it opens the Spanish text as text, line breaks kept', async () => {
+    respondWith(view({ privacyNoticeEs: ES_NOTICE, privacyNoticeEn: EN_NOTICE }))
+    renderForm({ publicEntry: true })
+
+    const link = await screen.findByRole('button', { name: linkEs })
+    expect(precedes(link, screen.getByText('¿Qué tan satisfecho estás?'))).toBe(true)
+    // Not a gate: the question is answerable with the notice never opened.
+    expect(screen.getByRole('radio', { name: 'Muy de acuerdo' })).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    await userEvent.click(link)
+    const dialog = await screen.findByRole('dialog', { name: linkEs })
+    const text = dialog.querySelector('[data-slot="privacy-notice-text"]') as HTMLElement
+    // Character for character, markup included as characters: the text is a child, never HTML.
+    expect(text.textContent).toBe(ES_NOTICE)
+    expect(text.querySelector('b')).toBeNull()
+    expect(text.className).toContain('whitespace-pre-wrap')
+    expect(within(dialog).queryByText(/Controller/)).toBeNull()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.es('surveyRespond.privacyNotice.close') }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('changes nothing when neither language is set: no link, no wrapper, no dialog', async () => {
+    respondWith(view({ privacyNoticeEs: null, privacyNoticeEn: null }))
+    renderForm({ publicEntry: true })
+
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    expect(screen.queryByRole('button', { name: linkEs })).toBeNull()
+    expect(screen.queryByText(linkEs)).toBeNull()
+    expect(document.querySelector('[data-slot="privacy-notice-link"]')).toBeNull()
+    expect(document.querySelector('[data-slot="privacy-notice-text"]')).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('reads a blank notice as no notice', async () => {
+    respondWith(view({ privacyNoticeEs: '   ', privacyNoticeEn: '' }))
+    renderForm({ publicEntry: true })
+
+    await screen.findByText('¿Qué tan satisfecho estás?')
+    expect(document.querySelector('[data-slot="privacy-notice-link"]')).toBeNull()
+  })
+
+  it('opens the English text for a respondent reading in English', async () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    respondWith(view({ resolvedLocale: 'en', privacyNoticeEs: ES_NOTICE, privacyNoticeEn: EN_NOTICE }))
+    renderForm({ publicEntry: true })
+
+    await userEvent.click(await screen.findByRole('button', { name: linkEn }))
+    const dialog = await screen.findByRole('dialog', { name: linkEn })
+    expect(dialog.querySelector('[data-slot="privacy-notice-text"]')?.textContent).toBe(EN_NOTICE)
+  })
+
+  it('falls back to the English text when only that one is set', async () => {
+    respondWith(view({ privacyNoticeEs: null, privacyNoticeEn: EN_NOTICE }))
+    renderForm({ publicEntry: true })
+
+    await userEvent.click(await screen.findByRole('button', { name: linkEs }))
+    const dialog = await screen.findByRole('dialog', { name: linkEs })
+    expect(dialog.querySelector('[data-slot="privacy-notice-text"]')?.textContent).toBe(EN_NOTICE)
+  })
+
+  it('is on the demographic screen too, which comes before any question', async () => {
+    respondWith(view({ demographics: [area], privacyNoticeEs: ES_NOTICE }))
+    renderForm({ publicEntry: true })
+
+    const link = await screen.findByRole('button', { name: linkEs })
+    expect(precedes(link, screen.getByText('¿En qué área trabaja?'))).toBe(true)
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+  })
+
+  it('is on the identity screen too', async () => {
+    respondWith(view({ asksParticipantIdentity: true, privacyNoticeEs: ES_NOTICE }))
+    renderForm({ publicEntry: true })
+
+    await screen.findByText(copy.es('surveyRespond.identity.question'))
+    expect(screen.getByRole('button', { name: linkEs })).toBeTruthy()
+    expect(screen.queryByText('¿Qué tan satisfecho estás?')).toBeNull()
+  })
+})

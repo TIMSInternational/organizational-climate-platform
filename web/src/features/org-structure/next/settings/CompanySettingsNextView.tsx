@@ -4,12 +4,13 @@ import { Check, FileText } from 'lucide-react'
 import { useTranslation } from '../../../../i18n'
 import { PageHeader } from '../../../../components/layout'
 import { ANONYMITY_FLOOR, DEFAULT_RESULT_BANDS } from '../../../../components/charts'
-import { Button, EmptyState, Input, NetworkError, SkeletonText } from '../../../../components/ui'
+import { Button, EmptyState, Input, NetworkError, SkeletonText, Textarea } from '../../../../components/ui'
 import { readViewerClaims, useViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { updateCompanySettings } from '../../api/companySettings'
 import { CanvasSelect, Field, Panel } from '../super/parts'
 import {
   HEX_COLOUR,
+  PRIVACY_NOTICE_MAX_LENGTH,
   changesOf,
   logoValid,
   draftOf,
@@ -372,6 +373,42 @@ function SettingsForm({
                   <Readout>{DASH}</Readout>
                 </Field>
               </div>
+            </div>
+            {/* The «Aviso de privacidad» (Ley 8968), one per language, plain text the
+                client's legal team wrote — so no formatting controls and no preview: what is
+                pasted is what a respondent reads, line breaks included, behind a link before
+                the first question. Gated with the logo and the colour: this whole screen is
+                `allowed` or nothing, and the PUT that saves them is the same one. */}
+            <div className="flex flex-col gap-3 border-t border-line-light pt-4">
+              <Field fieldLabel={t(`${K}.privacyNoticeEs`)} htmlFor={`${ids}-privacy-es`}>
+                <Textarea
+                  id={`${ids}-privacy-es`}
+                  lang="es"
+                  value={draft.privacyNoticeEs}
+                  maxLength={PRIVACY_NOTICE_MAX_LENGTH}
+                  rows={4}
+                  aria-describedby={`${ids}-privacy-help`}
+                  onChange={(event) => set({ privacyNoticeEs: event.target.value })}
+                  className="max-h-80 text-sm"
+                />
+              </Field>
+              <Field fieldLabel={t(`${K}.privacyNoticeEn`)} htmlFor={`${ids}-privacy-en`}>
+                <Textarea
+                  id={`${ids}-privacy-en`}
+                  lang="en"
+                  value={draft.privacyNoticeEn}
+                  maxLength={PRIVACY_NOTICE_MAX_LENGTH}
+                  rows={4}
+                  aria-describedby={`${ids}-privacy-help`}
+                  onChange={(event) => set({ privacyNoticeEn: event.target.value })}
+                  className="max-h-80 text-sm"
+                />
+              </Field>
+              {/* One helper for both fields, so it sits under the pair rather than reading as
+                  the English field's alone. */}
+              <p id={`${ids}-privacy-help`} className="m-0 text-xs leading-snug text-fg-secondary">
+                {t(`${K}.privacyNoticeHelp`)}
+              </p>
             </div>
           </Panel>
 

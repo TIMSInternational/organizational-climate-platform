@@ -16,7 +16,10 @@ public sealed record CompanyBrandingDto(
     string PrimaryColor,
     string SecondaryColor,
     string FontFamily,
-    string? CustomCss);
+    string? CustomCss,
+    /// <summary>The company's «Aviso de privacidad», or null when not set. Plain text.</summary>
+    string? PrivacyNoticeEs = null,
+    string? PrivacyNoticeEn = null);
 
 public sealed record CompanySettingsResponse(
     Guid CompanyId,
@@ -39,4 +42,10 @@ public sealed record UpdateCompanySettingsRequest(
     string? CustomCss,
     UpdateResultBandsRequest? ResultBands = null,
     /// <summary>`shared` | `per_survey`; omitted leaves it alone, as every member here does.</summary>
-    string? CredentialMode = null);
+    string? CredentialMode = null,
+    /// <summary>
+    /// The «Aviso de privacidad». Null leaves it alone; blank clears it; anything else is
+    /// trimmed and stored, up to <see cref="BrandingValidation.PrivacyNoticeMaxLength"/>.
+    /// </summary>
+    string? PrivacyNoticeEs = null,
+    string? PrivacyNoticeEn = null);

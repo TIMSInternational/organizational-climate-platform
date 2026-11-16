@@ -172,6 +172,13 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 /// applies it only to an anonymous one.
 /// </param>
 /// <param name="ClosingMessage">The survey's own thank-you, or null for the product default.</param>
+/// <param name="PrivacyNoticeEs">
+/// The survey's company's «Aviso de privacidad» in Spanish, or null when it has set none. Both
+/// languages travel and the screen picks the respondent's first, the other when only that one
+/// is set. Null in both is the normal case, and the screen then shows nothing: no text of ours
+/// stands in for the client's legal notice (ruled 2026-11-15).
+/// </param>
+/// <param name="PrivacyNoticeEn">The same notice in English, or null.</param>
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -193,7 +200,9 @@ public sealed record SurveyRespondView(
     SurveyResponseState? InProgress,
     bool AsksParticipantIdentity = false,
     string? RespondentIntro = null,
-    string? ClosingMessage = null);
+    string? ClosingMessage = null,
+    string? PrivacyNoticeEs = null,
+    string? PrivacyNoticeEn = null);
 
 /// <param name="AlreadySubmitted">
 /// True when this call found a response that was already complete and therefore changed

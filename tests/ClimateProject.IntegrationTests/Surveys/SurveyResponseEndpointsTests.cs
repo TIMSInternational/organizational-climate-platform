@@ -4,6 +4,7 @@ using System.Text.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Questions;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -1915,4 +1916,49 @@ public class SurveyResponseEndpointsTests : IAsyncLifetime
 
             await db.SaveChangesAsync();
         });
+
+    // ------------------------------------------------------------------
+    // The company's «Aviso de privacidad» (Ley 8968, ruled 2026-11-15)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The notice travels on the respond payload in both languages, under the names the web
+    /// reads. Asserted on the raw JSON, because a renamed property deserialises to null on a
+    /// typed client and would pass the "not set" test below for the wrong reason. Set through
+    /// <c>PUT /admin/companies/{id}/settings</c>, the endpoint the settings screen calls.
+    /// </summary>
+    [Fact]
+    public async Task The_public_respond_payload_carries_the_companys_privacy_notice_in_both_languages()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+        var admin = await AdminAsync();
+        (await admin.PutAsJsonAsync($"/admin/companies/{_companyId}/settings", new UpdateCompanySettingsRequest(
+            null, null, null, null, null, null, null, null, null, null, null, null,
+            PrivacyNoticeEs: "  Aviso de privacidad de Respond Co.\nSegundo párrafo.  ",
+            PrivacyNoticeEn: "Respond Co privacy notice."))).EnsureSuccessStatusCode();
+
+        var http = await _factory.CreateClient().GetAsync(new Uri($"/surveys/{survey.Id}/respond", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, http.StatusCode);
+        using var json = JsonDocument.Parse(await http.Content.ReadAsStringAsync());
+        Assert.Equal("Aviso de privacidad de Respond Co.\nSegundo párrafo.", json.RootElement.GetProperty("privacyNoticeEs").GetString());
+        Assert.Equal("Respond Co privacy notice.", json.RootElement.GetProperty("privacyNoticeEn").GetString());
+    }
+
+    /// <summary>
+    /// Not set is the normal case, and then the payload says so with nulls: no text of ours
+    /// stands in for the client's legal notice.
+    /// </summary>
+    [Fact]
+    public async Task The_respond_payload_carries_null_privacy_notices_when_the_company_set_none()
+    {
+        var survey = await ActiveSurveyAsync(settings: new SurveySettingsInput(Anonymous: true));
+
+        var http = await _factory.CreateClient().GetAsync(new Uri($"/surveys/{survey.Id}/respond", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, http.StatusCode);
+        using var json = JsonDocument.Parse(await http.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("privacyNoticeEs").ValueKind);
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("privacyNoticeEn").ValueKind);
+    }
 }
