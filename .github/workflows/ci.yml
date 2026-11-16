@@ -180,6 +180,44 @@ jobs:
         working-directory: web
         run: npm run lint
 
+  # Known-vulnerable dependencies fail the build (added 2026-11-15). The July 2026 incident
+  # (docs/security/) came in through the dev toolchain, so this audits DEV dependencies too,
+  # not only what ships. Measured when added: npm 0 after `npm audit fix` + happy-dom 21.0.4
+  # (was 4 high, 2 moderate, all dev); NuGet 0 in both solutions. `dotnet list package
+  # --vulnerable` exits 0 whatever it finds, so its output is what is checked.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: npm audit (high and critical fail)
+        working-directory: web
+        run: npm audit --audit-level=high
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: NuGet vulnerable packages (any fails)
+        run: |
+          set -euo pipefail
+          status=0
+          for solution in ClimateProject.slnx services/tracking-api/ClimateTracking.slnx; do
+            dotnet restore "$solution" > /dev/null
+            report="$(dotnet list "$solution" package --vulnerable --include-transitive)"
+            echo "$report"
+            if grep -q "has the following vulnerable packages" <<< "$report"; then
+              echo "::error::$solution has vulnerable packages (see above)"
+              status=1
+            fi
+          done
+          exit "$status"
+
   # The deploy path is the one path CI cannot validate by running it: `deploy-prod.yml`
   # is workflow_dispatch-only, so no pull request ever exercises it, and the
   # CloudFormation templates would otherwise only be "validated" by attempting a real
