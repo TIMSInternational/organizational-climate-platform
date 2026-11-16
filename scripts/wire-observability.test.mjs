@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, chmodSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +71,14 @@ case "$args" in
     esac
     ;;
   *"cloudformation deploy"*)
+    # Keep a copy of the template exactly as it would have been sent, per stack.
+    prev=""; tf=""; stack=""
+    for a in "$@"; do
+      [ "$prev" = --template-file ] && tf="$a"
+      [ "$prev" = --stack-name ] && stack="$a"
+      prev="$a"
+    done
+    [ -n "$tf" ] && cp "$tf" "$STUB_LOG.$stack.template"
     # The real message from an unchanged stack, and the reason this script cannot trust it.
     printf 'No changes to deploy. Stack climate-project-observability-prod is up to date\\n'
     ;;
@@ -114,7 +122,7 @@ function run(env = {}) {
       ...env,
     },
   });
-  return { ...res, calls: readFileSync(log, 'utf8') };
+  return { ...res, calls: readFileSync(log, 'utf8'), log };
 }
 
 test('an expired subscription is recreated -- a re-deploy alone would not have', () => {
@@ -255,4 +263,86 @@ test('a real address is not mistaken for a placeholder', () => {
     assert.equal(r.status, 0, `${good} was refused: ${r.stderr}`);
     assert.doesNotMatch(r.stderr, /placeholder/);
   }
+});
+
+// CloudFormation takes a template inline only up to 51,200 bytes, and #673 took the
+// observability template to 53,941. Without these, the next real run stops at "Templates with a
+// size greater than 51,200 bytes must be deployed via an S3 Bucket" -- which is what happened
+// on 2026-11-16, the first time anyone ran it after #673.
+const INLINE_LIMIT = 51200;
+const sentTemplate = (r, stack) => {
+  const path = `${r.log}.${stack}.template`;
+  assert.ok(existsSync(path), `no template was sent for ${stack}:\n${r.calls}`);
+  return readFileSync(path, 'utf8');
+};
+const nonCommentLines = (text) => text.split('\n').filter((l) => !/^\s*#/.test(l));
+
+test('the observability template goes inline under 51,200 bytes, losing its comments and nothing else', () => {
+  const r = run({ STUB_SUBS: 'confirmed' });
+  assert.equal(r.status, 0, r.stderr);
+  const original = readFileSync(join(REPO, 'infra/aws/climate-project-observability.yml'), 'utf8');
+  const sent = sentTemplate(r, 'climate-project-observability-prod');
+  assert.ok(Buffer.byteLength(sent) <= INLINE_LIMIT, `sent ${Buffer.byteLength(sent)} bytes`);
+  assert.deepEqual(nonCommentLines(sent), nonCommentLines(original), 'only whole-line comments may be dropped');
+  const probe = sentTemplate(r, 'climate-project-synthetic-probe-prod');
+  assert.ok(Buffer.byteLength(probe) <= INLINE_LIMIT, `sent ${Buffer.byteLength(probe)} bytes for the probe`);
+});
+
+test('a # line inside a block scalar is content, and survives the stripping', () => {
+  // The Teams forwarder's inline Python and every multi-line Description are block scalars. A
+  // `#` line there is part of the value: dropping it would change the Lambda's code or the text.
+  const dir = mkdtempSync(join(tmpdir(), 'wire-obs-tpl-'));
+  const tpl = join(dir, 'big.yml');
+  const padding = Array.from({ length: 700 }, (_, i) => `# padding comment ${i} ${'x'.repeat(70)}`).join('\n');
+  writeFileSync(
+    tpl,
+    [
+      'Description: >-',
+      '  A folded description',
+      '  # this line is part of the description',
+      padding,
+      'Resources:',
+      '  # a real comment, outside any block',
+      '  Forwarder:',
+      '    Type: AWS::Lambda::Function',
+      '    Properties:',
+      '      Code:',
+      '        ZipFile: |',
+      '          import json',
+      '',
+      '          # kept: a Python comment inside the block',
+      '          def handler(event, context):',
+      '              return None',
+      '      Tags:',
+      '        - Value: !Sub |',
+      '            # kept: a line of a tagged block in a list',
+      '            ${AWS::StackName}',
+      '        # dropped: a comment after the block ends',
+      '',
+    ].join('\n'),
+  );
+  assert.ok(Buffer.byteLength(readFileSync(tpl)) > INLINE_LIMIT, 'the fixture must be over the limit');
+
+  const r = run({ STUB_SUBS: 'confirmed', OBS_TEMPLATE: tpl });
+  assert.equal(r.status, 0, r.stderr);
+  const sent = sentTemplate(r, 'climate-project-observability-prod');
+  assert.match(sent, /^  # this line is part of the description$/m);
+  assert.match(sent, /^          # kept: a Python comment inside the block$/m);
+  assert.match(sent, /^            # kept: a line of a tagged block in a list$/m);
+  assert.doesNotMatch(sent, /padding comment/);
+  assert.doesNotMatch(sent, /a real comment, outside any block/);
+  assert.doesNotMatch(sent, /dropped: a comment after the block ends/);
+  assert.deepEqual(nonCommentLines(sent), nonCommentLines(readFileSync(tpl, 'utf8')));
+});
+
+test('a template still over the limit without its comments is refused before anything is deployed', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wire-obs-tpl-'));
+  const tpl = join(dir, 'huge.yml');
+  const body = Array.from({ length: 800 }, (_, i) => `  Param${i}: { Type: String, Default: "${'y'.repeat(60)}" }`).join('\n');
+  writeFileSync(tpl, `Parameters:\n${body}\nResources: {}\n`);
+  const r = run({ STUB_SUBS: 'confirmed', OBS_TEMPLATE: tpl });
+  assert.equal(r.status, 1, `expected a refusal, got ${r.status}\n${r.stdout}${r.stderr}`);
+  assert.match(r.stderr, /Refusing to run: .* still \d+ without its comments/);
+  assert.doesNotMatch(r.calls, /cloudformation deploy/, 'nothing may be deployed when the template cannot be sent');
+  assert.doesNotMatch(r.calls, /sns subscribe/);
 });
