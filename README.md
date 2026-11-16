@@ -4,11 +4,12 @@ Monorepo for the organizational climate platform: `web/` (React + Vite SPA) and 
 (.NET 10 API). It runs organizational-climate surveys and microclimates — build an
 instrument from a question library, invite a company's employees, collect responses under an
 anonymity floor, and read the results as dimension scores, a climate map and action plans.
-`services/tracking-api/` is a separate, single-tenant action-plan tracking service. It is
-**live**: the web is `https://climate.timsint.com` and the API is
-`https://api.climate.timsint.com` (custom domain since 2026-09-14; the generated hostname
-`https://bhgrdkd4gt.us-east-1.awsapprunner.com` still answers and is still what the deployed web
-bundle calls), serving commit `69193e40` (`GET /version`, 2026-09-16).
+`services/tracking-api/` is a separate, single-tenant action-plan tracking service, **not yet
+deployed**. The platform is **live**: the web is `https://climate.timsint.com` (Vercel) and the API
+is `https://api.climate.timsint.com` (AWS App Runner, account 795965600143, us-east-2, since
+2026-10-13). `GET /version` names the deployed commit. (Corrected 2026-11-15: this paragraph used to
+say the old generated hostname `bhgrdkd4gt.us-east-1.awsapprunner.com` still answers and is what the
+bundle calls; measured that day, it does not answer and the bundle never names it.)
 
 This repository replaced a legacy Next.js/MongoDB app, but it is **not** a migration target:
 the legacy database held mock data and was abandoned rather than migrated on 2026-08-19 —
