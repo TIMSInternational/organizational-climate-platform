@@ -248,6 +248,69 @@ describe('CompanySettingsNextView (/admin/companies/:id for a company administra
     ])
   })
 
+  // The «Aviso de privacidad» (Ley 8968, ruled 2026-11-15): plain text from the client's legal
+  // team, one per language, saved by the same PUT as the logo and the colour.
+  const ES_NOTICE = 'Responsable: Grupo Meridiano S.A.\nFinalidad: medir el clima laboral.'
+  const EN_NOTICE = 'Controller: Grupo Meridiano S.A.\nPurpose: measuring the work climate.'
+  const withNotices: CompanySettingsResponse = {
+    ...stored,
+    branding: { ...stored.branding, privacyNoticeEs: ES_NOTICE, privacyNoticeEn: EN_NOTICE },
+  }
+
+  it('shows both privacy notices as stored, line breaks kept, capped at the API’s 4000', async () => {
+    vi.mocked(getCompanySettings).mockImplementation(async () => withNotices)
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    const es = (await screen.findByLabelText(copy.privacyNoticeEs)) as HTMLTextAreaElement
+    const en = screen.getByLabelText(copy.privacyNoticeEn) as HTMLTextAreaElement
+    expect(es.tagName).toBe('TEXTAREA')
+    expect(es.value).toBe(ES_NOTICE)
+    expect(en.value).toBe(EN_NOTICE)
+    expect(es.maxLength).toBe(4000)
+    expect(en.maxLength).toBe(4000)
+    // One helper, said to both fields: the text must come from the client's legal team.
+    const help = screen.getByText(copy.privacyNoticeHelp)
+    expect(es.getAttribute('aria-describedby')).toBe(help.id)
+    expect(en.getAttribute('aria-describedby')).toBe(help.id)
+  })
+
+  it('reads a company with no notice as two empty fields, and saving nothing sends nothing', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    expect(((await screen.findByLabelText(copy.privacyNoticeEs)) as HTMLTextAreaElement).value).toBe('')
+    expect((screen.getByLabelText(copy.privacyNoticeEn) as HTMLTextAreaElement).value).toBe('')
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+    expect(vi.mocked(updateCompanySettings)).not.toHaveBeenCalled()
+  })
+
+  it('saves typed notices on the settings PUT, trimmed, and only them', async () => {
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await userEvent.type(await screen.findByLabelText(copy.privacyNoticeEs), '  Responsable: Meridiano.{Enter}Finalidad: clima.  ')
+    await userEvent.type(screen.getByLabelText(copy.privacyNoticeEn), 'Controller: Meridiano.')
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+    expect(vi.mocked(updateCompanySettings).mock.calls[0].slice(1)).toEqual([
+      'c1',
+      { privacyNoticeEs: 'Responsable: Meridiano.\nFinalidad: clima.', privacyNoticeEn: 'Controller: Meridiano.' },
+    ])
+  })
+
+  it('clears a notice by sending "" — and leaves the other language off the wire', async () => {
+    vi.mocked(getCompanySettings).mockImplementation(async () => withNotices)
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await userEvent.clear(await screen.findByLabelText(copy.privacyNoticeEs))
+    await userEvent.click(screen.getByRole('button', { name: copy.save }))
+    expect(vi.mocked(updateCompanySettings).mock.calls[0].slice(1)).toEqual(['c1', { privacyNoticeEs: '' }])
+  })
+
+  it('offers the notice fields to nobody the branding is closed to', async () => {
+    renderAs({ role: 'leader', companyId: 'c1' })
+    expect(await screen.findByText(copy.notAllowedTitle)).toBeTruthy()
+    expect(screen.queryByLabelText(copy.privacyNoticeEs)).toBeNull()
+    expect(screen.queryByLabelText(copy.privacyNoticeEn)).toBeNull()
+    cleanup()
+    renderAs({ role: 'company_admin', companyId: 'c2' })
+    expect(await screen.findByText(copy.notAllowedTitle)).toBeTruthy()
+    expect(screen.queryByLabelText(copy.privacyNoticeEs)).toBeNull()
+  })
+
   it('reads in Spanish singulars where a count is one — “1 activo · 1 inactivo”, “5 · 1 activa”', async () => {
     window.localStorage.setItem('preferredLocale', 'es')
     vi.mocked(listDepartments).mockResolvedValue([department({ id: 'a' }), department({ id: 'x', isActive: false, employeeCount: 0 })])

@@ -7,6 +7,7 @@ import {
   LOGO_EXTENSIONS,
   LOGO_MAX_LENGTH,
   LOGO_PATH,
+  PRIVACY_NOTICE_MAX_LENGTH,
   logoValid,
 } from './derive'
 
@@ -66,6 +67,13 @@ describe('the branding rules the form and the API each enforce', () => {
 
     expect(match, 'LogoUrlMaxLength not found — renamed?').not.toBeNull()
     expect(Number(match![1])).toBe(LOGO_MAX_LENGTH)
+  })
+
+  it('agree on the privacy notice length cap — the textarea’s maxLength', () => {
+    const match = csharp().match(/public const int PrivacyNoticeMaxLength\s*=\s*(\d+)/)
+
+    expect(match, 'PrivacyNoticeMaxLength not found — renamed?').not.toBeNull()
+    expect(Number(match![1])).toBe(PRIVACY_NOTICE_MAX_LENGTH)
   })
 
   it('agree on the root-relative path pattern', () => {

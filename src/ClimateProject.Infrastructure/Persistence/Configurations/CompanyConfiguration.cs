@@ -26,6 +26,8 @@ public class CompanyConfiguration : IEntityTypeConfiguration<Company>
             branding.Property(b => b.SecondaryColor).HasColumnName("branding_secondary_color").HasMaxLength(20).IsRequired().HasDefaultValue("#1F2937");
             branding.Property(b => b.FontFamily).HasColumnName("branding_font_family").HasMaxLength(100).IsRequired().HasDefaultValue("Inter");
             branding.Property(b => b.CustomCss).HasColumnName("branding_custom_css").HasColumnType("text");
+            branding.Property(b => b.PrivacyNoticeEs).HasColumnName("branding_privacy_notice_es").HasMaxLength(4000);
+            branding.Property(b => b.PrivacyNoticeEn).HasColumnName("branding_privacy_notice_en").HasMaxLength(4000);
         });
 
         builder.OwnsOne(c => c.Settings, settings =>

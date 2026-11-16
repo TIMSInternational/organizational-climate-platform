@@ -6160,7 +6160,10 @@
       "retentionFixedHelp": "Las respuestas no se borran por plazo. La plataforma borra sola los borradores de encuesta sin tocar en 30 días, las notificaciones al cabo de 1 año y las invitaciones no aceptadas 90 días después de vencer.",
       "colourEmailHelp": "El color del botón en los correos que llevan el acceso: credenciales al importar personas, la invitación masiva y la distribución de una encuesta. No colorea ninguna pantalla.",
       "brandMetaInEffect": "el logotipo en la app y al responder; logotipo y color en los correos de acceso",
-      "logoPathHelpPublished": "Una ruta de este sitio, como /brand/esph-logo.svg. TIMS publica el archivo en el sitio; aquí solo se elige. Vacío quita el logotipo."
+      "logoPathHelpPublished": "Una ruta de este sitio, como /brand/esph-logo.svg. TIMS publica el archivo en el sitio; aquí solo se elige. Vacío quita el logotipo.",
+      "privacyNoticeEs": "Aviso de privacidad (español)",
+      "privacyNoticeEn": "Aviso de privacidad (inglés)",
+      "privacyNoticeHelp": "El texto debe provenir del equipo legal del cliente; aquí solo se pega, tal cual. Quien responde lo abre desde un enlace antes de la primera pregunta, en su idioma. Vacío quita el aviso."
     }
   },
   "wizard": {
@@ -6681,6 +6684,10 @@
       "server": "Algo falló de nuestro lado y no pudimos confirmar que se registrara lo que acaba de enviar. Sus respuestas siguen en esta página: inténtelo de nuevo en unos minutos; si ya había llegado, no se contará dos veces.",
       "network": "No hubo conexión con el servidor y no pudimos confirmar que se registrara lo que acaba de enviar. Sus respuestas siguen en esta página: revise su conexión a internet e inténtelo de nuevo; si ya había llegado, no se contará dos veces.",
       "load": "Puede ser la conexión o un problema temporal de nuestro lado. Vuelva a abrirla en unos minutos; si sigue sin abrir, consulte a quien se la envió."
+    },
+    "privacyNotice": {
+      "link": "Aviso de privacidad",
+      "close": "Cerrar"
     }
   },
   "surveyResults": {

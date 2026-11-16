@@ -132,6 +132,13 @@ export interface SurveyRespondView {
    * or a survey nobody configured -- means the product's default paragraph.
    */
   respondentIntro?: string | null
+  /**
+   * The company's «Aviso de privacidad», plain text from the client's legal team, one per
+   * language (`pickPrivacyNotice` chooses). Null or absent: none is set, and the form shows
+   * nothing of it.
+   */
+  privacyNoticeEs?: string | null
+  privacyNoticeEn?: string | null
   /** The survey's own thank-you after a completed submit. Null or absent: the default thanks. */
   closingMessage?: string | null
 }

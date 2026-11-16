@@ -292,6 +292,8 @@ public static class CompanyEndpoints
         if (!string.IsNullOrWhiteSpace(request.SecondaryColor)) company.Branding.SecondaryColor = request.SecondaryColor;
         if (!string.IsNullOrWhiteSpace(request.FontFamily)) company.Branding.FontFamily = request.FontFamily;
         if (request.CustomCss is not null) company.Branding.CustomCss = request.CustomCss;
+        if (request.PrivacyNoticeEs is not null) company.Branding.PrivacyNoticeEs = BrandingValidation.NormalisePrivacyNotice(request.PrivacyNoticeEs);
+        if (request.PrivacyNoticeEn is not null) company.Branding.PrivacyNoticeEn = BrandingValidation.NormalisePrivacyNotice(request.PrivacyNoticeEn);
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -412,7 +414,7 @@ public static class CompanyEndpoints
     private static CompanySettingsResponse ToSettingsResponse(Company company) => new(
         company.Id,
         new CompanySettingsDto(company.Settings.SurveyFrequency, company.Settings.MicroclimateEnabled, company.Settings.AiInsightsEnabled, company.Settings.AnonymousSurveys, company.Settings.DataRetentionDays, company.Settings.Timezone, company.Settings.Language, company.Settings.CredentialMode),
-        new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss),
+        new CompanyBrandingDto(company.Branding.LogoUrl, company.Branding.PrimaryColor, company.Branding.SecondaryColor, company.Branding.FontFamily, company.Branding.CustomCss, company.Branding.PrivacyNoticeEs, company.Branding.PrivacyNoticeEn),
         ResultBandsDto.From(company.Settings));
 
     /// <summary>

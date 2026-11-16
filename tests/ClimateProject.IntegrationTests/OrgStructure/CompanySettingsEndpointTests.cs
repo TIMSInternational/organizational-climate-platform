@@ -352,4 +352,138 @@ public class CompanySettingsEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
+
+    // ---- The «Aviso de privacidad» (Ley 8968, ruled 2026-11-15) ---------------------------
+    // BrandingValidationTests covers the rule; these cover that it is WIRED into the PUT, that
+    // what is stored is the normalised value, and that the GET reads it back.
+
+    private static UpdateCompanySettingsRequest NoticeOnly(string? es, string? en, string? timezone = null) =>
+        new(null, null, null, null, null, timezone, null, null, null, null, null, null,
+            PrivacyNoticeEs: es, PrivacyNoticeEn: en);
+
+    private Task<CompanyBranding> StoredBrandingAsync() => WithDbAsync(db => db.Companies.AsNoTracking()
+        .Where(c => c.Id == _companyAId)
+        .Select(c => new CompanyBranding { PrivacyNoticeEs = c.Branding.PrivacyNoticeEs, PrivacyNoticeEn = c.Branding.PrivacyNoticeEn })
+        .FirstAsync());
+
+    private async Task<T> WithDbAsync<T>(Func<ClimateProjectDbContext, Task<T>> action)
+    {
+        using var scope = _factory.Services.CreateScope();
+        return await action(scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>());
+    }
+
+    private async Task<HttpClient> CompanyAdminClientAsync()
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, Roles.CompanyAdmin, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    [Fact]
+    public async Task A_privacy_notice_in_both_languages_is_stored_trimmed_and_the_GET_reads_it_back()
+    {
+        var client = await CompanyAdminClientAsync();
+
+        var put = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings",
+            NoticeOnly("  \nAviso de privacidad.\nSegundo párrafo.\t ", "\tPrivacy notice.  "));
+
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var saved = (await put.Content.ReadFromJsonAsync<CompanySettingsResponse>())!.Branding;
+        Assert.Equal("Aviso de privacidad.\nSegundo párrafo.", saved.PrivacyNoticeEs);
+        Assert.Equal("Privacy notice.", saved.PrivacyNoticeEn);
+
+        var read = (await client.GetFromJsonAsync<CompanySettingsResponse>($"/admin/companies/{_companyAId}/settings"))!.Branding;
+        Assert.Equal("Aviso de privacidad.\nSegundo párrafo.", read.PrivacyNoticeEs);
+        Assert.Equal("Privacy notice.", read.PrivacyNoticeEn);
+
+        // The column, not only the response: a response built from the request would pass
+        // the two checks above with nothing stored.
+        var stored = await StoredBrandingAsync();
+        Assert.Equal("Aviso de privacidad.\nSegundo párrafo.", stored.PrivacyNoticeEs);
+        Assert.Equal("Privacy notice.", stored.PrivacyNoticeEn);
+    }
+
+    [Fact]
+    public async Task A_blank_privacy_notice_clears_the_stored_one_to_null()
+    {
+        var client = await CompanyAdminClientAsync();
+        (await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", NoticeOnly("Aviso", "Notice"))).EnsureSuccessStatusCode();
+
+        var put = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", NoticeOnly("   ", ""));
+
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var read = (await client.GetFromJsonAsync<CompanySettingsResponse>($"/admin/companies/{_companyAId}/settings"))!.Branding;
+        Assert.Null(read.PrivacyNoticeEs);
+        Assert.Null(read.PrivacyNoticeEn);
+        // Null, not "   ": the respondent's screen shows the link whenever a notice is set.
+        var stored = await StoredBrandingAsync();
+        Assert.Null(stored.PrivacyNoticeEs);
+        Assert.Null(stored.PrivacyNoticeEn);
+    }
+
+    [Fact]
+    public async Task A_request_that_omits_the_privacy_notice_leaves_the_stored_one_alone()
+    {
+        var client = await CompanyAdminClientAsync();
+        (await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", NoticeOnly("Aviso", "Notice"))).EnsureSuccessStatusCode();
+
+        // A request about something else entirely -- what every other settings screen sends.
+        var put = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", new UpdateCompanySettingsRequest(
+            "monthly", null, null, null, null, null, null, null, null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var stored = await StoredBrandingAsync();
+        Assert.Equal("Aviso", stored.PrivacyNoticeEs);
+        Assert.Equal("Notice", stored.PrivacyNoticeEn);
+    }
+
+    [Theory]
+    [InlineData("es", "Spanish")]
+    [InlineData("en", "English")]
+    public async Task A_privacy_notice_over_4000_characters_is_refused_with_the_limit_and_nothing_in_the_request_is_written(string field, string language)
+    {
+        var client = await CompanyAdminClientAsync();
+        (await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", NoticeOnly("Aviso previo", "Earlier notice"))).EnsureSuccessStatusCode();
+        var timezoneBefore = await WithDbAsync(db => db.Companies.AsNoTracking()
+            .Where(c => c.Id == _companyAId).Select(c => c.Settings.Timezone).FirstAsync());
+        var tooLong = new string('a', BrandingValidation.PrivacyNoticeMaxLength + 1);
+        var newTimezone = timezoneBefore == "Asia/Tokyo" ? "Europe/Madrid" : "Asia/Tokyo";
+
+        // The other notice in the same request is valid, and so is the timezone: neither may
+        // be saved when one field is refused.
+        var put = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", field == "es"
+            ? NoticeOnly(tooLong, "New notice", newTimezone)
+            : NoticeOnly("Aviso nuevo", tooLong, newTimezone));
+
+        Assert.Equal(HttpStatusCode.BadRequest, put.StatusCode);
+        var body = await put.Content.ReadAsStringAsync();
+        Assert.Contains("4000 characters or fewer", body, StringComparison.Ordinal);
+        Assert.Contains(language, body, StringComparison.Ordinal);
+
+        var stored = await StoredBrandingAsync();
+        Assert.Equal("Aviso previo", stored.PrivacyNoticeEs);
+        Assert.Equal("Earlier notice", stored.PrivacyNoticeEn);
+        var timezoneAfter = await WithDbAsync(db => db.Companies.AsNoTracking()
+            .Where(c => c.Id == _companyAId).Select(c => c.Settings.Timezone).FirstAsync());
+        Assert.Equal(timezoneBefore, timezoneAfter);
+    }
+
+    [Theory]
+    [InlineData(Roles.Employee)]
+    [InlineData(Roles.Leader)]
+    [InlineData(Roles.Supervisor)]
+    public async Task A_role_that_cannot_manage_settings_cannot_set_the_privacy_notice(string role)
+    {
+        var client = _factory.CreateClient();
+        var token = await SignUpAndGetTokenAsync(client, role, _companyADomain, _companyAId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var put = await client.PutAsJsonAsync($"/admin/companies/{_companyAId}/settings", NoticeOnly("Aviso", "Notice"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, put.StatusCode);
+        var stored = await StoredBrandingAsync();
+        Assert.Null(stored.PrivacyNoticeEs);
+        Assert.Null(stored.PrivacyNoticeEn);
+    }
 }

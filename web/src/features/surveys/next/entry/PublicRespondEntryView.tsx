@@ -3,6 +3,7 @@ import { RespondCaption, RespondReading } from '../../../../components/layout'
 import { Button, CanvasArrowRightIcon } from '../../../../components/ui'
 import { instantDay } from '../../../../lib/calendarDay'
 import { AnonymityNotice } from '../../components/SurveyRespondForm'
+import { PrivacyNoticeLink } from '../../components/PrivacyNoticeLink'
 import type { SurveyRespondView } from '../../api/surveyResponses'
 import { entryPace } from './derive'
 
@@ -78,6 +79,8 @@ export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondE
           response under. Never the link payload's `allowAnonymous`, which is the
           distribution's access rule and answers a different question entirely. */}
       <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
+      {/* The company's privacy notice, readable before the respondent begins; nothing when none is set. */}
+      <PrivacyNoticeLink view={view} />
 
       <Button
         type="button"

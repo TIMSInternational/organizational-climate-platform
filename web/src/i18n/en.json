@@ -6160,7 +6160,10 @@
       "retentionFixedHelp": "Responses are not deleted after a period. The platform itself deletes survey drafts untouched for 30 days, notifications after 1 year, and unaccepted invitations 90 days after they expire.",
       "colourEmailHelp": "The button colour in the mail that carries sign-in details: credentials when people are imported, the mass invite, and distributing a survey. It colours no screen.",
       "brandMetaInEffect": "the logo in the app and when answering; logo and colour in sign-in mail",
-      "logoPathHelpPublished": "A path on this site, like /brand/esph-logo.svg. TIMS publishes the file on the site; here it is only chosen. Empty removes the logo."
+      "logoPathHelpPublished": "A path on this site, like /brand/esph-logo.svg. TIMS publishes the file on the site; here it is only chosen. Empty removes the logo.",
+      "privacyNoticeEs": "Privacy notice (Spanish)",
+      "privacyNoticeEn": "Privacy notice (English)",
+      "privacyNoticeHelp": "The text must come from the client's legal team; it is only pasted here, as it is. Respondents open it from a link before the first question, in their language. Empty removes the notice."
     }
   },
   "wizard": {
@@ -6681,6 +6684,10 @@
       "server": "Something failed on our side and we could not confirm that what you just sent was recorded. Your answers are still on this page: try again in a few minutes; if it had already arrived, it will not be counted twice.",
       "network": "There was no connection to the server and we could not confirm that what you just sent was recorded. Your answers are still on this page: check your internet connection and try again; if it had already arrived, it will not be counted twice.",
       "load": "It may be the connection or a temporary problem on our side. Open it again in a few minutes; if it still does not open, ask whoever sent it to you."
+    },
+    "privacyNotice": {
+      "link": "Privacy notice",
+      "close": "Close"
     }
   },
   "surveyResults": {
