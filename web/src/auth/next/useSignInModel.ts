@@ -1,8 +1,7 @@
 import { useCallback, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { AuthRequestError, login } from '../api'
-import { setToken } from '../token'
-import { resolveInitialRoute } from '../../app/resolveInitialRoute'
+import { acceptSignIn } from '../twoFactor'
 import { safeReturnPath } from '../returnPath'
 import { useTranslation } from '../../i18n'
 import { loginOutcome, prefilledUsername, type LoginOutcome } from './derive'
@@ -71,12 +70,13 @@ export function useSignInModel(): SignInModel {
       async function run() {
         try {
           const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-          const { token } = await login(baseUrl, email, password)
-          setToken(token)
+          const answer = await login(baseUrl, email, password)
           // `/dashboard` for every role since #132 — the page dispatches on the claim, so
           // nothing has to be decoded here to pick a destination. A validated `from`
           // destination wins over it, so the invitation's promise to come back is kept.
-          navigate(returnPath ?? resolveInitialRoute())
+          // `acceptSignIn` stores the session, or the two-factor challenge and answers the
+          // second step instead (`twoFactor.ts`).
+          navigate(acceptSignIn(answer, returnPath))
         } catch (err) {
           const status = err instanceof AuthRequestError ? err.status : 0
           const message = err instanceof Error && err.message ? err.message : t('errors.generic')
@@ -93,7 +93,7 @@ export function useSignInModel(): SignInModel {
 
       void run()
     },
-    [email, navigate, password, t],
+    [email, navigate, password, returnPath, t],
   )
 
   return { email, password, setEmail, setPassword, error, submitting, submit }

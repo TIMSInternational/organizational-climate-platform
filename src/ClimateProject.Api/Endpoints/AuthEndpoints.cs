@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
+using ClimateProject.Application.Auth.TwoFactor;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Tracking;
 using ClimateProject.Domain.Entities;
@@ -24,6 +25,9 @@ public static class AuthEndpoints
     // Said plainly, and only ever to a caller who already holds a valid token for the
     // account: reaching the ceiling is not a credential failure and there is nothing the
     // holder can do about it but sign in again.
+    internal const string TwoFactorRequiredMessage =
+        "Two-step verification is now required for this account. Please sign in again.";
+
     private const string SessionCeilingReachedMessage =
         "This session has reached its maximum length. Please sign in again.";
 
@@ -51,6 +55,8 @@ public static class AuthEndpoints
         ClimateProjectDbContext db,
         IPasswordHasher passwordHasher,
         IJwtTokenService jwtTokenService,
+        TwoFactorSettings twoFactor,
+        TimeProvider clock,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
@@ -117,6 +123,14 @@ public static class AuthEndpoints
         if (gate is not null)
         {
             return gate;
+        }
+
+        // The second factor (ruled 2026-11-15). A per-survey credential is gated too: the session
+        // it opens carries the account's ROLE, so skipping it would let a super admin's survey
+        // code bypass the factor their password cannot. LastLoginAt waits for the second step.
+        if (await TwoFactorEndpoints.ChallengeIfRequiredAsync(user, credential?.SurveyId, db, twoFactor, clock, cancellationToken) is { } challenge)
+        {
+            return challenge;
         }
 
         user.LastLoginAt = DateTimeOffset.UtcNow;
@@ -220,6 +234,8 @@ public static class AuthEndpoints
         ClimateProjectDbContext db,
         IGoogleTokenVerifier googleTokenVerifier,
         IJwtTokenService jwtTokenService,
+        TwoFactorSettings twoFactor,
+        TimeProvider clock,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.IdToken))
@@ -287,6 +303,16 @@ public static class AuthEndpoints
             db.Users.Add(user);
         }
 
+        // Gated exactly like the password path: Google proves the address, not the second factor,
+        // so a super admin must not be able to step around it by choosing this button. Checked
+        // before the save, so a brand-new registration (never a super admin) is unaffected.
+        if (user.Id != Guid.Empty
+            && db.Entry(user).State != EntityState.Added
+            && await TwoFactorEndpoints.ChallengeIfRequiredAsync(user, null, db, twoFactor, clock, cancellationToken) is { } challenge)
+        {
+            return challenge;
+        }
+
         user.LastLoginAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
@@ -301,6 +327,7 @@ public static class AuthEndpoints
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
         IJwtTokenService jwtTokenService,
+        TwoFactorSettings twoFactor,
         CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
@@ -320,6 +347,21 @@ public static class AuthEndpoints
         if (user is null)
         {
             return Results.Json(new ErrorResponse("Account is no longer active"), statusCode: 401);
+        }
+
+        // Two-factor is REQUIRED for super_admin (ruled 2026-11-15), and a refresh re-mints the
+        // role off the ROW. Without this, a session opened before the factor was required -- a
+        // person promoted to super_admin (a role change rotates no stamp), or any super admin's
+        // session from before Auth:TotpEncryptionKey was configured -- would refresh into a
+        // super-admin session that never passed the second step. Refused, so they sign in again
+        // and meet the enrollment challenge. A factor enabled since rotated the stamp, so every
+        // session that survives to here was opened through the second step.
+        if (twoFactor.IsEnabled
+            && user.Role == Roles.SuperAdmin
+            && !await db.UserTwoFactors.AsNoTracking().AnyAsync(
+                t => t.UserId == user.Id && t.SecretCiphertext != null && t.EnabledAt != null, cancellationToken))
+        {
+            return Results.Json(new ErrorResponse(TwoFactorRequiredMessage), statusCode: 401);
         }
 
         // The caller has already proved they hold a token for this account, so unlike the two
@@ -370,7 +412,10 @@ public static class AuthEndpoints
         DateTimeOffset sessionStartedAt,
         CancellationToken cancellationToken,
         int successStatusCode = 200,
-        Guid? surveyScope = null)
+        Guid? surveyScope = null,
+        // The body around the token, for the two-factor steps that hand back more than the token
+        // (recovery codes, codes remaining). Null keeps the { token } every other path returns.
+        Func<string, object>? responseBody = null)
     {
         if (!user.IsActive)
         {
@@ -421,7 +466,7 @@ public static class AuthEndpoints
             SurveyScope: surveyScope),
             window);
 
-        return Results.Json(new TokenResponse(token), statusCode: successStatusCode);
+        return Results.Json(responseBody?.Invoke(token) ?? new TokenResponse(token), statusCode: successStatusCode);
     }
 
     private static async Task<IResult> ResetCredentialsAsync(

@@ -113,6 +113,7 @@ to silence. What survives is a row that nothing can resolve to a person.
 | `users` | Pseudonymised | Sixteen `RESTRICT` keys, above. |
 | `user_demographics` | **Deleted** | The most directly identifying non-account data. The historical values the aggregates need live in `demographic_snapshot_entries`. |
 | `notifications` | **Deleted** | Message bodies plus delivery metadata (IP, user agent, mail client). Nothing aggregates over them and nothing audits from them. |
+| `user_two_factor`, `user_recovery_codes` | **Deleted** | The second sign-in factor (2026-11-15): an encrypted TOTP secret and hashed recovery codes. Working keys, not records; exported with the key material redacted. |
 | `survey_drafts` | **Deleted** | Private, unsubmitted authoring content, already on a 30-day clock. |
 | `user_invitation_demographics` | **Deleted** | Demographic values pre-assigned to an invitee. Nothing aggregates over them. |
 | `responses` | **Anonymised** | See below. |

@@ -355,6 +355,10 @@ jobs:
           # drops both the runtime secret and the IAM grant when it is unset. It is set only for
           # the ~24h overlap and then cleared -- while it is set, the secret being rotated away
           # from still authenticates. Do not make it mandatory.
+          # TOTP_ENCRYPTION_KEY_SECRET_ARN is optional for the same reason: unset means two-factor
+          # sign-in is OFF and sign-in is unchanged. Passed explicitly so CLEARING it takes effect
+          # (an omitted parameter keeps the previous stack value). Never change it once people have
+          # enrolled -- their secrets are encrypted with it.
           aws cloudformation deploy \
             --stack-name "$SERVICE_STACK_NAME" \
             --template-file infra/aws/climate-project-api-prod-service.yml \
@@ -378,7 +382,8 @@ jobs:
               DatabaseConnectionStringSecretArn="${{ vars.DATABASE_CONNECTION_STRING_SECRET_ARN }}" \
               InternalApiKeySecretArn="${{ vars.INTERNAL_API_KEY_SECRET_ARN }}" \
               EmailSmtpUsernameSecretArn="${{ vars.EMAIL_SMTP_USERNAME_SECRET_ARN }}" \
-              EmailSmtpPasswordSecretArn="${{ vars.EMAIL_SMTP_PASSWORD_SECRET_ARN }}"
+              EmailSmtpPasswordSecretArn="${{ vars.EMAIL_SMTP_PASSWORD_SECRET_ARN }}" \
+              TotpEncryptionKeySecretArn="${{ vars.TOTP_ENCRYPTION_KEY_SECRET_ARN }}"
 
       - name: Read App Runner URL
         id: service

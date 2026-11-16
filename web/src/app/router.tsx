@@ -1,6 +1,7 @@
 import ClimateWorkbookPage from '../features/surveys/ClimateWorkbookPage'
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import LoginNextPage from '../auth/next/LoginNextPage'
+import TwoFactorNextPage from '../auth/next/TwoFactorNextPage'
 import RegisterNextPage from '../auth/next/RegisterNextPage'
 import AuthErrorNextPage from '../auth/next/AuthErrorNextPage'
 import AccountInactiveNextPage from '../auth/next/AccountInactiveNextPage'
@@ -222,6 +223,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomeRedirect /> },
       { path: '/login', element: <LoginNextPage /> },
+      // The second step of signing in (two-factor). Outside RequireAuth: what it holds is a
+      // challenge, not a session (`auth/twoFactor.ts`).
+      { path: '/login/two-factor', element: <TwoFactorNextPage /> },
       // #81's auth states. All five sit OUTSIDE RequireAuth, beside /login, and
       // must: each of them is a state the app is in precisely because there is no
       // usable session, so putting them behind the gate would redirect them to

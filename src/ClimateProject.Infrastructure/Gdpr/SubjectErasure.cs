@@ -136,6 +136,11 @@ public static class SubjectErasure
         // --- Deleted --------------------------------------------------------------------
         actions.Add(await DeleteAsync("UserDemographic",
             db.UserDemographics.Where(d => d.UserId == id), cancellationToken));
+        // A second sign-in factor is a credential of the person being erased (2026-11-15).
+        actions.Add(await DeleteAsync("UserTwoFactor",
+            db.UserTwoFactors.Where(t => t.UserId == id), cancellationToken));
+        actions.Add(await DeleteAsync("UserRecoveryCode",
+            db.UserRecoveryCodes.Where(c => c.UserId == id), cancellationToken));
         actions.Add(await DeleteAsync("Notification",
             db.Notifications.Where(n => n.UserId == id), cancellationToken));
         actions.Add(await DeleteAsync("SurveyDraft",

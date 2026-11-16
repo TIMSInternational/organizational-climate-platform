@@ -6,9 +6,8 @@ import { AuthShell } from './AuthShell'
 import { AuthPending } from './AuthPending'
 import { pageWorthyReason } from './authReason'
 import { beginGoogleSignIn, googleClientId } from './googleOAuth'
-import { setToken } from './token'
 import { safeReturnPath } from './returnPath'
-import { resolveInitialRoute } from '../app/resolveInitialRoute'
+import { acceptSignIn } from './twoFactor'
 import { useTranslation } from '../i18n'
 import { Alert, AlertDescription, Button, TextField } from '../components/ui'
 import { BrandLockup } from '../components/layout'
@@ -80,14 +79,13 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-      const { token } = await login(baseUrl, email, password)
-      setToken(token)
+      const answer = await login(baseUrl, email, password)
 
       // Unconditionally navigating to /admin/companies (SuperAdmin-only) used to
       // 403 every non-SuperAdmin login before they could see anything. Since #132
       // the destination is `/dashboard` for every role — the page itself dispatches
       // on the claim, so nothing needs decoding here.
-      navigate(returnPath ?? resolveInitialRoute())
+      navigate(acceptSignIn(answer, returnPath))
     } catch (err) {
       const status = err instanceof AuthRequestError ? err.status : 0
       const message = err instanceof Error && err.message ? err.message : t('errors.generic')

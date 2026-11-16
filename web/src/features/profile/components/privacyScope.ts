@@ -89,6 +89,8 @@ export const ERASURE_DELETED_TABLES = [
   'survey_user_targets',
   'user_demographics',
   'user_invitation_demographics',
+  'user_recovery_codes',
+  'user_two_factor',
 ] as const
 
 /** Tables whose link to the person is severed, the rows surviving. `ErasureTreatment.Anonymised`. */
@@ -116,6 +118,8 @@ export const DELETED_LABEL_PATH: Record<string, string> = {
   survey_user_targets: 'privacy.erasureDeletedSurveyUserTargets',
   user_demographics: 'privacy.erasureDeletedUserDemographics',
   user_invitation_demographics: 'privacy.erasureDeletedInvitationDemographics',
+  user_recovery_codes: 'privacy.erasureDeletedRecoveryCodes',
+  user_two_factor: 'privacy.erasureDeletedTwoFactor',
 }
 
 export const ANONYMISED_LABEL_PATH: Record<string, string> = {

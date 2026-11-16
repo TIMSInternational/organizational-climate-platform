@@ -1,9 +1,11 @@
-import { useId, useState } from 'react'
-import { KeyRound } from 'lucide-react'
+import { useEffect, useId, useState } from 'react'
+import { KeyRound, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { ANONYMITY_FLOOR } from '../../../components/charts'
 import { Alert, AlertDescription, Button, ConfirmationDialog, Input } from '../../../components/ui'
-import { PerSurveyPersonError, resetCredentials, type ResetCredentialsResult, type User } from '../api/users'
+import { PerSurveyPersonError, getUserTwoFactor, resetCredentials, resetUserTwoFactor, type ResetCredentialsResult, type User, type UserTwoFactorStatus } from '../api/users'
+import { readViewerClaims } from '../../../auth/viewerCapabilities'
+import { calendarDay } from '../../../lib/calendarDay'
 import type { PersonDetailsState } from './usePersonDetails'
 import { CanvasSelect, Field } from '../next/super/parts'
 
@@ -225,6 +227,96 @@ export function ResetPassword({
         title={t('users.next.edit.resetTitle', { name: user.name })}
         description={t('users.next.edit.resetBody', { email: user.email })}
         confirmText={t('users.next.edit.resetConfirm')}
+        cancelText={t('common.cancel')}
+        onConfirm={reset}
+      />
+    </div>
+  )
+}
+
+/**
+ * The person's two-step verification, for a SUPER ADMINISTRATOR viewer only: `GET
+ * /admin/users/{id}/two-factor` and `POST /admin/users/{id}/two-factor/reset` refuse every other role, so for
+ * them nothing renders and nothing is requested. The reset is for someone who lost both their
+ * phone and their recovery codes; the server audits it and ends the person's sessions.
+ */
+export function TwoFactorReset({ user, baseUrl }: { user: User; baseUrl: string }) {
+  const { t, locale } = useTranslation()
+  const isSuperAdmin = readViewerClaims().role === 'super_admin'
+  const [status, setStatus] = useState<UserTwoFactorStatus | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [done, setDone] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    let live = true
+    getUserTwoFactor(baseUrl, user.id).then(
+      (value) => {
+        if (live) setStatus(value)
+      },
+      () => {
+        if (live) setStatus(null)
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [baseUrl, isSuperAdmin, user.id])
+
+  if (!isSuperAdmin || status === null) return null
+
+  async function reset() {
+    setFailed(false)
+    try {
+      await resetUserTwoFactor(baseUrl, user.id)
+      setDone(true)
+      setStatus({ enabled: false, enabledAt: null })
+    } catch (err) {
+      setFailed(true)
+      throw err
+    }
+  }
+
+  const since = status.enabledAt ? Date.parse(status.enabledAt) : Number.NaN
+
+  return (
+    <div data-slot="two-factor-reset" className="flex flex-col gap-2">
+      <p className="m-0 flex flex-wrap items-center gap-x-2 text-sm">
+        <ShieldCheck aria-hidden="true" className="size-4 text-fg-tertiary" />
+        <span className="font-semibold text-fg-secondary">{t('twoFactor.adminLabel')}</span>
+        <span data-slot="two-factor-status" className="text-fg-primary">
+          {status.enabled
+            ? Number.isNaN(since)
+              ? t('twoFactor.statusOn')
+              : t('twoFactor.adminOnSince', { date: calendarDay(since, locale) })
+            : t('twoFactor.adminOff')}
+        </span>
+      </p>
+      {done && (
+        <span role="status" className="text-xs text-fg-secondary">
+          {t('twoFactor.resetDone', { name: user.name })}
+        </span>
+      )}
+      {status.enabled && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Button type="button" variant="outline" onClick={() => setConfirming(true)}>
+            {t('twoFactor.reset')}
+          </Button>
+          <span className="text-xs text-fg-tertiary">{t('twoFactor.resetHelper')}</span>
+          {failed && (
+            <span role="status" className="text-xs text-accent-red">
+              {t('twoFactor.resetFailed')}
+            </span>
+          )}
+        </div>
+      )}
+      <ConfirmationDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={t('twoFactor.resetTitle', { name: user.name })}
+        description={t('twoFactor.resetBody')}
+        confirmText={t('twoFactor.resetConfirm')}
         cancelText={t('common.cancel')}
         onConfirm={reset}
       />

@@ -161,6 +161,11 @@ public static class SubjectDataMap
         "UserInvitation.InvitationToken",
         "SurveyInvitation.InvitationToken",
         "MicroclimateInvitation.InvitationToken",
+        // Two-factor sign-in (2026-11-15): the encrypted TOTP secrets and the recovery-code hashes
+        // are working keys. The export says a factor EXISTS and when; never the material.
+        "UserTwoFactor.SecretCiphertext",
+        "UserTwoFactor.PendingSecretCiphertext",
+        "UserRecoveryCode.CodeHash",
     };
 
     /// <summary>What a redacted column's value is replaced with in an export.</summary>
@@ -451,6 +456,23 @@ public static class SubjectDataMap
             "Deleted 30 days after last save (SurveyDraftRetention), or on erasure.",
             "The subject's unsubmitted authoring sessions, including the autosaved wizard payload. Private to "
             + "their author, referenced by nothing, and already on a 30-day clock — deleted outright."),
+
+        new("UserTwoFactor", "user_two_factor", SubjectLink.Subject, ["UserId"],
+            ExportTreatment.FullRecord, ErasureTreatment.Deleted,
+            BasisContract,
+            "For as long as two-factor sign-in is on for the account; deleted on erasure, disable or reset.",
+            "The subject's second sign-in factor (ruled 2026-11-15): an AES-GCM-encrypted TOTP secret, when it "
+            + "was enabled, and the replay/lockout counters. DELETED rather than redacted for the reason "
+            + "survey_credentials is: it is a working key, not a record of anything. Both secret columns are in "
+            + "RedactedColumns, so an access export says the factor exists without handing over the key."),
+
+        new("UserRecoveryCode", "user_recovery_codes", SubjectLink.Subject, ["UserId"],
+            ExportTreatment.FullRecord, ErasureTreatment.Deleted,
+            BasisContract,
+            "Until used, replaced by a new enrollment, or erased.",
+            "The ten single-use recovery codes for the subject's second factor, each a bcrypt hash. Deleted on "
+            + "erasure, as working keys are; the hash is in RedactedColumns, so the export shows how many exist "
+            + "and which were spent, never the material."),
 
         new("SurveyCredential", "survey_credentials", SubjectLink.Subject, ["UserId"],
             ExportTreatment.FullRecord, ErasureTreatment.Deleted,

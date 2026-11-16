@@ -191,6 +191,12 @@ public static class SubjectAccessExport
             // token beside it.
             await FullAsync(db, "SurveyCredential", "UserId",
                 db.SurveyCredentials.Where(c => c.UserId == id), cancellationToken),
+            // Two-factor sign-in (2026-11-15). Same treatment as the per-survey sign-in above:
+            // the rows are disclosed, the key material is in RedactedColumns.
+            await FullAsync(db, "UserTwoFactor", "UserId",
+                db.UserTwoFactors.Where(t => t.UserId == id), cancellationToken),
+            await FullAsync(db, "UserRecoveryCode", "UserId",
+                db.UserRecoveryCodes.Where(c => c.UserId == id), cancellationToken),
 
             // --- Actor: the subject as author, approver or manager ---------------------------
             // Paired-column labels (#195/#210) are whichever half exists, English first: an

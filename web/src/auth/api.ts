@@ -1,3 +1,5 @@
+import type { SignInResponse } from './twoFactor'
+
 export interface LoginResponse {
   token: string
 }
@@ -56,7 +58,7 @@ async function toRequestError(response: Response): Promise<AuthRequestError> {
   return new AuthRequestError(response.status, message)
 }
 
-export async function login(baseUrl: string, email: string, password: string): Promise<LoginResponse> {
+export async function login(baseUrl: string, email: string, password: string): Promise<SignInResponse> {
   const response = await fetch(`${baseUrl}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -67,7 +69,7 @@ export async function login(baseUrl: string, email: string, password: string): P
     throw await toRequestError(response)
   }
 
-  return response.json() as Promise<LoginResponse>
+  return response.json() as Promise<SignInResponse>
 }
 
 export interface SignupInput {
@@ -121,7 +123,7 @@ export async function signup(baseUrl: string, input: SignupInput): Promise<Login
  * is unauthenticated and must not report account state). Neither is something a
  * user can fix on a form, so unlike login's 401 it takes the whole page.
  */
-export async function googleLogin(baseUrl: string, idToken: string): Promise<LoginResponse> {
+export async function googleLogin(baseUrl: string, idToken: string): Promise<SignInResponse> {
   const response = await fetch(`${baseUrl}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -132,7 +134,7 @@ export async function googleLogin(baseUrl: string, idToken: string): Promise<Log
     throw await toRequestError(response)
   }
 
-  return response.json() as Promise<LoginResponse>
+  return response.json() as Promise<SignInResponse>
 }
 
 /**

@@ -3,8 +3,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { AuthRequestError, googleLogin } from '../api'
 import { pageWorthyReason } from '../authReason'
 import { clearGoogleHandshake, peekGoogleHandshake, readGoogleCallback } from '../googleOAuth'
-import { setToken } from '../token'
-import { resolveInitialRoute } from '../../app/resolveInitialRoute'
+import { acceptSignIn } from '../twoFactor'
 import { useTranslation } from '../../i18n'
 import { AuthTransitionCard } from './AuthTransitionCard'
 
@@ -78,9 +77,9 @@ export default function AuthTransitionNextPage() {
     async function exchange(idToken: string) {
       try {
         const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-        const { token } = await googleLogin(baseUrl, idToken)
-        setToken(token)
-        navigate(resolveInitialRoute(), { replace: true })
+        // The Google path is gated exactly as the password one: a challenge goes to the
+        // second step, a session to the reader's destination.
+        navigate(acceptSignIn(await googleLogin(baseUrl, idToken), null), { replace: true })
       } catch (err) {
         const status = err instanceof AuthRequestError ? err.status : 0
         const message = err instanceof Error && err.message ? err.message : t('errors.generic')

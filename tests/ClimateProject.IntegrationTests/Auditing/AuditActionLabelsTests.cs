@@ -56,6 +56,7 @@ public class AuditActionLabelsTests(PostgresContainerFixture postgres)
         ProfileAuditActions.Update,
         ProfileAuditActions.PasswordChange,
         ProfileAuditActions.PreferencesUpdate,
+        TwoFactorEndpoints.RecoveryCodeUsedAction,
         GdprEndpoints.AccessAction,
         GdprEndpoints.ErasureAction,
         GdprEndpoints.ComplianceReportAction,

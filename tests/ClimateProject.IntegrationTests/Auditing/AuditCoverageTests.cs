@@ -195,6 +195,12 @@ public class AuditCoverageTests : IAsyncLifetime
         "POST /auth/google",
         "POST /auth/login",
         "POST /auth/signup",
+        // 2026-11-15. The second sign-in step: the caller holds a challenge, not a session. Each
+        // handler attributes its own row to the challenged user's company (AuditEntry.AttributeTo),
+        // so these ARE on the trail for every user who has one -- TwoFactorSignInTests reads a row.
+        "POST /auth/two-factor/enrollment/confirm",
+        "POST /auth/two-factor/enrollment/start",
+        "POST /auth/two-factor/verify",
         "POST /invitations/{token}/accept",
         "POST /microclimate-invitations/{token}/completed",
         "POST /microclimate-invitations/{token}/opened",

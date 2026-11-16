@@ -11,6 +11,8 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<CompanyLogo> CompanyLogos => Set<CompanyLogo>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserTwoFactor> UserTwoFactors => Set<UserTwoFactor>();
+    public DbSet<UserRecoveryCode> UserRecoveryCodes => Set<UserRecoveryCode>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
     public DbSet<UserDemographic> UserDemographics => Set<UserDemographic>();

@@ -4,8 +4,7 @@ import { AuthRequestError, googleLogin } from './api'
 import { AuthPending } from './AuthPending'
 import { pageWorthyReason } from './authReason'
 import { clearGoogleHandshake, peekGoogleHandshake, readGoogleCallback } from './googleOAuth'
-import { setToken } from './token'
-import { resolveInitialRoute } from '../app/resolveInitialRoute'
+import { acceptSignIn } from './twoFactor'
 import { useTranslation } from '../i18n'
 
 /**
@@ -92,10 +91,7 @@ export default function AuthLoadingPage() {
     async function exchange(idToken: string) {
       try {
         const baseUrl = import.meta.env.VITE_API_BASE_URL as string
-        const { token } = await googleLogin(baseUrl, idToken)
-
-        setToken(token)
-        navigate(resolveInitialRoute(), { replace: true })
+        navigate(acceptSignIn(await googleLogin(baseUrl, idToken), null), { replace: true })
       } catch (err) {
         const status = err instanceof AuthRequestError ? err.status : 0
         const message = err instanceof Error && err.message ? err.message : t('errors.generic')
