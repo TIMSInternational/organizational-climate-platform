@@ -4768,6 +4768,95 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.ToTable("user_invitation_demographics", (string)null);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.UserRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("user_recovery_codes", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.UserTwoFactor", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTimeOffset?>("EnabledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("enabled_at");
+
+                    b.Property<int>("FailedAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("failed_attempts");
+
+                    b.Property<long?>("LastUsedStep")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_used_step");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("locked_until");
+
+                    b.Property<DateTimeOffset?>("PendingCreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pending_created_at");
+
+                    b.Property<byte[]>("PendingSecretCiphertext")
+                        .HasColumnType("bytea")
+                        .HasColumnName("pending_secret_ciphertext");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<byte[]>("SecretCiphertext")
+                        .HasColumnType("bytea")
+                        .HasColumnName("secret_ciphertext");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("user_two_factor", (string)null);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.AIInsight", b =>
                 {
                     b.HasOne("ClimateProject.Domain.Entities.User", null)
@@ -6777,6 +6866,24 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasOne("ClimateProject.Domain.Entities.UserInvitation", null)
                         .WithMany()
                         .HasForeignKey("InvitationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.UserRecoveryCode", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.UserTwoFactor", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithOne()
+                        .HasForeignKey("ClimateProject.Domain.Entities.UserTwoFactor", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -11,6 +11,7 @@ import { CanvasSelect, Field, Panel } from '../../org-structure/next/super/parts
 import { roleText } from '../../org-structure/next/super/labels'
 import { PROFILE_THEMES, type Profile, type ProfileActivityEntry, type ProfileDisplayPreferences, type ProfileTheme } from '../api/profile'
 import AccountTabs from './AccountTabs'
+import TwoFactorCard from './TwoFactorCard'
 import { useProfileModel } from './useProfileModel'
 import { useRespondentShell } from '../../../navigation/useRespondentShell'
 
@@ -122,6 +123,8 @@ export default function ProfileNextPage() {
                 )}
               </div>
               {state.profile.hasPassword && <PasswordCard onSave={state.savePassword} />}
+              {/* Renders nothing unless `GET /profile/two-factor` says the feature is available. */}
+              <TwoFactorCard />
               {state.activity && <ActivityCard entries={state.activity} />}
             </div>
           )}

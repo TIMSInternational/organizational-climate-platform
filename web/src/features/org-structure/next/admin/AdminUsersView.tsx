@@ -30,7 +30,7 @@ import { updateUser, type User, type UserEmailChange } from '../../api/users'
 import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
 import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
-import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { DeactivationConfirm, PersonDetailsFields, ResetPassword, TwoFactorReset } from '../../components/PersonDetails'
 import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
 import IntakeWizard from '../../components/IntakeWizard'
@@ -926,6 +926,8 @@ function EditPerson({
       {/* An administrator's password is the super administrator's to reset: the API refuses a
           company administrator one (`AuthEndpoints.ResetCredentialsAsync`), as it does their email. */}
       <ResetPassword user={user} baseUrl={baseUrl} allowed={!accountLocked} details={details} />
+      {/* Super administrators only; renders nothing for a company administrator. */}
+      <TwoFactorReset user={user} baseUrl={baseUrl} />
       <DeactivationConfirm
         open={confirmingDeactivation}
         name={user.name}

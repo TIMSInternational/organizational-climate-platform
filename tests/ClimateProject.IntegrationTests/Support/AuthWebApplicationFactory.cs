@@ -126,6 +126,15 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     ///     test CASE -- it took the run to 18 and failed 20 tests across six classes, including
     ///     <c>SharedHostTests</c>, which is this budget's own regression test.
     ///   </description></item>
+    ///   <item><description>
+    ///     <c>TwoFactorSignInTests</c> -- ONE host for the whole run, held in a static class fixture
+    ///     (<c>TwoFactorHostFixture</c>), and the same reason as 7: the CONFIGURATION is the
+    ///     experiment. Two-factor sign-in is ON only when <c>Auth:TotpEncryptionKey</c> is set, and
+    ///     the shared host must keep it unset -- dozens of classes sign in as a super admin with a
+    ///     password alone, and with the key set every one of them would be handed an enrollment
+    ///     challenge instead of a token. The same host also swaps the clock the TOTP steps read, so
+    ///     replay and expiry are asserted by moving time rather than by sleeping.
+    ///   </description></item>
     /// </list>
     /// </para>
     /// <para>
@@ -134,7 +143,7 @@ public class AuthWebApplicationFactory(string connectionString) : WebApplication
     /// another. If you need one more host, say which of the reasons above yours is like.
     /// </para>
     /// </summary>
-    public const int HostBudget = 10;
+    public const int HostBudget = 11;
 
     /// <summary>
     /// The sign-in limit every host this factory builds is configured with. Deliberately the

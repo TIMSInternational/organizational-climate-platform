@@ -289,7 +289,11 @@ public class SubjectDataMapTests
         // that deleting a company's people no longer has the database SET NULL their audit rows
         // behind AuditLogAppendOnlyInterceptor's back. A census of FK-referring types loses it;
         // the person's data in it is exactly what it was.
-        Assert.Equal(33, nonOwnedReferrers.Count);
+        // 35 since 2026-11-15: user_two_factor and user_recovery_codes hold a person's second
+        // sign-in factor (user_id, cascade). Both credentials -- the reason this census exists --
+        // and both declared in the map as Subject, exported with the key material redacted and
+        // deleted on erasure.
+        Assert.Equal(35, nonOwnedReferrers.Count);
 
         var restricting = user.GetReferencingForeignKeys()
             .Where(fk => !fk.DeclaringEntityType.IsOwned() && fk.DeleteBehavior == DeleteBehavior.Restrict)

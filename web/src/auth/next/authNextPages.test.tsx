@@ -13,6 +13,7 @@ import { TranslationProvider } from '../../i18n'
 import type { Locale } from '../../i18n'
 import { getToken, setToken, clearToken } from '../token'
 import { beginGoogleSignIn, peekGoogleHandshake } from '../googleOAuth'
+import { clearChallenge, readChallenge } from '../twoFactor'
 import { tokenFor } from '../../test/jwtFixture'
 import {
   ADMIN_THEME_ATTRIBUTE,
@@ -526,6 +527,19 @@ describe('AuthTransitionNextPage', () => {
     expect(getToken()).toBeTruthy()
     const [url] = vi.mocked(fetch).mock.calls[0]
     expect(String(url)).toMatch(/\/auth\/google$/)
+  })
+
+  it('a two-factor answer from Google goes to the second step with no session stored', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ twoFactor: 'verify', challengeToken: 'challenge-google', expiresInSeconds: 300 }), { status: 200 }),
+    )
+
+    renderAuthRoutes(callbackUrl({ email: 'ana@meridiano.test' }))
+
+    await waitFor(() => expect(path()).toBe('/login/two-factor'))
+    expect(getToken()).toBeNull()
+    expect(readChallenge()?.challengeToken).toBe('challenge-google')
+    clearChallenge()
   })
 
   it('sends a bare visit back to sign-in rather than inventing a failure', async () => {

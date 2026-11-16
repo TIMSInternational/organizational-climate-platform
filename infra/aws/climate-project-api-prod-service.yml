@@ -154,6 +154,18 @@ Parameters:
       not boot at all, fails its App Runner health check, and the deploy fails outright.
       It no longer degrades to per-request 500s on /api/internal/* the way it did before
       #189 -- the failure is now earlier and total.
+  TotpEncryptionKeySecretArn:
+    Type: String
+    Default: ""
+    Description: >-
+      Secrets Manager ARN holding Auth:TotpEncryptionKey -- base64 of 32 random bytes, the
+      AES-256-GCM key two-factor sign-in encrypts TOTP secrets with (ruled 2026-11-15). OPTIONAL,
+      and empty is safe: with no key the API turns two-factor OFF (sign-in unchanged, nothing
+      enforced) and logs one startup warning, so a deploy can ship before the secret exists.
+      Same empty-means-absent rule as TrackingJwtSecretPreviousArn: empty drops both the runtime
+      secret and the IAM grant. Once set, NEVER change or clear the value casually -- every
+      enrolled secret is encrypted with it; a new key makes every enrolled person fall back to
+      a recovery code or a super-admin reset.
 
 Conditions:
   # An optional list element cannot be expressed by passing an empty value: the app binds
@@ -167,6 +179,8 @@ Conditions:
   # The rotation overlap (#70). Absent by default: a deployment that has never rotated supplies
   # no ARN, and must neither mount an empty secret nor hold a grant on one.
   HasPreviousTrackingJwtSecret: !Not [!Equals [!Ref TrackingJwtSecretPreviousArn, ""]]
+  # Two-factor sign-in's key. Absent until the secret is created; see TotpEncryptionKeySecretArn.
+  HasTotpEncryptionKey: !Not [!Equals [!Ref TotpEncryptionKeySecretArn, ""]]
 
 Resources:
   AppRunnerInstanceRole:
@@ -197,6 +211,10 @@ Resources:
                   - !Ref InternalApiKeySecretArn
                   - !Ref EmailSmtpUsernameSecretArn
                   - !Ref EmailSmtpPasswordSecretArn
+                  - !If
+                    - HasTotpEncryptionKey
+                    - !Ref TotpEncryptionKeySecretArn
+                    - !Ref AWS::NoValue
       Tags:
         - Key: Project
           Value: climate-project-api
@@ -381,6 +399,13 @@ Resources:
                 Value: !Ref EmailSmtpUsernameSecretArn
               - Name: Email__SmtpPassword
                 Value: !Ref EmailSmtpPasswordSecretArn
+              # Two-factor sign-in (2026-11-15). Not mounted at all while no ARN is supplied, and
+              # the API then runs with the feature OFF -- the state it shipped in.
+              - !If
+                - HasTotpEncryptionKey
+                - Name: Auth__TotpEncryptionKey
+                  Value: !Ref TotpEncryptionKeySecretArn
+                - !Ref AWS::NoValue
       InstanceConfiguration:
         Cpu: !Ref Cpu
         Memory: !Ref Memory

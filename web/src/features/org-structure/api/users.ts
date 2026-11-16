@@ -244,3 +244,23 @@ export async function resetCredentials(baseUrl: string, userId: string): Promise
   }
   return response.json() as Promise<ResetCredentialsResult>
 }
+
+/** `GET /admin/users/{id}/two-factor` — super administrators only (403 otherwise). The contract draft said `/users/…`; the API maps it under `/admin/users` (`TwoFactorEndpoints.cs`). */
+export interface UserTwoFactorStatus {
+  enabled: boolean
+  enabledAt: string | null
+}
+
+export async function getUserTwoFactor(baseUrl: string, userId: string): Promise<UserTwoFactorStatus> {
+  const response = await authFetch(`${baseUrl}/admin/users/${encodeURIComponent(userId)}/two-factor`)
+  return response.json() as Promise<UserTwoFactorStatus>
+}
+
+/**
+ * `POST /admin/users/{id}/two-factor/reset` → 204. Audited server-side, and it bumps the person's
+ * security stamp, so their open sessions end and their next sign-in starts from no authenticator
+ * (a super administrator is then asked to enroll again).
+ */
+export async function resetUserTwoFactor(baseUrl: string, userId: string): Promise<void> {
+  await authFetch(`${baseUrl}/admin/users/${encodeURIComponent(userId)}/two-factor/reset`, { method: 'POST' })
+}

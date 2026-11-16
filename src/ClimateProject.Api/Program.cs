@@ -258,7 +258,18 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         // authentication also covers endpoints that read a token without RequireAuthorization.
         options.Events = new JwtBearerEvents
         {
-            OnTokenValidated = SecurityStampValidation.ValidateAsync,
+            OnTokenValidated = async context =>
+            {
+                // A two-factor challenge is never a session. It is signed with a different key,
+                // so it cannot reach here today; this refuses it anyway, for the day it could.
+                if (ClimateProject.Infrastructure.Auth.TwoFactorChallengeTokens.CarriesChallengePurpose(context.Principal))
+                {
+                    context.Fail(SecurityStampValidation.RejectionMessage);
+                    return;
+                }
+
+                await SecurityStampValidation.ValidateAsync(context);
+            },
         };
     })
     // Forces the Configure delegate above to run at host-startup time (via the
@@ -340,6 +351,27 @@ builder.Services.AddOptions<CorsOptions>()
     // behaviour now; it is kept only so that the guarantee survives someone later moving
     // UseCors behind a conditional, which would otherwise silently remove the eager resolution.
     .ValidateOnStart();
+
+// Two-factor sign-in (ruled 2026-11-15). Read once, at startup, through an options type with
+// ValidateOnStart so the one warning line below is in the deploy's log rather than on the first
+// sign-in. A missing or malformed Auth:TotpEncryptionKey never fails the host: it turns the
+// feature OFF, and sign-in is then exactly what it was (see TwoFactorSettings).
+builder.Services.AddOptions<TwoFactorSettingsHolder>()
+    .Configure<IConfiguration, ILoggerFactory>((holder, configuration, loggerFactory) =>
+    {
+        holder.Settings = ClimateProject.Application.Auth.TwoFactor.TwoFactorSettings.FromConfiguredKey(
+            configuration[ClimateProject.Application.Auth.TwoFactor.TwoFactorSettings.ConfigurationKey],
+            out var problem);
+        if (problem is not null)
+        {
+            loggerFactory.CreateLogger("ClimateProject.Api.TwoFactor").LogWarning("{TwoFactorProblem}", problem);
+        }
+    })
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<TwoFactorSettingsHolder>>().Value.Settings);
+
+// The clock TOTP steps and challenge expiry read. Injectable so a test can move time.
+builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -658,6 +690,7 @@ app.MapGet("/version", () => Results.Ok(new VersionResponse(
     BuiltAt: BuildInfo.BuildTimestamp)));
 
 app.MapAuthEndpoints();
+app.MapTwoFactorEndpoints();
 app.MapCompanyEndpoints();
 app.MapCompanyLicenseEndpoints();
 app.MapDepartmentEndpoints();
@@ -714,6 +747,12 @@ app.MapAuditEndpoints();
 app.MapGdprEndpoints();
 
 app.Run();
+
+internal sealed class TwoFactorSettingsHolder
+{
+    public ClimateProject.Application.Auth.TwoFactor.TwoFactorSettings Settings { get; set; } =
+        ClimateProject.Application.Auth.TwoFactor.TwoFactorSettings.Disabled;
+}
 
 internal sealed record ReadinessResponse(
     string Service,

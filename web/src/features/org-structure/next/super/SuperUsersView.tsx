@@ -29,7 +29,7 @@ import { updateUser, updateUserRole, type User, type UserEmailChange } from '../
 import { EmailChangeOutcome } from '../../components/EmailChangeOutcome'
 import { updateErrorText } from '../../components/emailRefusal'
 import { ResendCredentials } from '../../components/ResendCredentials'
-import { DeactivationConfirm, PersonDetailsFields, ResetPassword } from '../../components/PersonDetails'
+import { DeactivationConfirm, PersonDetailsFields, ResetPassword, TwoFactorReset } from '../../components/PersonDetails'
 import { ErasePerson } from '../../components/ErasePerson'
 import { departmentChange, usePersonDetails } from '../../components/usePersonDetails'
 import type { Department } from '../../api/departments'
@@ -671,6 +671,7 @@ function EditPerson({
       <PersonDetailsFields user={user} people={people} state={details} />
       <ResendCredentials user={user} baseUrl={baseUrl} />
       <ResetPassword user={user} baseUrl={baseUrl} allowed details={details} />
+      <TwoFactorReset user={user} baseUrl={baseUrl} />
       <DeactivationConfirm
         open={confirmingDeactivation}
         name={user.name}
