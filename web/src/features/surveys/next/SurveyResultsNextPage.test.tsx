@@ -339,6 +339,27 @@ describe('SurveyResultsNextPage', () => {
     expect(requested.some((url) => /\/surveys\/s1\/export\/pdf\?lang=en$/.test(url))).toBe(true)
   })
 
+  it('takes an administrator to «Generar informe» with this survey already chosen', async () => {
+    renderAt({ role: 'company_admin' })
+    await screen.findByRole('heading', { level: 1 })
+    const link = screen.getByRole('link', { name: en.reportWizard.open })
+    expect(link.getAttribute('href')).toBe('/admin/companies/c1/reports/new?survey=s1')
+  })
+
+  it('takes TIMS to the report of the SURVEY\'s company, with no company chosen in the header', async () => {
+    // The survey names its own company; the header names none.
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/analytics')) return Promise.resolve(jsonResponse(payload()))
+      if (url.includes('/action-plans')) return Promise.resolve(jsonResponse(plans))
+      if (/\/surveys\/s1(\?|$)/.test(url)) return Promise.resolve(jsonResponse({ id: 's1', companyId: 'c7' }))
+      return Promise.resolve(new Response('{}', { status: 404 }))
+    })
+    renderAt({ role: 'super_admin', companyId: '' })
+    await screen.findByRole('heading', { level: 1 })
+    expect((await screen.findByRole('link', { name: en.reportWizard.open })).getAttribute('href')).toBe('/admin/companies/c7/reports/new?survey=s1')
+  })
+
   it('reports a failed PDF download instead of doing nothing', async () => {
     // A download button that silently no-ops reads as a broken build, and an admin who
     // cannot tell "refused" from "nothing happened" will retry rather than escalate.
@@ -430,6 +451,8 @@ describe('SurveyResultsNextPage', () => {
     expect(screen.getByText(en.surveyResults.suppressedTitle)).toBeTruthy()
     expect(screen.queryByRole('button', { name: copy.exportPdf })).toBeNull()
     expect(screen.queryByRole('button', { name: copy.exportCsv })).toBeNull()
+    // A report of a survey under the floor would be its participation and nothing else.
+    expect(screen.queryByRole('link', { name: en.reportWizard.open })).toBeNull()
     expect(screen.queryByRole('heading', { level: 2, name: copy.mapHeading })).toBeNull()
     expect(screen.queryByTestId('group-row-d-eng')).toBeNull()
     // The groups tile prints no figure below the whole-survey floor: withheld, not "0 de 0".

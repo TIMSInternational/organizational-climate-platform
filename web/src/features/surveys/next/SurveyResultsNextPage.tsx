@@ -72,6 +72,9 @@ export default function SurveyResultsNextPage() {
           capabilities={capabilities}
           baseUrl={baseUrl}
           onError={setActionError}
+          // TIMS reached the report wizard only through Empresas › company › Informes (their rail
+          // has no Informes); here it is one click, with this survey already chosen.
+          reportHref={companyId ? `/admin/companies/${encodeURIComponent(companyId)}/reports/new?survey=${encodeURIComponent(id)}` : null}
           // Drawn here and placed by the view under its «Cruces» segment: a cross is a question
           // asked ABOUT the results, and it keeps its own requests and state.
           crossPanel={<SurveyCrossPanel surveyId={id} payload={payload} baseUrl={baseUrl} bands={model.bands} />}

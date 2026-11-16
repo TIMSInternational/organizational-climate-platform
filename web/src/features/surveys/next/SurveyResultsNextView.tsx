@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, Check, ChevronDown, Download, Lock, MoreHorizontal } from 'lucide-react'
+import { ArrowDown, ArrowRight, Check, ChevronDown, Download, FileText, Lock, MoreHorizontal } from 'lucide-react'
+import { Link } from 'react-router'
 import { useTranslation } from '../../../i18n'
 import { PageHeader } from '../../../components/layout'
 import {
@@ -77,6 +78,8 @@ type ResultsView = 'summary' | 'questions' | 'crosses' | 'comments'
 const CLOSED_STATUSES = new Set(['closed', 'archived'])
 
 interface SurveyResultsNextViewProps {
+  /** The report wizard with this survey chosen; null hides «Generar informe». */
+  reportHref?: string | null
   model: SurveyResultsNextModel
   capabilities: ViewerCapabilities
   /** The API base, for the exports the browser cannot build. */
@@ -124,7 +127,7 @@ interface SurveyResultsNextViewProps {
  * withheld row, and (4) the exports are the page's builders over the same payload,
  * which the server already floored, or the server's own files.
  */
-export default function SurveyResultsNextView({ model, capabilities, baseUrl, onError, crossPanel }: SurveyResultsNextViewProps) {
+export default function SurveyResultsNextView({ model, capabilities, baseUrl, onError, crossPanel, reportHref = null }: SurveyResultsNextViewProps) {
   const { t, locale } = useTranslation()
   // Opens on the lowest disclosed cell, as the artboard does: the reader lands on the
   // cell the findings name first, with its question already under the map.
@@ -339,6 +342,14 @@ export default function SurveyResultsNextView({ model, capabilities, baseUrl, on
         actions={
           !model.isSuppressed ? (
             <>
+              {reportHref ? (
+                <Button asChild variant="outline">
+                  <Link to={reportHref}>
+                    <FileText aria-hidden="true" />
+                    {t('reportWizard.open')}
+                  </Link>
+                </Button>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { Lock, Shield } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
 import { PageHeader } from '../../../components/layout'
@@ -85,6 +85,17 @@ export default function ReportWizardPage() {
   const [outcome, setOutcome] = useState<'done' | 'failed' | null>(null)
   const [crossRow, setCrossRow] = useState('')
   const [crossColumn, setCrossColumn] = useState('')
+
+  // «Generar informe» on a survey's results page arrives with `?survey=<id>`: that survey is
+  // chosen as soon as the list loads -- but only if the list offers it. A draft, a survey nobody
+  // answered or another company's id is ignored, never forced past the filter below.
+  const [searchParams] = useSearchParams()
+  const askedSurvey = searchParams.get('survey')
+  useEffect(() => {
+    if (!askedSurvey || state.surveyId || !surveys?.some((survey) => survey.id === askedSurvey)) return
+    setPreview(null)
+    setState((previous) => ({ ...previous, surveyId: askedSurvey, compareSurveyId: null, scope: 'all', departmentIds: [], crosses: [] }))
+  }, [askedSurvey, surveys, state.surveyId])
 
   useEffect(() => {
     let cancelled = false

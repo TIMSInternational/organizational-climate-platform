@@ -79,11 +79,11 @@ function urls(fragment: string): string[] {
   return vi.mocked(authFetch).mock.calls.map((call) => String(call[0])).filter((url) => url.includes(fragment))
 }
 
-function renderPage() {
+function renderPage(query = '') {
   setToken(tokenFor({ sub: 'u1', nodoId: '', role: 'company_admin', companyId: CID }))
   return render(
     <TranslationProvider>
-      <MemoryRouter initialEntries={[`/admin/companies/${CID}/reports/new`]}>
+      <MemoryRouter initialEntries={[`/admin/companies/${CID}/reports/new${query}`]}>
         <CompanyContextProvider>
           <Routes>
             <Route path="/admin/companies/:companyId/reports/new" element={<ReportWizardPage />} />
@@ -116,6 +116,22 @@ describe('«Generar informe»', () => {
     expect(await screen.findByRole('radio', { name: 'Clima Organizacional 2026' })).toBeTruthy()
     expect(screen.queryByRole('radio', { name: 'Borrador 2027' })).toBeNull()
     expect(screen.queryByRole('radio', { name: 'Pulso sin respuestas' })).toBeNull()
+  })
+
+  it('arrives from a results page with that survey chosen', async () => {
+    renderPage('?survey=s1')
+
+    const radio = await screen.findByRole('radio', { name: 'Clima Organizacional 2026' })
+    await waitFor(() => expect(radio.getAttribute('aria-checked') ?? String((radio as HTMLInputElement).checked)).toBe('true'))
+    await waitFor(() => expect(urls('/surveys/s1/report/options').length).toBeGreaterThan(0))
+  })
+
+  it('ignores a survey in the address that it would not offer', async () => {
+    renderPage('?survey=s2')
+
+    const radio = await screen.findByRole('radio', { name: 'Clima Organizacional 2026' })
+    expect(radio.getAttribute('aria-checked') ?? String((radio as HTMLInputElement).checked)).toBe('false')
+    expect(urls('/report/options')).toHaveLength(0)
   })
 
   it('downloads the PDF the steps describe, with the cross and the departments chosen', async () => {
