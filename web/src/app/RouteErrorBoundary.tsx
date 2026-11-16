@@ -1,6 +1,8 @@
-import { Link } from 'react-router'
+import { useEffect } from 'react'
+import { Link, useLocation, useRouteError } from 'react-router'
 import { useTranslation } from '../i18n'
 import { Button, ErrorState } from '../components/ui'
+import { reportCrash } from './crashReporter'
 
 // Safe to use translations here: TranslationProvider wraps RouterProvider in
 // main.tsx, so it sits above every route element including this errorElement.
@@ -29,8 +31,21 @@ import { Button, ErrorState } from '../components/ui'
 // role (or to the sign-in page when there is no session) — never a destination this
 // viewer may not open. Navigating away clears the boundary: react-router resets an
 // errorElement on the next navigation.
+//
+// ## And somebody is told
+//
+// Until #158 this card was the only trace a crash left. It now hands the error to
+// `crashReporter`, which sends the matched ROUTE PATTERN — never this pathname, which on a
+// respondent's screen is their access token — and nothing else that names a person. Once per
+// error and route: StrictMode's second render and a re-render of the card send nothing new.
 export default function RouteErrorBoundary({ placement = 'page' }: { placement?: 'page' | 'shell' }) {
   const { t } = useTranslation()
+  const error = useRouteError()
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    reportCrash(error, pathname)
+  }, [error, pathname])
 
   const card = (
     <ErrorState

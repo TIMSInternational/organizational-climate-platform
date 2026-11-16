@@ -955,3 +955,70 @@ The correct arrangement after this change is:
 Neither alone is monitoring, and as the last column says, neither of them pages anyone right
 now. The workflow also still carries the `deploy-drift.yml` relay, which nothing in AWS
 replicates.
+
+---
+
+## 10. Request lines, request ids and website crash reports (2026-11-15)
+
+Two gaps measured on 2026-11-15 and closed in code. Neither changes what §8 says about the
+JSON formatter; both work under the SimpleConsole formatter the service runs today, because
+each writes its whole content on the message line.
+
+### Every request leaves one line (except the probes)
+
+`RequestLogging` (`src/ClimateProject.Api/Infrastructure/RequestLogging.cs`) writes, at
+Information under `ClimateProject.Api.Requests`, after every request:
+
+```
+api-request GET /surveys/{id:guid}/results 403 12ms id=0HNA1B2C3D4E5:00000007
+```
+
+The **route template**, never the path or the query string — paths carry access tokens and ids,
+and `Request.Path` is percent-decoded, so logging it would let a caller forge lines. A request
+that matched no route is `(unmatched)`. `/health`, `/ready` and `/version` write nothing (App
+Runner and the probe poll them constantly). The id is `HttpContext.TraceIdentifier`; it is
+returned on **every** response as `X-Request-Id` (exposed to the web through CORS) and as
+`requestId` in the JSON body of the exception handler's 400/409/500 and the size limit's 413.
+
+To find a request somebody quotes (logs only, literal filter, never a dump — CLAUDE.md):
+
+```sh
+aws logs filter-log-events --region us-east-2 \
+  --log-group-name "/aws/apprunner/climate-project-api-prod/<ServiceId>/application" \
+  --filter-pattern '"id=<the request id>"' --start-time <epoch-ms>
+```
+
+For a 500, the exception the framework logs is the event immediately before it.
+
+### Website crashes reach the log group, and an alarm counts them
+
+The web (`web/src/app/crashReporter.ts`) reports a render error caught by `RouteErrorBoundary`,
+an uncaught error and an unhandled rejection to `POST /client-errors` — at most five per page
+load, one per distinct error, fire-and-forget. The API writes one Warning line under
+`ClimateProject.Api.ClientErrors`:
+
+```
+web-crash-report route=/s/:token build=<40-hex sha> message=TypeError: … stack=… | at … ua=… id=…
+```
+
+What it may carry: the matched **route pattern** (never the pathname — a respondent's path is
+their token), the message (≤ 500) and the stack (≤ 2 KB) with query strings, fragments, emails
+and token-shaped runs removed on **both** sides, the build stamp, the user agent. No bearer
+token is sent and none is read. The route is anonymous (respondents crash too), rate-limited
+per caller (`client-error`, 30 a minute) and capped at 8 KB (413).
+
+`WebCrashReportFilter` counts `"web-crash-report"` into `ClimateProject/Prod WebCrashReported`;
+`WebCrashReportSpikeAlarm` goes to the **warning** topic at **≥ 5 in 15 minutes**. The literal is
+not a substring of the route, so the request line for the report is not a second count;
+`RequestLoggingAndClientErrorTests.The_alarm_counts_the_literal_the_endpoint_writes` pins the
+two together.
+
+**Deploying the alarm** is the same path as every other change to this stack: a human with an
+admin profile on the climate account runs `DRY=1 bash scripts/wire-observability.sh`, reads the
+change set (it should add exactly `WebCrashReportFilter` and `WebCrashReportSpikeAlarm`), then
+`bash scripts/wire-observability.sh`. `ops-deploy-observability.yml` is the button for it, but
+its header records that the GitHub deploy role still lacks the `logs`/`cloudwatch`/`sns`
+actions. Deploy the **API first**: until the new image runs, the filter matches nothing and the
+alarm sits in `OK` on `notBreaching`, which is harmless but proves nothing. To prove the
+instrument after both are live, send one report and read it back with
+`--filter-pattern '"web-crash-report"'`.

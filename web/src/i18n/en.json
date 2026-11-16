@@ -8710,6 +8710,7 @@
       "admin__companies__participation__export__export": "Downloaded the status of all of a company's surveys",
       "admin__companies__delivery-audit__export": "Downloaded a company's delivery audit (who never received the email)",
       "webhooks__ses__create": "Amazon reported a bounce or complaint for a sent email",
+      "client-errors__create": "The website reported a crash",
       "admin__users__credentials__create": "Sent sign-in details to people",
       "admin__users__role__update": "Changed a person's role",
       "admin__users__update": "Updated a person",

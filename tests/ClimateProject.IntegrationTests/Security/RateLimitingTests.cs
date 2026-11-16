@@ -722,6 +722,8 @@ public class RateLimitingTests : IClassFixture<WebApplicationFactory<Program>>
         ("/microclimates/{id:guid}/responses", MicroclimateEndpoints.ResponseSubmissionRateLimiterPolicy),
         ("/surveys/{id:guid}/responses", SurveyResponseEndpoints.ResponseSubmissionRateLimiterPolicy),
         ("/surveys/{id:guid}/respond", SurveyResponseEndpoints.ResponseSubmissionRateLimiterPolicy),
+        // 2026-11-15 (#158). Anonymous and writes a Warning line, so it is bounded per caller.
+        (ClientErrorEndpoints.Route, RateLimitPolicies.ClientError),
     ];
 
     /// <summary>
