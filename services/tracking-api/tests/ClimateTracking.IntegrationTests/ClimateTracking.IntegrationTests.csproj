@@ -19,7 +19,7 @@
       without it (NU1903 as an error), so until this bump nothing in this solution's
       integration suite could be built or run at all.
     -->
-    <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.17.0" />
   </ItemGroup>
 
   <ItemGroup>
