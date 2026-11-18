@@ -288,7 +288,7 @@ jobs:
           echo "The tracking migration string points at a different database from climate-project's."
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: services/tracking-api/global.json
 

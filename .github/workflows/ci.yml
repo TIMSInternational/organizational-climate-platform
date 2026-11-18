@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -99,7 +99,7 @@ jobs:
       # services/tracking-api/global.json, not the root one. They pin the same SDK
       # today (10.0.100, rollForward latestFeature); using the solution's own is what
       # keeps this job correct if exactly one of them moves.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: services/tracking-api/global.json
 
@@ -199,7 +199,7 @@ jobs:
         working-directory: web
         run: npm audit --audit-level=high
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -372,7 +372,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
