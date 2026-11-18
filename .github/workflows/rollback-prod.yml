@@ -33,6 +33,14 @@ name: rollback-prod
 # `environment:production` OIDC sub, and its policy already grants
 # cloudformation:UpdateStack on climate-project-api-prod and ecr:DescribeImages.
 # No infrastructure change was needed to add this workflow.
+#
+# Re-read against today's production on 2026-11-18, after the 2026-10-12 move out of account
+# 747814092517 / us-east-1: vars.AWS_ACCOUNT_ID is 795965600143 (`gh variable list`), and in
+# us-east-2 that account holds climate-project-api-bootstrap (EcrRepositoryUri
+# 795965600143.dkr.ecr.us-east-2.amazonaws.com/climate-project-api, GitHubDeployRoleArn
+# .../climate-project-github-deploy-prod) and climate-project-api-prod (`aws cloudformation
+# describe-stacks --region us-east-2`). scripts/rollback-api-image.sh refuses credentials in any
+# other account. The procedure for the first production rehearsal is rollback.md section 11.
 
 on:
   workflow_dispatch:
@@ -202,6 +210,26 @@ jobs:
             --region "$AWS_REGION" \
             --target-sha "$TARGET_SHA"
 
+      # What /version said immediately before the swap, and when the swap began: the "from" half
+      # of the incident record and of the rehearsal's measurement table (rollback.md section 8).
+      # Informational only -- continue-on-error, so an API that is already down, which is when a
+      # rollback is most needed, can never block its own rollback here.
+      - name: Record what is serving before the swap
+        id: before
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          SERVICE_URL="$(aws cloudformation describe-stacks \
+            --stack-name "$SERVICE_STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue | [0]" \
+            --output text)"
+          FROM_COMMIT="$(curl -sS --max-time 20 "https://${SERVICE_URL}/version" | jq -r '.commit // "unknown"' || echo unknown)"
+          echo "Serving before the swap: ${FROM_COMMIT:-unknown}"
+          {
+            echo "from_commit=${FROM_COMMIT:-unknown}"
+            echo "swap_started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Roll back
         env:
           TARGET_SHA: ${{ inputs.target_sha }}
@@ -277,6 +305,8 @@ jobs:
           TARGET_SHA: ${{ inputs.target_sha }}
           REASON: ${{ inputs.reason }}
           ACTOR: ${{ github.actor }}
+          FROM_COMMIT: ${{ steps.before.outputs.from_commit }}
+          SWAP_STARTED_AT: ${{ steps.before.outputs.swap_started_at }}
         run: |
           set -euo pipefail
           {
@@ -285,7 +315,10 @@ jobs:
             echo ""
             echo "| | |"
             echo "|---|---|"
+            echo "| serving before the swap | \`${FROM_COMMIT:-not recorded}\` |"
             echo "| target commit | \`$TARGET_SHA\` |"
+            echo "| swap started (UTC) | ${SWAP_STARTED_AT:-not recorded} |"
+            echo "| record written (UTC) | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
             echo "| dispatched by | @$ACTOR |"
             echo "| trigger / reason | $REASON |"
             echo "| result | ${{ job.status }} |"

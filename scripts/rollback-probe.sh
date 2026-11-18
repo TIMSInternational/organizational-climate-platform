@@ -28,8 +28,11 @@
 # Usage:
 #   scripts/rollback-probe.sh <base-url> <duration-seconds> [interval] [workers] [outdir]
 #
-# Typical: start it, then in another terminal run scripts/rollback-api-image.sh.
-#   scripts/rollback-probe.sh https://xxxx.us-east-1.awsapprunner.com 900 0.5 4
+# Typical: start it, then in another terminal run scripts/rollback-api-image.sh (or
+# dispatch rollback-prod.yml). Production since the 2026-10-12 move -- the custom domain is
+# a CNAME onto the generated host (`dig +short api.climate.timsint.com` ->
+# av3s7p9mkm.us-east-2.awsapprunner.com, 2026-11-18), so either URL measures the same service:
+#   scripts/rollback-probe.sh https://api.climate.timsint.com 900 1.0 2
 
 set -euo pipefail
 

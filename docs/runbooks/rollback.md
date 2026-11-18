@@ -7,6 +7,13 @@ thirteen CloudFormation parameters. None of them has been run. The blanks in
 numbers this is still a document rather than a capability — which is #159's own
 distinction and the reason the issue exists.
 
+[AMENDED 2026-11-18. **Still never run**: `gh run list --workflow rollback-prod.yml` → 0 runs,
+and 0 for `rollback-rehearsal-staging.yml` and `deploy-staging.yml`. **Production moved on
+2026-10-12** from account `747814092517` / us-east-1 to account `795965600143` / **us-east-2**;
+every account, region and hostname below that is dated before 2026-10-12 is the old one, and the
+amendments marked 2026-11-18 say where it matters. The procedure for the first production
+rehearsal — `adcb81ca` and back to `074930f4` — is [§11](#11-the-first-production-rehearsal--procedure-2026-11-18).]
+
 Rewritten 2026-08-24 against `origin/main` at `8f0eacc`. Every claim marked **measured**
 was checked against the live system on that date and the command that checked it is
 shown. Every claim marked **guess** is a guess and says so.
@@ -42,7 +49,9 @@ twice over:
    service, so rolling the API back is still a stack update and still touches no DNS record;
    and the deployed web bundle does not resolve the custom domain at all — it names the
    generated hostname 84 times and `api.climate.timsint.com` zero times
-   (`/assets/index-q-ElFsLd.js`, counted 2026-09-16), because `VITE_API_BASE_URL` is unset.] **No resolver cache is on the critical path of any rollback
+   (`/assets/index-q-ElFsLd.js`, counted 2026-09-16), because `VITE_API_BASE_URL` is unset.] [AMENDED 2026-11-18. Since the 2026-10-12 move the CNAME target is
+   `av3s7p9mkm.us-east-2.awsapprunner.com.` (`dig +short api.climate.timsint.com @1.1.1.1`), the
+   `ServiceUrl` output of `climate-project-api-prod` in `795965600143`/us-east-2.] **No resolver cache is on the critical path of any rollback
    in this document.** The TTL phase in `cutover.md` is not wrong, it is simply not what
    makes rollback fast here.
 
@@ -218,6 +227,15 @@ Three reasons, each independently sufficient:
 Requires local credentials in account `747814092517`. Read §9 first — it is not
 established that any human has them.
 
+[AMENDED 2026-11-18. Production is account **`795965600143`, us-east-2** since 2026-10-12.
+`scripts/rollback-api-image.sh` now defaults to `--region us-east-2` (it defaulted to us-east-1,
+where no climate stack exists any more) and refuses credentials in any account other than
+`795965600143` before its first stack or ECR call (`--account` overrides). Measured: this
+workstation's default profile is `arn:aws:iam::795965600143:user/Federico`
+(`aws sts get-caller-identity`) while its CLI default region is still us-east-1
+(`aws configure list`) — the case the new default exists for. So a human with break-glass
+credentials exists; an agent must not use them (CLAUDE.md, "Production is off limits").]
+
 ```bash
 # Dry run first. Prints every parameter it will re-pass and refuses if the target image
 # has aged out of ECR. Nothing changes without --execute.
@@ -273,6 +291,16 @@ for account `795965600143`, not the production account `747814092517`, and
 `aws apprunner list-services` returns `SubscriptionRequiredException` there. Every
 App Runner runtime claim in this section comes from the templates and the workflow
 comments, not from the live service.
+
+[AMENDED 2026-11-18. Now measurable, read-only, from `795965600143`/us-east-2. App Runner's five
+most recent `UPDATE_SERVICE` operations took 2m28s–2m41s each (`aws apprunner list-operations
+--region us-east-2 --service-arn …/climate-project-api-prod/93676dfce5c941cd9ce43caf671c9918`,
+2026-11-15 to 2026-11-18). The `Deploy App Runner service stack` step of `deploy-prod.yml` — the
+same `aws cloudformation deploy` an image swap runs — took 3m07s (run 43967002998), 3m38s
+(43954676280) and 3m09s (44232791073), and the readiness canary after it 1m36s–1m39s. These are
+deploys, not rollbacks; §11.5 turns them into the rehearsal's expectation. The service runs
+**1 vCPU / 2 GB, 2–4 instances** (`describe-service`, `describe-auto-scaling-configuration`:
+`climate-project-api-prod-as` MinSize 2, MaxSize 4), not 0.25 vCPU / 0.5 GB.]
 
 #### What happens to in-flight requests
 
@@ -421,7 +449,12 @@ it fails mid-workflow or, worse, succeeds and leaves the schema wrong.
 ### 4.5 The backup that has to exist, because the recovery lever does not
 
 **Standing risk, and I could not verify it.** The claim on record is that Supabase
-point-in-time recovery is **off** with zero restorable backups. The Supabase MCP server
+point-in-time recovery is **off** with zero restorable backups. [AMENDED 2026-11-18. Answered:
+PITR is off (`supabase backups list`, 2026-09-28) and decision B replaced it — a `pg_dump` to
+`s3://climate-project-db-backups-795965600143-us-east-2/climate/` every 6 hours
+(`docs/decisions/database-backups.md`). Newest object at this writing:
+`climate/2026/11/18/climate-20261118T013417Z.dump`, 3,255,303 bytes (`aws s3 ls`). The restore
+drill is in `docs/runbooks/backup-restore-verification.md`.] The Supabase MCP server
 available in this session is bound to project `lzhfnjfsdwdywwnlqgqq`, whose schema is the
 TIMS ATS product (`candidates`, `vacancies`, `assessment_results`, Quartz tables) — **it
 is not the climate project's database**, so nothing here could read the real project's
@@ -559,6 +592,11 @@ chosen:
 **This is Federico's call and nobody else's.** It is written down so the option is
 visible, not because it is recommended.
 
+[AMENDED 2026-11-18. §11 is this option written out for today's pair, `adcb81ca` ↔ `074930f4`,
+with preconditions, commands, what to watch, durations and abort criteria. Staging still does
+not exist: `aws cloudformation describe-stacks --region us-east-2` lists no
+`climate-project-api-staging*` stack.]
+
 ### 7.3 The five-minute version, runnable today, against nothing
 
 Cheap and worth doing this week, because it catches the failures that are about people
@@ -577,6 +615,10 @@ aws ecr describe-images --repository-name climate-project-api --region us-east-1
 ./scripts/rollback-api-image.sh --stack climate-project-api-prod --target-sha <previous-40-hex>
 ```
 
+[AMENDED 2026-11-18. The two `--region us-east-1` commands above name the region production left
+on 2026-10-12. Today's are `--region us-east-2`, in account `795965600143`; they are written out
+in §11.2 (P8).]
+
 If the first command fails, stop reading and go to §9 — everything downstream of it is
 hypothetical.
 
@@ -593,6 +635,9 @@ The first half of §7.3 has now been run. `scripts/rollback-probe.sh` makes **ze
 calls**, so the probe needs no production credentials — it was run from a machine holding
 only `795965600143`, which cannot see App Runner at all. Only the three `aws` commands in
 §7.3 still require `747814092517` (H1).
+
+[AMENDED 2026-11-18. Since the 2026-10-12 move `795965600143` **is** the production account:
+`aws apprunner list-services --region us-east-2` lists `climate-project-api-prod`, RUNNING.]
 
 `scripts/rollback-probe.sh <url> 90 1.0 2` — deliberately light, ~2 req/s:
 
@@ -649,14 +694,14 @@ Ordered by how much of this document collapses without it.
 
 | # | The thing | Why it blocks | Owner |
 |---|---|---|---|
-| H1 | **Does any human hold credentials in AWS account `747814092517` that can update `climate-project-api-prod`?** The only principal proven to have `cloudformation:UpdateStack` on it is the GitHub OIDC role `climate-project-github-deploy-prod`, assumable only from Actions. The credentials in this environment are for `795965600143` and cannot see App Runner at all. | If the answer is no, the break-glass path in §3.2 does not exist, and every rollback depends on GitHub Actions being available. Test it with §7.3's first command — it takes ten seconds. | `____` |
-| H2 | **Is Supabase PITR on for the climate project, and are there restorable backups?** Unverifiable from here (§4.5). | Decides whether §4.5's `pg_dump` is a belt-and-braces habit or the *only* recovery lever in existence. Also decides how frightening PONR-1 and PONR-2 are. | `____` |
+| H1 | **Does any human hold credentials in AWS account `747814092517` that can update `climate-project-api-prod`?** [AMENDED 2026-11-18: the account is now `795965600143` (us-east-2), and yes — the workstation's default profile is the IAM user `Federico` there (`aws sts get-caller-identity`).] The only principal proven to have `cloudformation:UpdateStack` on it is the GitHub OIDC role `climate-project-github-deploy-prod`, assumable only from Actions. The credentials in this environment are for `795965600143` and cannot see App Runner at all. | If the answer is no, the break-glass path in §3.2 does not exist, and every rollback depends on GitHub Actions being available. Test it with §7.3's first command — it takes ten seconds. | `____` |
+| H2 | **Is Supabase PITR on for the climate project, and are there restorable backups?** [AMENDED 2026-11-18: PITR off; decision B's S3 dumps every 6 hours are the backups — `docs/decisions/database-backups.md`.] Unverifiable from here (§4.5). | Decides whether §4.5's `pg_dump` is a belt-and-braces habit or the *only* recovery lever in existence. Also decides how frightening PONR-1 and PONR-2 are. | `____` |
 | H3 | ~~**Merge `rollback-prod.yml` to `main`.**~~ **DONE** — it is on `main` (verified 2026-09-01), so `workflow_dispatch` offers it. It has still **never been run**: that is H10. | `workflow_dispatch` workflows are only offered from the default branch. On a feature branch it is inert. | ✅ |
 | H4 | **Ratify or replace the §5 thresholds, and name the decision owner and their backup.** | A threshold nobody agreed to will not be pulled at 3am. | `____` |
 | H5 | **#156, staging.** | §7.1's rehearsal has nowhere to run. Also blocks any future rehearsal being repeatable. | `____` |
 | H6 | **#158, monitoring.** | T2 and T3 are unmeasurable without it. Two of six triggers are decorative until it lands. | `____` |
 | H7 | **Provision the tracking database and decide `PROCOMER_COMPANY_ID` (§3.4).** **CORRECTED 2026-09-01: "No CI, no Dockerfile, no deploy" is now false on all three counts** — `ci.yml` gates `tracking-build-and-test` (163 tests, added in #410), `services/tracking-api/Dockerfile` exists, and `deploy-tracking-prod.yml` ran on 2026-08-27, failing at its credential-free preflight. **#219's `InternalApiKey` wiring is already correct**: both services read the same `INTERNAL_API_KEY_SECRET_ARN`, and the preflight refuses an empty or malformed one, so the two-sided coupling cannot be broken silently. What remains is three config values, two of which are one task (the database does not exist). | Still a "can it ship at all" question — but a provisioning one, not an engineering one. | `____` |
-| H10 | **Rehearse the rollback (#159).** `rollback-prod.yml`, `deploy-staging.yml` and `rollback-rehearsal-staging.yml` have **zero runs between them** (verified 2026-09-01). **The 2026-09-01 release is the most forgiving moment this will ever have**: its only migration, `AddReportShares`, is a pure `CreateTable`, so the previous image (`98f6a4b`) runs unchanged against the new schema, and this workflow is image-only by design. | An untested recovery path is not a recovery path. The conditions will not be this benign for the next release. | `____` |
+| H10 | **Rehearse the rollback (#159).** [AMENDED 2026-11-18: still 0 runs of all three. §11 is the procedure for a production rehearsal of `adcb81ca` ↔ `074930f4`, whose delta holds 0 migrations.] `rollback-prod.yml`, `deploy-staging.yml` and `rollback-rehearsal-staging.yml` have **zero runs between them** (verified 2026-09-01). **The 2026-09-01 release is the most forgiving moment this will ever have**: its only migration, `AddReportShares`, is a pure `CreateTable`, so the previous image (`98f6a4b`) runs unchanged against the new schema, and this workflow is image-only by design. | An untested recovery path is not a recovery path. The conditions will not be this benign for the next release. | `____` |
 | H8 | **Decide the Vercel auto-deploy posture during an incident (§3.1).** Merges to main silently roll the web forward again. | A web rollback that a merge undoes is not a rollback. | `____` |
 | H9 | ~~**Close the API/web version gap.**~~ **CLOSED 2026-09-01** — the nine-PR merge queue landed and `deploy-prod` shipped it: prod and `main` are both `4b21c0a`, so the gap is zero and `deploy-drift` is green for the first time since 2026-08-28. Re-open this row the moment drift reappears; it is a recurring condition, not a one-time fix. | Every rollback in this document is harder while the two halves are decoupled. | ✅ |
 
@@ -686,3 +731,178 @@ both scripts, and `scripts/verify-prod-deploy-invariants.py` still passes.
 `scripts/rollback-probe.sh` was self-tested for 8 seconds against the live API — 14 of
 14 probes returned 200 — which is the only part of this change that has been exercised
 against anything real.
+
+---
+
+## 11. The first production rehearsal — procedure, 2026-11-18
+
+**Written 2026-11-18 against `origin/main` at `074930f4`. Not executed.** It changes production
+twice, so **the user dispatches it; an agent does not** (CLAUDE.md, "Production is off limits").
+Every value marked *measured* was read on 2026-11-18, read-only, with the command shown. This is
+§7.2's option made concrete; §7.1 (staging) is still blocked — no `climate-project-api-staging*`
+stack exists in `795965600143`/us-east-2.
+
+### 11.1 The pair, and why it is the gentlest pair there will be
+
+| | roll back TO | roll forward TO (what serves now) |
+|---|---|---|
+| commit | `adcb81cabc3a67ded6dd8f6a21453ccc1eb1b3b1` | `074930f4cbb00fadd98548ae568137ca5ac6b66b` |
+| ECR tag (repo `climate-project-api`, us-east-2) | `prod-adcb81ca…`, pushed 2026-11-16T22:39:27Z, digest `sha256:6dc7bd42…` | `prod-074930f4…` and `prod-latest`, pushed 2026-11-18T04:24:12Z, digest `sha256:bbe77395…` |
+| built by | `deploy-prod` run 43967002998 | `deploy-prod` run 44232791073 |
+
+Measured with `aws ecr describe-images --region us-east-2 --repository-name climate-project-api
+--image-ids imageTag=<tag>`. The stack names `…:prod-074930f4…` as its `ImageIdentifier`, and
+`/version` reports `074930f4…` (`describe-stacks`; `curl https://api.climate.timsint.com/version`).
+
+- **No schema in the way.** `git diff --name-only adcb81ca 074930f4` → 16 files, **0** under
+  `src/ClimateProject.Infrastructure/Migrations/`; the newest migration at both commits is
+  `20261116025141_TwoFactorSignIn`. The workflow's delta step will print "No migration delta".
+- **No stack change rides along.** `infra/aws/climate-project-api-prod-service.yml` is not among
+  the 16 files, and the script re-passes the live stack's 20 parameters (all 20 of the
+  template's, `describe-stacks`), so `ImageIdentifier` is the only value that moves.
+- **What the API loses for the window**: `Anthropic` 13.9.0 → 12.60.0, `Anthropic.Bedrock` 1.0.3 →
+  0.14.1, `Microsoft.OpenApi` 2.13.1 → 2.13.0 (csproj diff), and the SDK-13 form of the intake
+  request in `ClaudeIntakeMappingModel.cs` (`92474486`) — that is, exactly the code that served
+  production from 2026-11-16T22:42Z to 2026-11-18T04:27Z. No scheduler, mail, GDPR or survey code
+  is in the range, so §6's PONR-2 and PONR-3 behave identically on both images.
+- **The web needs nothing.** The web files in the range are `SemaforoChip.tsx` (an icon rename,
+  `c1f52211`), its tests and `package.json`/lock; none calls an endpoint the older API lacks. The
+  web stays on Vercel's current deployment throughout. Do not roll it.
+- **The horizon is not close.** 41 tagged images are in the repository and `adcb81ca` is the
+  second newest; the lifecycle keeps 40 `prod-*` (`aws ecr get-lifecycle-policy`). Its "untagged
+  after 7 days" rule does not reach an image index's children: the untagged children pushed with
+  `prod-5018ff32` on 2026-10-20 are still there 29 days later (`describe-images`).
+- **`deploy-drift` stays green.** `adcb81ca` is 14 commits behind `074930f4`
+  (`git log --oneline adcb81ca..074930f4 | wc -l`) and its ancestor; the threshold is 20
+  (`deploy-drift.yml:43`).
+
+### 11.2 Preconditions — any "no" means do not dispatch
+
+| # | Check | How (read-only) | Must be |
+|---|---|---|---|
+| P1 | **No survey is live**, and none starts or closes in the next two hours | The user, in the admin console. An agent cannot check this without signing in to production, which it must not do | none |
+| P2 | **The user dispatches**, and names the decision owner in `reason` | — | a person |
+| P3 | Production serves `074930f4` | `curl -sS https://api.climate.timsint.com/version` | `"commit":"074930f4cbb00fadd98548ae568137ca5ac6b66b"` |
+| P4 | Nothing that runs in the API or shapes its stack changed on main since | `git fetch -q origin && git diff --name-only 074930f4cbb00fadd98548ae568137ca5ac6b66b origin/main -- src/ infra/aws/ Dockerfile` | prints nothing |
+| P5 | Nothing queued in the `deploy-prod` concurrency group | `gh run list --workflow deploy-prod.yml --limit 3` and `gh run list --workflow rollback-prod.yml --limit 3` | no `queued` or `in_progress` |
+| P6 | No alarm already firing | `aws cloudwatch describe-alarms --region us-east-2 --state-value ALARM --query 'MetricAlarms[].AlarmName'` | `[]` (all 27 were `OK` at writing) |
+| P7 | A backup younger than 12 hours | `aws s3 ls s3://climate-project-db-backups-795965600143-us-east-2/climate/$(date -u +%Y/%m/%d)/` | a key from today; if not, the user dispatches `gh workflow run db-backup.yml --ref main` and waits for green |
+| P8 | Optional, from a laptop in `795965600143`: the dry run the workflow also does first | `./scripts/rollback-api-image.sh --stack climate-project-api-prod --target-sha adcb81cabc3a67ded6dd8f6a21453ccc1eb1b3b1` | ends `DRY RUN complete. Nothing was changed.` |
+
+Two notes on P4. The workflow deploys **main's** copy of the service template and reports the
+migration delta against **main**, so a merged-but-undeployed change under `src/` or `infra/aws/`
+would ride along or distort the delta — hence "nothing under those paths", not "main equals
+`074930f4`". And the `recovery-drills` branch that added this section changes no API code: it
+adds the script's account guard, its us-east-2 default for laptop runs, and the workflow's
+before-swap record. If it is not merged, main's copies still target production correctly
+(`rollback-prod.yml` passes `--region us-east-2` to the script explicitly); if it is, P4 still
+holds, because it touches nothing under `src/`, `infra/aws/` or the `Dockerfile`.
+
+The production environment has **no required reviewer** (`gh api
+repos/TIMSInternational/organizational-climate-platform/environments/production` → a
+`branch_policy` rule only), so a dispatch runs the moment it is sent. The `confirm` phrase is the
+only gate.
+
+### 11.3 The commands
+
+Start one probe per swap, each in its own terminal and directory, a minute before its dispatch.
+It makes zero AWS calls; 2 workers at 1 s is the load of the 2026-09-01 baseline in §8.0; and its
+summary measures around the LAST commit flip it saw, hence one probe per swap:
+
+```bash
+scripts/rollback-probe.sh https://api.climate.timsint.com 600 1.0 2 ~/rollback-rehearsal-1-back
+```
+
+**Step 1 — roll back to `adcb81ca`** (the user):
+
+```bash
+gh workflow run rollback-prod.yml \
+  --repo TIMSInternational/organizational-climate-platform \
+  --ref main \
+  -f target_sha=adcb81cabc3a67ded6dd8f6a21453ccc1eb1b3b1 \
+  -f confirm='roll back production' \
+  -f reason='REHEARSAL 1 (#159, rollback.md §11): planned, no trigger met; decided by <name> at <UTC>'
+gh run list --workflow rollback-prod.yml --limit 1        # note the run id
+gh run watch <run-id> --exit-status
+```
+
+**Hold** on `adcb81ca` until the synthetic probe has logged it once (it runs every 15 minutes, so
+at most about 15 minutes; §11.4). Then start the second probe:
+
+```bash
+scripts/rollback-probe.sh https://api.climate.timsint.com 600 1.0 2 ~/rollback-rehearsal-1-forward
+```
+
+**Step 2 — roll forward to `074930f4`**, through the same workflow, because the image exists: no
+35-minute test run (`Test API` ran 03:47:08 → 04:22:43 in run 44232791073), no rebuild, and
+`prod-latest` is not moved:
+
+```bash
+gh workflow run rollback-prod.yml \
+  --repo TIMSInternational/organizational-climate-platform \
+  --ref main \
+  -f target_sha=074930f4cbb00fadd98548ae568137ca5ac6b66b \
+  -f confirm='roll back production' \
+  -f reason='REHEARSAL 1 (#159, rollback.md §11): roll FORWARD to the deployed commit; decided by <name> at <UTC>'
+gh run list --workflow rollback-prod.yml --limit 1
+gh run watch <run-id> --exit-status
+```
+
+The `confirm` phrase is the same in both directions: it is a literal in `rollback-prod.yml`.
+
+### 11.4 What to watch
+
+| Signal | Command | Expected |
+|---|---|---|
+| The run | `gh run watch <id> --exit-status`, then its job summary | green; "No migration delta"; the record names the commit serving before the swap and the target |
+| `/version` | `while sleep 10; do printf '%s ' "$(date -u +%T)"; curl -sS --max-time 10 https://api.climate.timsint.com/version \| jq -r .commit; done` | flips once per step (`074930f4…` → `adcb81ca…`, then back); never `null` or empty for more than one sample |
+| `/ready` | `curl -sS -w ' %{http_code}\n' https://api.climate.timsint.com/ready` | `200`, body `"status":"ready","database":"ok"`, throughout |
+| Synthetic probe | `aws logs filter-log-events --region us-east-2 --log-group-name /aws/lambda/climate-project-api-prod-synthetic-probe --start-time $(( ($(date +%s) - 1800) * 1000 )) --filter-pattern '"running:"' --query 'events[].message' --output text` | each 15-minute tick logs `running: <commit> built <time>`; the first after step 1 names `adcb81ca…`, the first after step 2 `074930f4…`. The log group is measured (`describe-log-groups`); this command has not been run |
+| Alarms | `aws cloudwatch describe-alarms --region us-east-2 --state-value ALARM --query 'MetricAlarms[].AlarmName'` | `[]` before, during, and for 30 minutes after step 2 |
+| App Runner | `aws apprunner list-operations --region us-east-2 --service-arn arn:aws:apprunner:us-east-2:795965600143:service/climate-project-api-prod/93676dfce5c941cd9ce43caf671c9918 --max-results 2` | the newest `UPDATE_SERVICE` is `SUCCEEDED` |
+| The two probes | their summaries | requests, non-200, longest gap — for §8 |
+
+The alarms a bad swap would trip, as configured (`describe-alarms`, 2026-11-18):
+`…-5xx-elevated` at ≥ 20 5xx in 300 s; `…-readiness-failing` at ≥ 3 in 300 s;
+`…-instance-replacement-loop` at ≥ 3 in 900 s; `…-synthetic-probe-api-down` on any failed probe
+in an 1800 s period (missing data breaches); `…-synthetic-probe-api-slow` on an average above
+2500 ms in 2 of 2 periods of 1800 s. A slow first health check on the new instances is expected,
+not a failure (§8.1).
+
+### 11.5 How long it should take
+
+Built from the three most recent deploys (the 2026-11-18 amendment in §3.2). There has never been
+a rollback to measure.
+
+| Part | Basis | Expect |
+|---|---|---|
+| queue, checkout (full history), phrase, delta, credentials, dry run | deploy-prod's checkout took 3–6 s at depth 1; the rest is a few API calls | under 1 min |
+| `aws cloudformation deploy` of the image swap | deploy-prod's same step: 3m07s, 3m38s, 3m09s; App Runner `UPDATE_SERVICE` 2m28s–2m41s | 3–4 min |
+| the script's `/version` wait | CloudFormation returns after App Runner's operation completes | seconds |
+| readiness canary, 20 consecutive 200s at 5 s | 1m36s, 1m38s, 1m39s | about 1m40s |
+| **one dispatch** | | **about 5–7 minutes** |
+| **the whole rehearsal** | two dispatches, a hold of up to 15 min, 30 min of alarm watch | about 30 min hands-on, 60 min to close |
+
+### 11.6 Abort criteria
+
+| If | Then |
+|---|---|
+| The run fails before `Roll back` (phrase, SHA, delta, credentials, dry run) | Nothing changed. Read the log and stop the rehearsal. |
+| The delta step reports **any** migration | Stop. It contradicts §11.1, so main moved (P4). Do not continue. |
+| The dry run says the tag is not in ECR | Stop. §11.1's horizon measurement is wrong. |
+| `Roll back` fails inside CloudFormation | CloudFormation restores the previous `ImageIdentifier`. Confirm `/version` is still `074930f4…`; stop; record. |
+| The script's `/version` wait (600 s) or the canary (300 s) fails | Read `/version`. Whatever it says, **run step 2 now**: `074930f4` is the known-good image. |
+| During the hold: an alarm in `ALARM`, `/ready` non-200 on 3 consecutive 10-s samples, any user-reported error, or anyone about to open a survey | **Run step 2 now.** Do not wait out the hold. |
+| Step 2 itself fails | `gh workflow run deploy-prod.yml --ref main` rebuilds and redeploys main (run 44232791073 took 42m45s end to end). Tell the decision owner meanwhile. |
+
+### 11.7 Afterwards
+
+- Fill §8's "Rehearsal 1" column: date, who, `074930f4 → adcb81ca → 074930f4`, both run ids, the
+  `Total wall clock` line from each run's `Roll back` log, both probe summaries, "0 migrations"
+  from the delta step, and what surprised you.
+- Confirm the end state is the start state: `/version` → `074930f4…`; the stack's
+  `ImageIdentifier` → `…:prod-074930f4…` (`aws cloudformation describe-stacks --region us-east-2
+  --stack-name climate-project-api-prod --query
+  "Stacks[0].Parameters[?ParameterKey=='ImageIdentifier'].ParameterValue"`); `prod-latest` still on
+  digest `sha256:bbe77395…`; alarms `OK` 30 minutes after step 2.
+- §7.1 asks for two clean runs before #159 closes. The second is a separate decision.

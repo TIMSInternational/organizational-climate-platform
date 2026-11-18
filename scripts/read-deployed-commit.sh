@@ -35,7 +35,7 @@ BASE_URL="${1:-}"
 BODY_OUTPUT_PATH="${2:-}"
 if [ -z "$BASE_URL" ]; then
   echo "usage: $0 <base-url> [body-output-path]" >&2
-  echo "  e.g. $0 https://bhgrdkd4gt.us-east-1.awsapprunner.com" >&2
+  echo "  e.g. $0 https://api.climate.timsint.com" >&2
   exit 2
 fi
 
