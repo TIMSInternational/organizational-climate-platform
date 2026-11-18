@@ -87,6 +87,58 @@ public sealed class ClaudeIntakeMappingModel(IConfiguration configuration, ILogg
     /// the deployment, never the file: the admin is told the AI is unavailable, not that their
     /// spreadsheet could not be read.
     /// </summary>
+    /// <summary>
+    /// The request exactly as it goes to the provider. Separate so a test can send it through the
+    /// real SDK serializer and read the wire body: SDK 13 changed how a message is built (the
+    /// role became the message's type), and a wrong shape only fails at the provider.
+    /// </summary>
+    internal static MessageCreateParams BuildRequest(string requestModel, string? effort, bool bedrock, string userContent)
+    {
+        var request = new MessageCreateParams
+        {
+            Model = requestModel,
+            MaxTokens = 16000,
+            OutputConfig = new BetaOutputConfig
+            {
+                Effort = effort switch
+                {
+                    "low" => Effort.Low,
+                    "high" => Effort.High,
+                    _ => Effort.Medium,
+                },
+                Format = new BetaJsonOutputFormat { Schema = OutputSchema },
+            },
+            System = new List<BetaTextBlockParam>
+            {
+                new() { Text = SystemPrompt, CacheControl = new BetaCacheControlEphemeral() },
+            },
+            Messages =
+            [
+                // SDK 13: a message is a union of user/assistant/system shapes, and the
+                // role is the shape rather than a property.
+                new BetaUserMessageParam
+                {
+                    Content = userContent,
+                },
+            ],
+        };
+
+        if (!bedrock)
+        {
+            // A declined request is re-served inside this same call by the fallback the
+            // platform routes its refusal category to ("default"), so an intake does not
+            // dead-end on a classifier's false positive. Claude API only: Bedrock has no
+            // server-side fallback, and there a refusal falls through to header words.
+            request = request with
+            {
+                Betas = ["server-side-fallback-2026-07-01"],
+                Fallbacks = new Default(),
+            };
+        }
+
+        return request;
+    }
+
     internal static bool IsNoAccess(AnthropicApiException ex) =>
         ex is AnthropicUnauthorizedException or AnthropicForbiddenException or AnthropicNotFoundException;
 
@@ -127,46 +179,11 @@ public sealed class ClaudeIntakeMappingModel(IConfiguration configuration, ILogg
 
         try
         {
-            var request = new MessageCreateParams
-            {
-                Model = requestModel,
-                MaxTokens = 16000,
-                OutputConfig = new BetaOutputConfig
-                {
-                    Effort = configuration["Intake:Ai:Effort"] switch
-                    {
-                        "low" => Effort.Low,
-                        "high" => Effort.High,
-                        _ => Effort.Medium,
-                    },
-                    Format = new BetaJsonOutputFormat { Schema = OutputSchema },
-                },
-                System = new List<BetaTextBlockParam>
-                {
-                    new() { Text = SystemPrompt, CacheControl = new BetaCacheControlEphemeral() },
-                },
-                Messages =
-                [
-                    new()
-                    {
-                        Role = Role.User,
-                        Content = JsonSerializer.Serialize(new { language, targets, profile }, Json),
-                    },
-                ],
-            };
-
-            if (!bedrock)
-            {
-                // A declined request is re-served inside this same call by the fallback the
-                // platform routes its refusal category to ("default"), so an intake does not
-                // dead-end on a classifier's false positive. Claude API only: Bedrock has no
-                // server-side fallback, and there a refusal falls through to header words.
-                request = request with
-                {
-                    Betas = ["server-side-fallback-2026-07-01"],
-                    Fallbacks = new Default(),
-                };
-            }
+            var request = BuildRequest(
+                requestModel,
+                configuration["Intake:Ai:Effort"],
+                bedrock,
+                JsonSerializer.Serialize(new { language, targets, profile }, Json));
 
             var response = await client.Beta.Messages.Create(request, timeout.Token);
             var inputTokens = response.Usage.InputTokens;

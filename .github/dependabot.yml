@@ -13,6 +13,12 @@ updates:
     groups:
       web-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Pinned at 1.76.0 on 2026-11-18. oxlint 1.93 turns on the React Compiler rules and
+      # reports 176 warnings against the 10-warning ceiling (`npm run lint`), 142 of them
+      # react(set-state-in-effect) across the respondent form and most screens. Adopting those
+      # rules is a refactor of its own, not a dependency bump; drop this entry when it lands.
+      - dependency-name: oxlint
 
   - package-ecosystem: nuget
     directories: [/, /services/tracking-api]
@@ -24,6 +30,20 @@ updates:
     groups:
       dotnet-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # These packages ship with the .NET runtime and move to a new major only with it. The app
+      # targets .NET 10 (LTS); 11.x versions (#691, #692) belong to a deliberate runtime upgrade,
+      # not to a weekly bump. Minor and patch updates still arrive in the group above.
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.Security.Cryptography.Pkcs"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

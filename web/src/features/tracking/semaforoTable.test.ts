@@ -65,7 +65,8 @@ describe('the tracking module has ONE semáforo table', () => {
   })
 
   /**
-   * `OctagonAlert` is the semáforo's own glyph — Rojo's silhouette, used for nothing else.
+   * The octagon (`OctagonExclamationPoint`, called `OctagonAlert` before lucide-react 1.72, which
+   * keeps the old name as an alias) is the semáforo's own glyph — Rojo's silhouette, used for nothing else.
    * A second module importing it is a second presentation table by definition — that is
    * exactly the shape `SemaforoSummary` had, and it is what let the strip and the chips
    * disagree about whether a state has a shape at all. (The canvas's clock and check,
@@ -74,7 +75,7 @@ describe('the tracking module has ONE semáforo table', () => {
    */
   it('imports the semáforo glyphs in exactly one component', () => {
     const importers = sourceFiles().filter((file) =>
-      /import\s*\{[^}]*\bOctagonAlert\b[^}]*\}\s*from\s*'lucide-react'/s.test(
+      /import\s*\{[^}]*\b(?:OctagonAlert|OctagonExclamationPoint|AlertOctagon)\b[^}]*\}\s*from\s*'lucide-react'/s.test(
         code(file),
       ),
     )

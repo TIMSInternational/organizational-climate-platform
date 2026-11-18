@@ -77,7 +77,9 @@ describe('the semáforo chip', () => {
       cleanup()
       return glyph
     }
-    expect(glyphOf('Rojo')).toBe('lucide-octagon-alert')
+    // lucide-react 1.72 renamed OctagonAlert to OctagonExclamationPoint (same glyph); the old
+    // name survives only as an alias.
+    expect(glyphOf('Rojo')).toBe('lucide-octagon-exclamation-point')
     expect(glyphOf('Amarillo')).toBe('lucide-clock')
     expect(glyphOf('Verde')).toBe('lucide-check')
   })
