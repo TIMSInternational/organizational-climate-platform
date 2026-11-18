@@ -1765,6 +1765,7 @@
       "server": "El servidor no pudo completar la solicitud. Intente de nuevo en unos minutos.",
       "rejected": "La solicitud fue rechazada. Revise los datos e intente de nuevo.",
       "codes": {
+        "survey_audience_not_chosen": "La audiencia de esta encuesta todavía no se ha elegido. Elíjala con «Editar audiencia» antes de enviarla, programarla o activarla.",
         "survey_ended_audience_frozen": "Esta encuesta ya terminó: su audiencia ya no se puede cambiar. Duplíquela para aplicarla de nuevo.",
         "credential_mode_frozen": "La forma de acceso de los participantes se fija al crear la encuesta y no se puede cambiar. Cree una encuesta nueva para usar otra modalidad.",
         "not_mass_invite": "Esta persona ingresa con su correo; no tiene datos de acceso generados que reenviar.",
@@ -4224,6 +4225,17 @@
       "suppressedGroups": "Grupos protegidos en todas las encuestas mostradas, porque respondieron menos de {threshold} personas: {count}."
     },
     "next": {
+      "duplicate": {
+        "title": "Duplicar la encuesta",
+        "intro": "La copia es un borrador nuevo con las mismas preguntas. Elija a quién va dirigida.",
+        "choiceLabel": "Qué copiar",
+        "withAudience": "Copiar con la misma audiencia",
+        "withAudienceHelp": "La copia va a los mismos departamentos y personas que esta encuesta.",
+        "questionsOnly": "Solo las preguntas — la audiencia queda por elegir",
+        "questionsOnlyHelp": "La copia no va a nadie hasta que elija su audiencia con «Editar audiencia». Mientras tanto no se puede enviar, programar ni activar.",
+        "keeps": "En los dos casos se copian los textos, el correo de invitación, el modo de acceso, el orden aleatorio y «Mantener al final». Solo cambian las personas.",
+        "confirm": "Duplicar"
+      },
       "statusWorkbook": {
         "loading": "Cargando las encuestas de la empresa…",
         "loadFailed": "No se pudieron cargar las encuestas. Inténtelo de nuevo.",
@@ -4617,6 +4629,8 @@
         "optional": "(opcional)"
       },
       "detail": {
+        "audienceNotChosen": "Audiencia sin elegir",
+        "audienceNotChosenCard": "Esta copia se hizo solo con las preguntas y todavía no va a nadie. Elija su audiencia con «Editar audiencia» antes de enviarla o activarla.",
         "eyebrow": "{type} · {count} preguntas",
         "duplicate": "Duplicar",
         "results": "Resultados",
@@ -4759,6 +4773,9 @@
           "refusedGone": "No se guardó: esta encuesta ya no existe."
         },
         "audienceEdit": {
+          "notChosen": "Audiencia sin elegir",
+          "notChosenNote": "Esta copia se hizo solo con las preguntas: todavía no tiene audiencia y no va a nadie. Elija departamentos o personas. Si no elige ninguno, irá a toda la empresa, y eso hay que confirmarlo abajo.",
+          "confirmEveryone": "Sí, la audiencia es toda la empresa ({count} personas).",
           "action": "Editar audiencia",
           "endedReason": "La encuesta terminó: su audiencia quedó fija. Para aplicarla a otras personas, duplíquela.",
           "title": "Audiencia de la encuesta",
@@ -4800,6 +4817,9 @@
         }
       },
       "distribution": {
+        "audienceNotChosenTitle": "Audiencia sin elegir",
+        "audienceNotChosen": "Esta copia se hizo solo con las preguntas y todavía no va a nadie. Elija su audiencia con «Editar audiencia» en el detalle de la encuesta antes de enviarla o activarla.",
+        "missingAudienceNotChosen": "Falta elegir la audiencia",
         "title": "Distribución",
         "description": "Quién puede responder, por dónde le llega la encuesta y qué falta para que llegue a todos.",
         "openSurvey": "Abrir la encuesta",
@@ -5505,6 +5525,7 @@
         "diffAfterShort": "Después",
         "absent": "No existía",
         "field": {
+          "audienceNotChosen": "Audiencia elegida",
           "title": "Título",
           "description": "Descripción",
           "type": "Tipo de encuesta",
@@ -5571,6 +5592,7 @@
           "employee": "Colaborador"
         },
         "action": {
+          "createdAudienceNotChosen": "Creó la encuesta como copia solo con las preguntas: la audiencia quedó por elegir",
           "created": "Creó la encuesta",
           "updated": "Editó la encuesta ({count} campos)",
           "updatedOne": "Editó la encuesta ({count} campo)",

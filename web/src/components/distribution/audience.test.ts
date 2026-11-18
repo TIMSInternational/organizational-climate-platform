@@ -40,6 +40,21 @@ describe('estimateAudience', () => {
     expect(estimateAudience('allTargeted', USERS, NO_SELECTION, NO_TARGETS)).toEqual(['a', 'b', 'c', 'd'])
   })
 
+  /**
+   * A questions-only copy (`audienceNotChosen`, 2026-11-18) has no targets of either kind and is
+   * aimed at NOBODY -- the one empty target set that is not the whole company.
+   */
+  it('reads a survey whose audience was never chosen as nobody, not as the whole company', () => {
+    const unchosen = { ...NO_TARGETS, audienceNotChosen: true }
+    expect(estimateAudience('allTargeted', USERS, NO_SELECTION, unchosen)).toEqual([])
+    expect(targetsWholeCompany(unchosen)).toBe(false)
+    // Choosing from it: everybody chosen is GAINED, and saving none is stated as the widening.
+    const change = audienceChange(USERS, unchosen, NO_TARGETS)
+    expect(change.before).toEqual([])
+    expect(change.gained).toEqual(['a', 'b', 'c', 'd'])
+    expect(change.widensToCompany).toBe(true)
+  })
+
   it('reads allTargeted as the survey’s own department targets when it has some', () => {
     expect(estimateAudience('allTargeted', USERS, NO_SELECTION, targets(['eng']))).toEqual(['a', 'b'])
   })

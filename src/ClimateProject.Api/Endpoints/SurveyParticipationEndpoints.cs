@@ -671,7 +671,7 @@ public static class SurveyParticipationEndpoints
         // invitation resolver apply, so the roster cannot name somebody the survey does not
         // reach. An untargeted survey is company-wide and this is unchanged for it.
         var users = await SurveyQueries
-            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, companyId)
+            .Audience(db.Users.AsNoTracking(), db.Surveys.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, companyId)
             .Where(u => u.Email != "")
             .Select(u => new { u.Id, u.Name, u.Email, u.Username, u.Role })
             .ToListAsync(cancellationToken);

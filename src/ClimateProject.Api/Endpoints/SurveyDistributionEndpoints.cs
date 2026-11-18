@@ -414,6 +414,13 @@ public static class SurveyDistributionEndpoints
             return error;
         }
 
+        // Before anything else about the send: with no audience chosen there is nobody it may
+        // reach, in any credential mode, and the operator's next step is «Editar audiencia».
+        if (survey!.AudienceNotChosen)
+        {
+            return SurveyEndpoints.AudienceNotChosen();
+        }
+
         // Inviting people to a draft is inviting them to something whose questions can still
         // be rewritten -- and the invitation carries the survey's title, which is exactly why
         // SurveyStatuses.RespondentVisible is the set that runs the translation gate.
@@ -477,7 +484,7 @@ public static class SurveyDistributionEndpoints
             // trimmed in silence -- a send that quietly drops people the operator named reads as
             // done when it is not. `allTargeted` IS the audience, so it cannot meet this.
             var inAudience = await SurveyQueries
-                .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+                .Audience(db.Users.AsNoTracking(), db.Surveys.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
                 .Where(u => userIds.Contains(u.Id))
                 .Select(u => u.Id)
                 .ToListAsync(cancellationToken);
@@ -1015,6 +1022,11 @@ public static class SurveyDistributionEndpoints
             return error;
         }
 
+        if (survey!.AudienceNotChosen)
+        {
+            return SurveyEndpoints.AudienceNotChosen();
+        }
+
         var invitation = await db.SurveyInvitations
             .FirstOrDefaultAsync(i => i.Id == invitationId && i.SurveyId == surveyId, cancellationToken);
         if (invitation is null)
@@ -1110,7 +1122,7 @@ public static class SurveyDistributionEndpoints
         // path refuses them, so a fresh link would open nothing either. Refused before the token
         // is rotated, so the link they hold -- which opens again if they are put back -- is kept.
         var inAudience = await SurveyQueries
-            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+            .Audience(db.Users.AsNoTracking(), db.Surveys.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
             .AnyAsync(u => u.Id == recipient.Id, cancellationToken);
         if (!inAudience)
         {
@@ -1731,7 +1743,7 @@ public static class SurveyDistributionEndpoints
         // They did: the browser's copy read zero DEPARTMENT targets as no targets at all and
         // showed a 240-person survey as aimed at the whole company.
         var audience = await SurveyQueries
-            .Audience(db.Users, db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+            .Audience(db.Users, db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);
         return (audience, null);

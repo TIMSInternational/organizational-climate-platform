@@ -52,6 +52,13 @@ internal static class AdminRefusals
 
     // Survey distribution
     public const string SurveyNotDistributable = "survey_not_distributable";
+
+    /// <summary>
+    /// The survey's audience was never chosen (<c>Survey.AudienceNotChosen</c>, a questions-only
+    /// duplicate): nothing that mails or admits people runs, and it cannot be scheduled or
+    /// activated, until «Editar audiencia» saves one. 409 on every such route.
+    /// </summary>
+    public const string SurveyAudienceNotChosen = "survey_audience_not_chosen";
     public const string SurveyWindowClosed = "survey_window_closed";
     public const string SurveyRemindersOff = "survey_reminders_off";
     public const string SurveyNotCollecting = "survey_not_collecting";

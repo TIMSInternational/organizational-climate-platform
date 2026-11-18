@@ -330,6 +330,79 @@ public class SurveyDuplicationTests
         Assert.All(copy.UserTargets, t => Assert.Equal(CopySurveyId, t.SurveyId));
     }
 
+    // ------------------------------------------------------------------
+    // «Solo las preguntas» (ruled 2026-11-18): the people stay behind, the copy goes to NOBODY.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void A_questions_only_copy_has_no_targets_and_is_marked_audience_not_chosen()
+    {
+        var copy = DuplicateSource(new SurveyDuplicateOptions(IncludeAudience: false));
+
+        // No targets of either kind -- which on its own reads as the WHOLE COMPANY -- and the
+        // marker that makes it read as nobody instead. The two always travel together.
+        Assert.Empty(copy.DepartmentTargets);
+        Assert.Empty(copy.UserTargets);
+        Assert.True(copy.Survey.AudienceNotChosen);
+        // The declared denominator was about the source's people.
+        Assert.Null(copy.Survey.TargetAudienceCount);
+    }
+
+    [Fact]
+    public void A_questions_only_copy_keeps_every_setting_and_question_the_full_copy_keeps()
+    {
+        var full = DuplicateSource();
+        var questionsOnly = DuplicateSource(new SurveyDuplicateOptions(IncludeAudience: false));
+
+        // Only the people differ: texts, the invitation email, the credential mode,
+        // randomisation and «Mantener al final» are copied either way.
+        Assert.Equal(full.Survey.TitleEs, questionsOnly.Survey.TitleEs);
+        Assert.Equal(full.Survey.DescriptionEn, questionsOnly.Survey.DescriptionEn);
+        Assert.Equal(full.Survey.ServiceType, questionsOnly.Survey.ServiceType);
+        Assert.Equal(full.Survey.Settings.CredentialMode, questionsOnly.Survey.Settings.CredentialMode);
+        Assert.Equal(full.Survey.Settings.RandomizeQuestions, questionsOnly.Survey.Settings.RandomizeQuestions);
+        Assert.Equal(full.Survey.Settings.InvitationCustomSubjectEs, questionsOnly.Survey.Settings.InvitationCustomSubjectEs);
+        Assert.Equal(full.Survey.Settings.InvitationCustomMessageEs, questionsOnly.Survey.Settings.InvitationCustomMessageEs);
+        Assert.Equal(full.Questions.Select(q => (q.TextEs, q.KeepAtEnd, q.Order)), questionsOnly.Questions.Select(q => (q.TextEs, q.KeepAtEnd, q.Order)));
+        Assert.Equal(full.Options.Select(o => o.Value), questionsOnly.Options.Select(o => o.Value));
+    }
+
+    [Fact]
+    public void The_default_copy_is_todays_copy_with_its_audience_chosen()
+    {
+        var omitted = DuplicateSource();
+        var explicitTrue = DuplicateSource(new SurveyDuplicateOptions(IncludeAudience: true));
+
+        foreach (var copy in new[] { omitted, explicitTrue })
+        {
+            Assert.False(copy.Survey.AudienceNotChosen);
+            Assert.Equal(200, copy.Survey.TargetAudienceCount);
+            Assert.Equal([DepartmentId], copy.DepartmentTargets.Select(t => t.DepartmentId));
+            Assert.Equal([NamedPersonA, NamedPersonB], copy.UserTargets.Select(t => t.UserId).Order());
+        }
+    }
+
+    [Fact]
+    public void Copying_the_same_audience_of_a_survey_whose_audience_was_never_chosen_keeps_it_unchosen()
+    {
+        // "The same audience" as an unchosen one is unchosen: dropping the marker here would
+        // carry over an empty target set -- the whole company.
+        var source = BilingualSource();
+        source.Survey.AudienceNotChosen = true;
+        var unchosenSource = new SurveyStructure(source.Survey, source.Questions, source.Options, source.EmojiOptions, source.ConditionalLogic, [])
+        {
+            UserTargets = [],
+        };
+
+        var copy = SurveyDuplication.Duplicate(
+            unchosenSource, CopySurveyId, DuplicatingAdminId, Now, SequentialIds(CopiedTriggerId, CopiedBranchId),
+            new SurveyDuplicateOptions(IncludeAudience: true));
+
+        Assert.True(copy.Survey.AudienceNotChosen);
+        Assert.Empty(copy.DepartmentTargets);
+        Assert.Empty(copy.UserTargets);
+    }
+
     [Fact]
     public void The_copy_meters_against_the_sources_service()
     {

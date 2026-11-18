@@ -82,7 +82,10 @@ public static class SurveyQueries
         Guid userId,
         Guid? surveyScope = null)
     {
-        var query = surveys.Where(s => s.CompanyId == companyId && s.Status == SurveyStatuses.Active);
+        // A survey whose audience nobody has chosen is aimed at nobody (`Survey.AudienceNotChosen`).
+        // It cannot be active while the marker is set -- the status change refuses -- so this is
+        // the rule restated where it is read, not a second gate anybody relies on.
+        var query = surveys.Where(s => s.CompanyId == companyId && s.Status == SurveyStatuses.Active && !s.AudienceNotChosen);
 
         // Narrowed FIRST, so everything below -- targeting, completion -- is evaluated
         // against the one survey this session is for rather than filtered down to it
@@ -129,9 +132,19 @@ public static class SurveyQueries
     /// of them, which is why the department branch tests it explicitly instead of letting a
     /// <c>= NULL</c> comparison decide.
     /// </para>
+    ///
+    /// <para>
+    /// A survey whose audience was never chosen (<see cref="Survey.AudienceNotChosen"/>, a
+    /// questions-only duplicate) resolves to NOBODY. It has no targets of either kind, so
+    /// without this clause it would read as the whole company -- exactly the widening the
+    /// marker exists to prevent. <paramref name="surveys"/> is required, not optional, so no
+    /// caller can ask for an audience without the marker being read: the rule reads it from
+    /// the row itself rather than trusting a flag a caller passed.
+    /// </para>
     /// </summary>
     public static IQueryable<User> Audience(
         IQueryable<User> users,
+        IQueryable<Survey> surveys,
         IQueryable<SurveyDepartmentTarget> departmentTargets,
         IQueryable<SurveyUserTarget> userTargets,
         Guid surveyId,
@@ -139,6 +152,7 @@ public static class SurveyQueries
         => users.Where(u =>
             u.CompanyId == companyId
             && u.IsActive
+            && !surveys.Any(s => s.Id == surveyId && s.AudienceNotChosen)
             && ((!departmentTargets.Any(t => t.SurveyId == surveyId) && !userTargets.Any(t => t.SurveyId == surveyId))
                 || (u.DepartmentId != null
                     && departmentTargets.Any(t => t.SurveyId == surveyId && t.DepartmentId == u.DepartmentId))

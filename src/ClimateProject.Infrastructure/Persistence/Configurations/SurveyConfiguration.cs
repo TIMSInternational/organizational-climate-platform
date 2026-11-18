@@ -27,6 +27,9 @@ public class SurveyConfiguration : IEntityTypeConfiguration<Survey>
         builder.Property(s => s.Status).HasColumnName("status").HasMaxLength(20).IsRequired().HasDefaultValue("draft");
         builder.Property(s => s.ResponseCount).HasColumnName("response_count").IsRequired().HasDefaultValue(0);
         builder.Property(s => s.TargetAudienceCount).HasColumnName("target_audience_count");
+        // NOT NULL, false by default: every survey that exists has a chosen audience (its targets,
+        // or the whole company), and only a questions-only duplicate is written with true.
+        builder.Property(s => s.AudienceNotChosen).HasColumnName("audience_not_chosen").IsRequired().HasDefaultValue(false);
         builder.Property(s => s.Version).HasColumnName("version").IsRequired().HasDefaultValue(1);
         builder.Property(s => s.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(s => s.UpdatedAt).HasColumnName("updated_at").IsRequired();

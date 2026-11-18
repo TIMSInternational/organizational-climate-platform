@@ -23,6 +23,7 @@ import {
 } from '../../../../components/ui'
 import { useViewerCapabilities, type ViewerCapabilities } from '../../../../auth/viewerCapabilities'
 import { StatusWorkbookButton } from '../StatusWorkbookButton'
+import { DuplicateSurveyDialog } from '../DuplicateSurveyDialog'
 import { formatMetric } from '../../../../components/charts/formatMetric'
 import { calendarDay, calendarDayOf, todayCalendarDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
@@ -260,6 +261,12 @@ function SurveysListForCompany() {
           <AlertDescription>{state.actionError}</AlertDescription>
         </Alert>
       )}
+
+      <DuplicateSurveyDialog
+        open={state.duplicateTarget !== null}
+        onOpenChange={(open) => !open && state.cancelDuplicate()}
+        onDuplicate={state.confirmDuplicate}
+      />
 
       {state.status === 'error' ? (
         <NetworkError

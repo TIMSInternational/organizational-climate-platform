@@ -26,6 +26,12 @@ export interface SurveyTargets {
   departmentIds: readonly string[]
   /** `survey.userIds`. People aimed at individually (#587). */
   userIds: readonly string[]
+  /**
+   * `survey.audienceNotChosen`: a questions-only copy whose audience nobody has chosen. Its two
+   * lists are empty and it is aimed at NOBODY -- the server's `SurveyQueries.Audience` reads the
+   * marker before it reads "no targets" as the whole company, and so does everything here.
+   */
+  audienceNotChosen?: boolean
 }
 
 /** What the administrator has ticked in the audience selector. */
@@ -44,6 +50,8 @@ export interface AudienceSelectionInput {
  * company-wide.
  */
 export function targetsWholeCompany(targets: SurveyTargets): boolean {
+  // An audience nobody chose is not the whole company, however empty its lists are.
+  if (targets.audienceNotChosen === true) return false
   return targets.departmentIds.length === 0 && targets.userIds.length === 0
 }
 
@@ -87,6 +95,8 @@ export function estimateAudience(
       .map((user) => user.id)
   }
 
+  // An audience never chosen (`audienceNotChosen`) is not the whole company -- `targetsWholeCompany`
+  // says so -- and its empty lists then match nobody below, as the server resolves it.
   if (targetsWholeCompany(surveyTargets)) {
     return active.map((user) => user.id)
   }
