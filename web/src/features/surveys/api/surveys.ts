@@ -420,6 +420,23 @@ export async function setSurveyOneSessionOnly(
 }
 
 /**
+ * Moves an existing survey to or from `personal_link` -- the only credential-mode change the API
+ * accepts after create, and only while nothing has been issued under the current mode (a
+ * per-survey key, or a personal link that was mailed). Refused otherwise with 400
+ * `credential_mode_in_use`; `shared` <-> `per_survey` stays `credential_mode_frozen`.
+ */
+export async function setSurveyCredentialMode(
+  baseUrl: string,
+  id: string,
+  mode: SurveyCredentialMode,
+): Promise<void> {
+  await authFetch(`${baseUrl}/surveys/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ settings: { credentialMode: mode } }),
+  })
+}
+
+/**
  * Turns "ask who is answering" on the public link on or off -- the same narrow
  * `PUT /surveys/{id}` as `setSurveySelfDeclaredDemographics`, for the same reasons: it is a
  * setting, not content, so it is legal on a live survey and lands in the audit trail as
@@ -497,7 +514,8 @@ export interface SurveyParticipationView {
   surveyTitleEs?: string | null
 }
 
-export type SurveyCredentialMode = 'shared' | 'per_survey'
+/** The survey's mode as the roster reports it; `personal_link` since 2026-11-18. */
+export type SurveyCredentialMode = 'shared' | 'per_survey' | 'personal_link'
 
 /**
  * Where ONE invited person stands on this survey.

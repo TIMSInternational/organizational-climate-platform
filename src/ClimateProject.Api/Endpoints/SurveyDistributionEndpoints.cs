@@ -98,6 +98,16 @@ public static class SurveyDistributionEndpoints
 
     private const int NotificationTitleMaxLength = 500;
 
+    /// <summary>
+    /// The refusal of a personal link to somebody outside the survey's audience, on the invite
+    /// route and on the one-person resend. The respond path refuses such a person's link
+    /// (<c>SurveyResponseEndpoints.ResolvePersonalLinkRespondentAsync</c>, the audience rule the
+    /// signed-in path applies), so mailing it would hand them a link that opens nothing -- and
+    /// widening who may answer is «Editar audiencia»'s decision, taken there on purpose, never a
+    /// side effect of a send (CLAUDE.md, 28 Oct 2026).
+    /// </summary>
+    public const string PersonalLinkNotInAudience = "personal_link_not_in_audience";
+
     public static void MapSurveyDistributionEndpoints(this WebApplication app)
     {
         var admin = app.MapGroup("/surveys").RequireAuthorization();
@@ -395,6 +405,7 @@ public static class SurveyDistributionEndpoints
         ClimateProjectDbContext db,
         IPasswordHasher passwordHasher,
         ICredentialsEmailSender credentialsSender,
+        IPersonalLinkEmailSender linkSender,
         CancellationToken cancellationToken)
     {
         var (survey, error) = await LoadAdministrableSurveyAsync(surveyId, principal, db, cancellationToken);
@@ -445,6 +456,7 @@ public static class SurveyDistributionEndpoints
         // thirteen of these rather than three, each comfortably inside the ceiling.
         var credentialMode = survey.Settings.CredentialMode ?? CredentialModes.Shared;
         var perSurveyCredentials = credentialMode == CredentialModes.PerSurvey;
+        var personalLink = credentialMode == CredentialModes.PersonalLink;
         var resolvedCount = userIds!.Count;
 
         // How many of the resolved audience still hold no key once this call is done -- the
@@ -452,7 +464,51 @@ public static class SurveyDistributionEndpoints
         var withoutCodeBefore = 0;
         HashSet<Guid> credentialedBefore = [];
 
-        if (perSurveyCredentials)
+        // The same number for `personal_link`: people in the resolved audience whose own link
+        // has not been mailed yet.
+        var withoutLinkBefore = 0;
+
+        if (personalLink && !request.AllTargeted)
+        {
+            // A person named here, by name or through a department, who is not in the survey's
+            // audience would be mailed a link the respond path refuses on arrival. Refused whole
+            // and before anything is written or sent, naming how many: the operator either
+            // widens the audience first («Editar audiencia») or sends to fewer people. Never
+            // trimmed in silence -- a send that quietly drops people the operator named reads as
+            // done when it is not. `allTargeted` IS the audience, so it cannot meet this.
+            var inAudience = await SurveyQueries
+                .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => u.Id)
+                .ToListAsync(cancellationToken);
+            var outside = userIds.Except(inAudience).Order().ToList();
+            if (outside.Count > 0)
+            {
+                return Results.Json(
+                    new
+                    {
+                        message = $"{outside.Count} of the people this request names are not in the survey's audience, so a personal link "
+                                  + "would not open it for them. Add them to the audience first, or leave them out of the send.",
+                        code = PersonalLinkNotInAudience,
+                        outsideAudience = outside,
+                    },
+                    statusCode: 409);
+            }
+        }
+
+        if (personalLink)
+        {
+            // BATCHED like `per_survey`, for the half of its reason that applies: every recipient
+            // costs one outbound message, sent inline, against App Runner's 120 s ceiling. And
+            // drawn ONLY from `userIds` -- the audience THIS request resolved. Never from the
+            // survey's other unsent invitations: a send list holds only the people the operator
+            // named (CLAUDE.md, 28 Oct 2026), and a row minted by an earlier call for somebody
+            // else is not a request to mail them now.
+            var (batch, withoutLink) = await NextLinkBatchAsync(db, surveyId, userIds, cancellationToken);
+            withoutLinkBefore = withoutLink;
+            userIds = batch;
+        }
+        else if (perSurveyCredentials)
         {
             // BATCHED, not refused (#G9). The cap is the bcrypt-and-mail cost of ONE request,
             // so it is counted against the people this request would actually hash and mail
@@ -655,6 +711,73 @@ public static class SurveyDistributionEndpoints
             }
         }
 
+        // ---- personal links ---------------------------------------------------------
+        //
+        // AFTER the save, for the per-survey block's reason: a link that no row backs opens
+        // nothing. INLINE rather than queued, and that is a decision, not a convenience -- see
+        // docs/decisions/personal-link-invitations.md. The token already lives in exactly one
+        // place, `survey_invitations.invitation_token`; the composed message, the only other
+        // thing that ever holds it, exists between these lines and the transport and is written
+        // nowhere. A queued `notifications` row would add no copy of the token either, but it
+        // would put the send behind the consent policy, the retry budget and the sweep that the
+        // 2026-10-19 ruling took apart, and the operator would learn who did not get their link
+        // minutes later instead of in this response.
+        var linksSent = 0;
+        var linkNotSentEmails = new List<string>();
+        if (personalLink && recipients.Count > 0)
+        {
+            var mail = SurveyPersonalLinks.MailFor(survey, await MailCompanyAsync(db, survey.CompanyId, cancellationToken));
+            var batchIds = recipients.Select(r => r.Id).ToList();
+            var invitationsByUser = await db.SurveyInvitations
+                .Where(i => i.SurveyId == surveyId && batchIds.Contains(i.UserId))
+                .ToDictionaryAsync(i => i.UserId, cancellationToken);
+
+            foreach (var recipient in recipients.OrderBy(r => r.Id))
+            {
+                // Mailed once. A row whose link already went is the one-person resend's to send
+                // again, deliberately, never this route's on a re-run; a revoked one was taken
+                // out of the audience and is not put back by a bulk send.
+                if (!invitationsByUser.TryGetValue(recipient.Id, out var invitation)
+                    || invitation.Status == SurveyInvitationStatuses.Revoked
+                    || invitation.SentAt is not null)
+                {
+                    continue;
+                }
+
+                // The link mailed now lives as long as THIS request says, not as long as the
+                // survey's window was when the row was minted -- a row minted weeks earlier under
+                // another mode, or before the close was moved, would otherwise mail a link that
+                // dies early or is already dead. And to the account's address as it is now.
+                invitation.ExpiresAt = expiresAt;
+                invitation.Email = recipient.Email;
+
+                var outcome = await linkSender.SendAsync(recipient.Email, invitation.InvitationToken, mail, cancellationToken);
+                if (outcome.Delivered)
+                {
+                    invitation.SentAt = UtcNow();
+                    if (SurveyInvitationStatuses.Advances(invitation.Status, SurveyInvitationStatuses.Sent))
+                    {
+                        invitation.Status = SurveyInvitationStatuses.Sent;
+                    }
+
+                    linksSent++;
+                }
+                else
+                {
+                    // Left unsent, with its token: the row is the artefact, and the next call of
+                    // this same request mails it again. Nothing about it was ever handed out.
+                    linkNotSentEmails.Add(recipient.Email);
+                }
+
+                invitation.UpdatedAt = UtcNow();
+
+                // One save per person, as the per-survey block does: a request cut off by the
+                // 120 s ceiling still records everybody it actually mailed, so re-running it
+                // never mails them twice.
+                await db.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         // Null unless there is something WRONG with this batch. "No mail was queued" was a
         // note while it was a per-survey setting that could differ between calls; since the
         // invitation email was deleted on 2026-10-19 it is a permanent property of the
@@ -702,9 +825,65 @@ public static class SurveyDistributionEndpoints
                 note,
                 credentialsIssued,
                 credentialsNotSent,
-                Remaining: perSurveyCredentials ? Math.Max(0, withoutCodeBefore - credentialsIssued) : 0,
-                CredentialsNotSentEmails: notSentEmails),
+                Remaining: perSurveyCredentials ? Math.Max(0, withoutCodeBefore - credentialsIssued)
+                    : personalLink ? Math.Max(0, withoutLinkBefore - linksSent)
+                    : 0,
+                CredentialsNotSentEmails: notSentEmails,
+                LinksSent: linksSent,
+                LinksNotSent: linkNotSentEmails.Count,
+                LinksNotSentEmails: [.. linkNotSentEmails.OrderBy(e => e, StringComparer.Ordinal)]),
             statusCode: 201);
+    }
+
+    /// <summary>
+    /// The company columns both inline mails are branded and dated from -- one projection, so the
+    /// credentials mail and the personal-link mail cannot disagree about whose they are.
+    /// </summary>
+    private static Task<SurveyCredentialCompany?> MailCompanyAsync(
+        ClimateProjectDbContext db, Guid companyId, CancellationToken cancellationToken)
+        => db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => new SurveyCredentialCompany(
+                c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor, c.Settings.Timezone))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>
+    /// The next `personal_link` batch out of a resolved audience: at most
+    /// <see cref="MaxCredentialBatch"/> people whose own link has not been mailed.
+    ///
+    /// <para><b>Who is in it.</b> Everyone in <paramref name="audience"/> -- and nobody else --
+    /// with no invitation row yet, or with one whose link never went (<c>SentAt</c> null). A
+    /// revoked invitee is left out, as the per-survey batch leaves them out: revoking was a
+    /// decision to take them out of the audience.</para>
+    ///
+    /// <para><b>In what order.</b> People never attempted come first and people whose mail
+    /// failed come last, for <see cref="NextCredentialBatchAsync"/>'s reason: a handful of
+    /// addresses that refuse every send must not sit at the head of every batch.</para>
+    /// </summary>
+    private static async Task<(List<Guid> Batch, int WithoutLink)> NextLinkBatchAsync(
+        ClimateProjectDbContext db,
+        Guid surveyId,
+        List<Guid> audience,
+        CancellationToken cancellationToken)
+    {
+        var invitations = await db.SurveyInvitations
+            .Where(i => i.SurveyId == surveyId && audience.Contains(i.UserId))
+            .Select(i => new { i.UserId, i.Status, i.SentAt })
+            .ToListAsync(cancellationToken);
+        var invited = invitations.Select(i => i.UserId).ToHashSet();
+        var closed = invitations
+            .Where(i => i.Status == SurveyInvitationStatuses.Revoked || i.SentAt != null)
+            .Select(i => i.UserId)
+            .ToHashSet();
+
+        var pending = audience
+            .Where(id => !closed.Contains(id))
+            .Distinct()
+            .OrderBy(id => invited.Contains(id))
+            .ThenBy(id => id)
+            .ToList();
+
+        return (pending.Take(MaxCredentialBatch).ToList(), pending.Count);
     }
 
     /// <summary>
@@ -807,9 +986,12 @@ public static class SurveyDistributionEndpoints
         // Distribucion screen to show how many reminders are owed, and the honest answer to
         // that question is now permanently none. Nothing is loaded and nothing is written.
         //
-        // Belt as well as braces: even if this body came back, it only ever reminded
-        // invitations whose status was sent/opened/started, and no invitation can reach
-        // `sent` any more -- the one producer of that status was the invitation mail.
+        // Since 2026-11-18 an invitation CAN reach `sent` again -- a `personal_link` survey
+        // mails each invitee their link -- and that ruling kept this line exactly as it is:
+        // "reminders still never" (docs/decisions/personal-link-invitations.md). So this is now
+        // the only thing between a `sent` row and a reminder, and it reads nothing at all.
+        // `PersonalLinkInvitationTests.No_reminder_is_ever_produced_for_a_personal_link`
+        // holds it, together with the sweep's.
         return await Task.FromResult(Results.Ok(new SurveyReminderResult(0, 0, 0, null)));
     }
 
@@ -824,6 +1006,7 @@ public static class SurveyDistributionEndpoints
         Guid invitationId,
         ClaimsPrincipal principal,
         ClimateProjectDbContext db,
+        IPersonalLinkEmailSender linkSender,
         CancellationToken cancellationToken)
     {
         var (survey, error) = await LoadAdministrableSurveyAsync(surveyId, principal, db, cancellationToken);
@@ -858,6 +1041,13 @@ public static class SurveyDistributionEndpoints
             return Results.Json(new { message = "The invited user no longer exists." }, statusCode: 409);
         }
 
+        // `personal_link` (ruled 2026-11-18): the one mode in which this route sends again.
+        // Every other mode falls through to the 410 below, exactly as before.
+        if ((survey.Settings.CredentialMode ?? CredentialModes.Shared) == CredentialModes.PersonalLink)
+        {
+            return await ResendPersonalLinkAsync(survey, invitation, recipient, db, linkSender, now, cancellationToken);
+        }
+
         // THE SURVEY INVITATION EMAIL NO LONGER EXISTS. Ruled 2026-10-19: "delete this email
         // completely, as if it never existed ... the one with the username and password is the
         // ONLY one the application will be sending out."
@@ -878,6 +1068,96 @@ public static class SurveyDistributionEndpoints
                     + "them to sign in with the credentials they already have.",
             },
             statusCode: 410));
+    }
+
+    /// <summary>
+    /// Mail ONE invitee a fresh personal link (`personal_link` only). The invite route never mails
+    /// anybody twice; this is the deliberate way to, for one named person: a lost mail, a changed
+    /// address, a link forwarded by mistake.
+    ///
+    /// <para><b>The token is rotated, so the previous link stops working.</b> That is what makes
+    /// this the answer to "I forwarded my link", and it costs the invitee nothing they had built:
+    /// a part-finished response is found again by the respondent's own derived session
+    /// (<c>SurveyResumeSession</c>), never by the token. A revoked invitation is revived the same
+    /// way -- the old link stays dead and the person named here gets a new one -- which is the
+    /// route's documented contract from before 2026-10-19.</para>
+    ///
+    /// <para><b>Rotated and saved BEFORE the send, and put back if the send fails.</b> A link
+    /// mailed before its token was saved would open nothing if the save then failed; a rotation
+    /// left in place after a failed send would kill the live link and deliver nothing in its
+    /// place, "the worst of both". The restore runs with <see cref="CancellationToken.None"/> for
+    /// the reissue route's reason: a caller who gives up mid-request must not leave the person
+    /// holding nothing.</para>
+    /// </summary>
+    private static async Task<IResult> ResendPersonalLinkAsync(
+        Survey survey,
+        SurveyInvitation invitation,
+        User recipient,
+        ClimateProjectDbContext db,
+        IPersonalLinkEmailSender linkSender,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        // The link would open nothing: the respond path refuses a deactivated account.
+        if (!recipient.IsActive || recipient.CompanyId != survey.CompanyId)
+        {
+            return Results.Json(
+                new { message = "The invited person's account is no longer active in this company.", code = "personal_link_recipient_inactive" },
+                statusCode: 409);
+        }
+
+        // Nor for somebody taken out of the audience after their first link went: the respond
+        // path refuses them, so a fresh link would open nothing either. Refused before the token
+        // is rotated, so the link they hold -- which opens again if they are put back -- is kept.
+        var inAudience = await SurveyQueries
+            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+            .AnyAsync(u => u.Id == recipient.Id, cancellationToken);
+        if (!inAudience)
+        {
+            return Results.Json(
+                new
+                {
+                    message = "This person is not in the survey's audience, so a personal link would not open it for them. Add them to the audience first.",
+                    code = PersonalLinkNotInAudience,
+                },
+                statusCode: 409);
+        }
+
+        var previous = (invitation.InvitationToken, invitation.ExpiresAt, invitation.Status, invitation.SentAt, invitation.Email, invitation.UpdatedAt);
+
+        invitation.InvitationToken = SurveyAccessTokens.Mint();
+        invitation.ExpiresAt = survey.EndDate;
+        invitation.Email = recipient.Email;
+        invitation.UpdatedAt = now;
+        await db.SaveChangesAsync(cancellationToken);
+
+        var mail = SurveyPersonalLinks.MailFor(survey, await MailCompanyAsync(db, survey.CompanyId, cancellationToken));
+        var outcome = await linkSender.SendAsync(recipient.Email, invitation.InvitationToken, mail, cancellationToken);
+
+        if (!outcome.Delivered)
+        {
+            (invitation.InvitationToken, invitation.ExpiresAt, invitation.Status, invitation.SentAt, invitation.Email, invitation.UpdatedAt) = previous;
+            await db.SaveChangesAsync(CancellationToken.None);
+            return Results.Json(
+                new
+                {
+                    message = "The new link could not be emailed, so the previous one was kept and still works. "
+                              + (outcome.FailureReason ?? string.Empty),
+                    code = "personal_link_not_sent",
+                },
+                statusCode: 502);
+        }
+
+        // `pending` and `revoked` become `sent`; anything further along keeps its place on the
+        // ladder -- a resend is not evidence that somebody un-opened their link.
+        if (invitation.Status is SurveyInvitationStatuses.Pending or SurveyInvitationStatuses.Revoked)
+        {
+            invitation.Status = SurveyInvitationStatuses.Sent;
+        }
+
+        invitation.SentAt = now;
+        await db.SaveChangesAsync(cancellationToken);
+        return Results.Ok(ToInvitationDetail(invitation, now));
     }
 
     /// <summary>

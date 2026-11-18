@@ -3,20 +3,24 @@ import { useTranslation } from '../../../../i18n'
 import { administersSurvey, readViewerClaims } from '../../../../auth/viewerCapabilities'
 import { listDepartments, type Department } from '../../../org-structure/api/departments'
 import { listUsers, type User } from '../../../org-structure/api/users'
-import { getCompanySettings } from '../../../org-structure/api/companySettings'
+import { credentialModeOf as companyCredentialModeOf, getCompanySettings, type CredentialMode } from '../../../org-structure/api/companySettings'
 import {
   getSurvey,
   setSurveyCollectParticipantIdentity,
   setSurveySelfDeclaredDemographics,
+  setSurveyCredentialMode,
   setSurveyOneSessionOnly,
+  type SurveyCredentialMode,
   type SurveyDetail,
 } from '../../api/surveys'
 import {
   createSurveyInvitations,
   getSurveyDistribution,
   isPerSurvey,
+  isPersonalLink,
   listSurveyInvitations,
   regenerateSurveyLink,
+  resendSurveyInvitation,
   revokeSurveyInvitation,
   revokeSurveyLink,
   updateSurveyDistribution,
@@ -25,7 +29,9 @@ import {
   type SurveyInvitationBatchResult,
   type SurveyInvitationList,
 } from '../../api/surveyDistribution'
-import { describeApiError } from '../../../../api/describeApiError'
+import { ApiError } from '../../../../api/authFetch'
+import { describeApiError, describeKnownRefusal } from '../../../../api/describeApiError'
+import { credentialModeOf } from './audienceEdit'
 
 export interface DistributionModel {
   survey: SurveyDetail
@@ -43,6 +49,34 @@ export interface DistributionModel {
    * as the detail page reads it (`useSurveyDetailModel`), so the two print one close date.
    */
   timeZone?: string | null
+  /**
+   * The mode «Cómo entran las personas» returns the survey to when it is switched OFF
+   * (`linkOffModeFor`): the mode the survey had when the page loaded, or the company's when it
+   * was already `personal_link`. Null when neither is known -- the company's settings could not be
+   * read -- and then the switch does not offer to turn it off at all.
+   */
+  linkOffMode?: CredentialMode | null
+}
+
+/**
+ * Where turning `personal_link` OFF takes a survey, and never a hard-coded `shared`.
+ *
+ * The API cannot undo a wrong answer: `shared` -> `per_survey` is frozen (`credential_mode_frozen`,
+ * #617). A `per_survey` survey switched on and then off that landed on `shared` -- in a company
+ * whose accounts have no password, because its people sign in with per-survey keys -- would mint
+ * invitation rows and no keys, and nobody could sign in to answer it (review of 2026-11-18). So:
+ *
+ * - the survey's own mode, when it is not `personal_link` -- on and off again in one visit puts it
+ *   back exactly as it was;
+ * - otherwise the company's mode, which is the mode a new survey in that company takes
+ *   (`NewSurveyDefaults.Apply`), and the one its accounts are set up for;
+ * - otherwise null: nothing known, nothing offered.
+ */
+export function linkOffModeFor(
+  surveyMode: ReturnType<typeof credentialModeOf>,
+  companyMode: CredentialMode | null,
+): CredentialMode | null {
+  return surveyMode === 'personal_link' ? companyMode : surveyMode
 }
 
 export type DistributionState =
@@ -70,7 +104,8 @@ export interface SendProgress {
  */
 export type SendOutcome =
   | {
-      kind: 'per_survey'
+      /** `per_survey` mails keys; `personal_link` mails each person their own link. Same loop, same numbers. */
+      kind: 'per_survey' | 'personal_link'
       issued: number
       /** Null when no call answered at all: then nobody knows how many still need a key. */
       remaining: number | null
@@ -88,6 +123,14 @@ export interface DistributionActions {
   regenerateLink: () => void
   revokeLink: () => void
   revokeInvitation: (invitationId: string) => void
+  /** `personal_link` only: mail ONE person a fresh link; their previous one stops working. */
+  resendInvitation: (invitationId: string, email: string) => void
+  /**
+   * Moves the survey to or from `personal_link`. The API accepts it only while nothing has been
+   * issued under the current mode, and answers 400 `credential_mode_in_use` otherwise. Off is
+   * `DistributionModel.linkOffMode`, never a hard-coded `shared`.
+   */
+  setCredentialMode: (next: SurveyCredentialMode) => void
   /** Turns the public link's self-declared demographic questions on or off. */
   setSelfDeclaredDemographics: (next: boolean) => void
   /** Turns "ask who is answering" on the public link on or off. */
@@ -104,9 +147,11 @@ export interface DistributionActions {
  * directory may be asked for at all; then the distribution (null on 404) and the invitation list
  * in the reader's language, whose `anonymity.guarantee` is the sentence the server writes.
  *
- * Three of the old page's writes are deliberately NOT here, because none of them can do what it
- * says: the per-invitation resend (the server answers 410 since the invitation email was deleted),
- * the reminder (it answers zeros by design), and the invitation's own text (no email reads it).
+ * Of the old page's writes, the reminder is deliberately NOT here: it answers zeros by design, and
+ * the 2026-11-18 ruling kept it that way ("reminders still never"). The per-invitation resend and
+ * the invitation's own text came back with that ruling, for `personal_link` surveys only -- the
+ * one mode whose email reads the text and whose resend answers (410 in the other two). The text is
+ * edited in `InvitationEmailDialog`, which loads and saves on its own.
  */
 export function useDistributionModel(surveyId: string) {
   const { t, locale } = useTranslation()
@@ -134,6 +179,7 @@ export function useDistributionModel(surveyId: string) {
       let departments: Department[] = []
       let users: User[] = []
       let timeZone: string | null = null
+      let companyMode: CredentialMode | null = null
       if (scoped) {
         const [departmentList, userList, settings] = await Promise.allSettled([
           listDepartments(baseUrl, survey.companyId),
@@ -143,8 +189,12 @@ export function useDistributionModel(surveyId: string) {
         departments = departmentList.status === 'fulfilled' ? departmentList.value : []
         users = userList.status === 'fulfilled' ? userList.value : []
         timeZone = settings.status === 'fulfilled' ? (settings.value?.settings?.timezone ?? null) : null
+        companyMode = settings.status === 'fulfilled' && settings.value?.settings ? companyCredentialModeOf(settings.value.settings) : null
       }
-      setState({ status: 'ready', model: { survey, distribution, invitations, departments, users, scoped, timeZone } })
+      // Read once, here, from the survey as it loaded: the refresh after the switch re-reads the
+      // survey (now `personal_link`) and keeps this, so on-then-off restores what it was.
+      const linkOffMode = linkOffModeFor(credentialModeOf(survey), companyMode)
+      setState({ status: 'ready', model: { survey, distribution, invitations, departments, users, scoped, timeZone, linkOffMode } })
     } catch (error) {
       setState({ status: 'error', message: describeApiError(error, t, 'surveys.distribution.loadFailed') })
     }
@@ -194,11 +244,14 @@ export function useDistributionModel(surveyId: string) {
   const send = async (selection: SurveyAudienceSelection) => {
     if (state.status !== 'ready') return
     const perSurvey = isPerSurvey(state.model.invitations)
+    const personalLink = isPersonalLink(state.model.invitations)
+    // Both mail one message per person, 100 per call, and answer `remaining` -- one loop.
+    const batched = perSurvey || personalLink
     setBusy(true)
     setActionError(null)
     setNotice(null)
     setOutcome(null)
-    setProgress(perSurvey ? { done: 0, total: null } : null)
+    setProgress(batched ? { done: 0, total: null } : null)
     let issued = 0
     let remaining: number | null = null
     let total: number | null = null
@@ -206,34 +259,45 @@ export function useDistributionModel(surveyId: string) {
     let skipped = 0
     const failed = new Set<string>()
     let stopped = false
+    // A refusal that says WHY no link may go, in the reader's words. Only this one: every other
+    // failure keeps the "stopped, resume" outcome below exactly as before.
+    let refusal: string | null = null
     try {
       for (let call = 0; call < MAX_SEND_CALLS; call += 1) {
         const result: SurveyInvitationBatchResult = await createSurveyInvitations(baseUrl, surveyId, selection)
         created += result.created
         skipped += result.skippedUserIds.length
-        if (!perSurvey) break
-        issued += result.credentialsIssued
+        if (!batched) break
+        const mailed = perSurvey ? result.credentialsIssued : (result.linksSent ?? 0)
+        issued += mailed
         remaining = result.remaining ?? 0
-        // Everyone who held no key when this started: this call's keys plus everyone still
-        // without one -- which counts the ones whose mail just failed, as it should.
-        if (total === null) total = result.credentialsIssued + remaining
-        for (const email of result.credentialsNotSentEmails ?? []) failed.add(email)
+        // Everyone who held no key (or no link) when this started: this call's plus everyone
+        // still without one -- which counts the ones whose mail just failed, as it should.
+        if (total === null) total = mailed + remaining
+        for (const email of (perSurvey ? result.credentialsNotSentEmails : result.linksNotSentEmails) ?? []) failed.add(email)
         setProgress({ done: issued, total })
-        if (remaining === 0 || result.credentialsIssued === 0) break
+        if (remaining === 0 || mailed === 0) break
       }
-    } catch {
+    } catch (error) {
       // The server's message is English and about one call; the page says what it means for
-      // the whole send, which is that it can be resumed.
+      // the whole send, which is that it can be resumed...
       stopped = true
+      // ...except when the API refused a personal link to somebody outside the survey's audience
+      // (`personal_link_not_in_audience`): nothing went, and resuming would be refused again. The
+      // operator is told why and what to do -- widen the audience, or send to fewer people.
+      if (error instanceof ApiError && error.code === 'personal_link_not_in_audience') refusal = describeKnownRefusal(error, t)
     }
     setOutcome(
-      perSurvey
-        ? { kind: 'per_survey', issued, remaining, failedEmails: [...failed].sort(), stopped }
-        : stopped
-          ? null
-          : { kind: 'shared', created, skipped },
+      refusal !== null
+        ? null
+        : batched
+          ? { kind: personalLink ? 'personal_link' : 'per_survey', issued, remaining, failedEmails: [...failed].sort(), stopped }
+          : stopped
+            ? null
+            : { kind: 'shared', created, skipped },
     )
-    if (!perSurvey && stopped) setActionError(t('surveys.next.distribution.send.sharedFailed'))
+    if (refusal !== null) setActionError(refusal)
+    else if (!batched && stopped) setActionError(t('surveys.next.distribution.send.sharedFailed'))
     setProgress(null)
     try {
       const [distribution, invitations] = await Promise.all([
@@ -291,6 +355,26 @@ export function useDistributionModel(surveyId: string) {
         return null
       }),
     revokeInvitation: (invitationId) => perInvitation(invitationId, (id) => revokeSurveyInvitation(baseUrl, surveyId, id)),
+    /**
+     * `POST /surveys/{id}/invitations/{invitationId}/resend`. Answers again only on a
+     * `personal_link` survey (410 in the other two modes, as since 2026-10-19): a new token,
+     * mailed; the old link stops working. A failed send keeps the old one and says so (502).
+     */
+    resendInvitation: (invitationId, email) => {
+      setBusyInvitationId(invitationId)
+      void run(async () => {
+        await resendSurveyInvitation(baseUrl, surveyId, invitationId)
+        return t('surveys.next.distribution.link.resent', { email })
+      }).finally(() => setBusyInvitationId(null))
+    },
+    setCredentialMode: (next) =>
+      void run(
+        async () => {
+          await setSurveyCredentialMode(baseUrl, surveyId, next)
+          return t(next === 'personal_link' ? 'surveys.next.distribution.link.modeOn' : 'surveys.next.distribution.link.modeOff')
+        },
+        { refreshSurvey: true },
+      ),
     /**
      * `PUT /surveys/{id}` with only `settings.selfDeclaredDemographics`. Legal while the
      * survey is draft, scheduled or active -- the same set `canDistribute` gates the

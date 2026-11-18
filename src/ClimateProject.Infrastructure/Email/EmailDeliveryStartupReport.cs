@@ -32,6 +32,17 @@ public static class EmailDeliveryStartupReport
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(options);
 
+        if (options.IsPickup)
+        {
+            // The folder only: nothing in it is logged, and nothing is sent anywhere.
+            logger.LogWarning(
+                "Email delivery is the Development PICKUP FOLDER: every message is written to {PickupDirectory} and " +
+                "NO MAIL LEAVES THIS MACHINE. Links are built from {AppBaseUrl}.",
+                options.PickupDirectory,
+                options.AppBaseUrl);
+            return;
+        }
+
         if (options.IsConfigured)
         {
             // Host, port and the From address only. The SMTP username is a credential half

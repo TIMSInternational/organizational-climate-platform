@@ -204,8 +204,12 @@ export function invitationIsFinished(
   )
 }
 
-/** `CredentialModes`: one account that opens every survey, or one key per person per survey. */
-export type CredentialMode = 'shared' | 'per_survey'
+/**
+ * `CredentialModes`: one account that opens every survey, one key per person per survey, or
+ * (ruled 2026-11-18) one personal LINK per person, mailed by «Enviar invitaciones» -- no
+ * username and no password.
+ */
+export type CredentialMode = 'shared' | 'per_survey' | 'personal_link'
 
 export interface SurveyInvitationList {
   invitations: SurveyInvitationDetail[]
@@ -221,6 +225,14 @@ export interface SurveyInvitationList {
 /** Whether invitations on this survey carry a per-survey key. Anything else is `shared`. */
 export function isPerSurvey(list: Pick<SurveyInvitationList, 'credentialMode'>): boolean {
   return list.credentialMode === 'per_survey'
+}
+
+/**
+ * Whether invitations on this survey are mailed as each person's own link (`personal_link`):
+ * «Enviar invitaciones» emails real people, and the per-row resend sends a fresh link.
+ */
+export function isPersonalLink(list: Pick<SurveyInvitationList, 'credentialMode'>): boolean {
+  return list.credentialMode === 'personal_link'
 }
 
 export interface SurveyInvitationBatchResult {
@@ -254,6 +266,15 @@ export interface SurveyInvitationBatchResult {
   remaining?: number
   /** The addresses behind `credentialsNotSent`. */
   credentialsNotSentEmails?: string[] | null
+  /**
+   * `personal_link`: links mailed by this call. A person is mailed once; the per-row resend is
+   * the deliberate way to mail them again. Absent from an API older than the mode.
+   */
+  linksSent?: number
+  /** `personal_link`: links that did not go; those invitations stay unsent and the next call retries them. */
+  linksNotSent?: number
+  /** The addresses behind `linksNotSent`. */
+  linksNotSentEmails?: string[] | null
 }
 
 export interface SurveyReminderResult {

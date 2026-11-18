@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { AlertCircle, Check, ClipboardList, Clock, HelpCircle, KeyRound, MoreHorizontal, ShieldCheck, Users } from 'lucide-react'
+import { AlertCircle, Check, ClipboardList, Clock, HelpCircle, KeyRound, Mail, MoreHorizontal, ShieldCheck, Users } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { useFollowCompany } from '../../../../company-context/useFollowCompany'
 import { PageHeader } from '../../../../components/layout'
@@ -41,12 +41,13 @@ import {
 import { useTranslation } from '../../../../i18n'
 import { cn } from '../../../../lib/cn'
 import { canDistribute } from '../../api/surveyInvitationCopy'
-import { isKnownInvitationStatus, isPerSurvey, type SurveyInvitationDetail } from '../../api/surveyDistribution'
+import { isKnownInvitationStatus, isPerSurvey, isPersonalLink, type SurveyInvitationDetail } from '../../api/surveyDistribution'
 import { Meter, type ShareLinkAction } from './parts'
 import SharePanel from './SharePanel'
 import ParticipationPanel from './ParticipationPanel'
 import SurveyRosterPanel from './SurveyRosterPanel'
 import { RespondentTextsDialog } from './RespondentTextsDialog'
+import { InvitationEmailDialog } from './InvitationEmailDialog'
 import { useSurveyParticipation } from './useSurveyParticipation'
 import {
   INVITATION_COLUMNS,
@@ -143,6 +144,9 @@ export function DistributionView({
   const { t, locale } = useTranslation()
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.distribution.${key}`, vars)
   const { survey, distribution, invitations, departments, users, scoped } = model
+  // Where the access switch takes the survey when it is turned off: its mode before
+  // `personal_link`, or the company's -- never a hard-coded `shared` (`linkOffModeFor`).
+  const linkOffMode = model.linkOffMode ?? null
   const title = survey.title ?? t('surveys.untitled')
   const [mode, setMode] = useState<AudienceMode>('allTargeted')
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([])
@@ -152,6 +156,9 @@ export function DistributionView({
   const [linkConfirm, setLinkConfirm] = useState<'regenerate' | 'revoke' | null>(null)
   const [textsOpen, setTextsOpen] = useState(false)
   const [textsSaved, setTextsSaved] = useState<string | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
+  const [emailSaved, setEmailSaved] = useState<string | null>(null)
+  const [resendTarget, setResendTarget] = useState<SurveyInvitationDetail | null>(null)
   const [showAll, setShowAll] = useState(false)
 
   // ONE request for the two panels that read it. Each fetching for itself meant two identical
@@ -164,6 +171,11 @@ export function DistributionView({
   // refuses an invitation to it with a 409, so nothing here offers to send one.
   const sendable = actionable && canSend(survey.status)
   const perSurvey = isPerSurvey(invitations)
+  // `personal_link` (ruled 2026-11-18): the send mails each person their own link -- real email to
+  // real people -- and the row offers a resend. Same batched loop as `per_survey`.
+  const personalLink = isPersonalLink(invitations)
+  // The copy namespace the send's progress line reads from.
+  const sendCopy = personalLink ? 'link' : 'send'
   // The survey's own targets, BOTH kinds. Passing the departments alone is what made a
   // survey aimed at 240 people by name read as "the whole company · 642 personas".
   const surveyTargets = { departmentIds: survey.departmentIds, userIds: survey.userIds }
@@ -180,13 +192,13 @@ export function DistributionView({
   ).length
   const selection = audienceSelection(mode, selectedDepartmentIds, selectedUserIds)
   const summary = invitations.summary
-  const read = invitationCoverage({ summary, audience: resolved, perSurvey })
+  const read = invitationCoverage({ summary, audience: resolved, perSurvey, personalLink })
   // The list is re-read once the send ends, not after every call; while it runs, the keys this
   // send has mailed so far move from one bucket to the other, so the buckets never contradict the
   // progress line beneath them ("0 con código" over "Enviando códigos: 200 de 617").
   const sentSoFar = progress?.done ?? 0
   const coverage = { ...read, covered: read.covered + sentSoFar, uncovered: Math.max(0, read.uncovered - sentSoFar) }
-  const steps = launchChecklist({ audience: resolved, publicLink: distribution?.publicLink ?? null, summary, perSurvey })
+  const steps = launchChecklist({ audience: resolved, publicLink: distribution?.publicLink ?? null, summary, perSurvey, personalLink })
   const ready = readySteps(steps)
   const firstMissing = steps.find((step) => step.state === 'missing')
   const firstUnknown = steps.find((step) => step.state === 'unknown')
@@ -314,7 +326,7 @@ export function DistributionView({
             <span className={cn(firstMissing ? 'font-medium text-fg-primary' : 'text-fg-secondary')}>
               {firstMissing
                 ? firstMissing.id === 'invitations'
-                  ? copy(perSurvey ? 'send.missingCodes' : 'send.missingShared')
+                  ? copy(perSurvey ? 'send.missingCodes' : personalLink ? 'link.missing' : 'send.missingShared')
                   : copy(`missing.${firstMissing.id}`)
                 : firstUnknown ? copy(`unknown.${firstUnknown.id}`) : copy('allReady')}
             </span>
@@ -433,6 +445,46 @@ export function DistributionView({
           screen the launch is watched from. */}
       {scoped ? <SurveyRosterPanel state={participation} /> : null}
 
+      {/* How people get in -- and, on a `personal_link` survey, the email that carries the link.
+          The switch is offered wherever the page may write; the API decides whether the mode may
+          still move (nothing issued under the current one) and its refusal is said in words. */}
+      <section aria-labelledby="access-mode" className="mt-6" data-testid="access-mode">
+        <Card className="flex flex-col gap-4 px-5">
+          <h2 id="access-mode" className="m-0 text-2xl">
+            {copy('link.modeTitle')}
+          </h2>
+          <SwitchField
+            label={copy('link.modeLabel')}
+            description={copy('link.modeHelp')}
+            checked={personalLink}
+            // Off is offered only when there is a known mode to return to: guessing `shared` put a
+            // `per_survey` survey in a mode the API then freezes it in, and nobody could sign in.
+            disabled={!actionable || busy || (personalLink && linkOffMode === null)}
+            onChange={(next) => {
+              if (next) actions.setCredentialMode('personal_link')
+              else if (linkOffMode !== null) actions.setCredentialMode(linkOffMode)
+            }}
+          />
+          {personalLink ? (
+            <div className="flex flex-col gap-2 border-t border-line-default pt-4" data-testid="invitation-email">
+              <p className="m-0 text-base font-medium text-fg-primary">{copy('link.email')}</p>
+              <p className="m-0 text-sm text-fg-secondary">{copy('link.emailOpen')}</p>
+              <div>
+                <Button type="button" variant="outline" disabled={!actionable} onClick={() => { setEmailSaved(null); setEmailOpen(true) }}>
+                  {t('common.edit')}
+                </Button>
+              </div>
+              {emailSaved ? <p role="status" className="m-0 text-sm text-fg-secondary">{emailSaved}</p> : null}
+            </div>
+          ) : null}
+          {personalLink && distribution?.publicLink ? (
+            <Note role="status" tone="info" icon={<AlertCircle />} data-testid="personal-link-public-open">
+              {copy('link.publicLinkOpen')}
+            </Note>
+          ) : null}
+        </Card>
+      </section>
+
       <section aria-labelledby="launch-checklist" className="mt-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 id="launch-checklist" className="m-0 text-2xl">
@@ -515,7 +567,7 @@ export function DistributionView({
         <Step
           testId="step-invitations"
           state={stateOf('invitations')}
-          title={perSurvey ? copy('send.codesTitle') : copy('invitationsTitle')}
+          title={perSurvey ? copy('send.codesTitle') : personalLink ? copy('link.title') : copy('invitationsTitle')}
           action={
             sendable && (
               <Button
@@ -527,27 +579,37 @@ export function DistributionView({
                   setConfirming(true)
                 }}
               >
-                {perSurvey ? <KeyRound aria-hidden="true" className="size-icon" /> : <Users aria-hidden="true" className="size-icon" />}
-                {perSurvey ? copy('send.sendCodes') : copy('send.register')}
+                {perSurvey ? (
+                  <KeyRound aria-hidden="true" className="size-icon" />
+                ) : personalLink ? (
+                  <Mail aria-hidden="true" className="size-icon" />
+                ) : (
+                  <Users aria-hidden="true" className="size-icon" />
+                )}
+                {perSurvey ? copy('send.sendCodes') : personalLink ? copy('link.send') : copy('send.register')}
               </Button>
             )
           }
         >
           <p className="m-0 text-sm text-fg-secondary">
-            {perSurvey ? copy('send.codesHelp') : copy('send.sharedHelp')}
+            {perSurvey ? copy('send.codesHelp') : personalLink ? copy('link.help') : copy('send.sharedHelp')}
             {actionable && !sendable ? ` ${copy('send.draftHelp')}` : ''}
           </p>
           <div className="grid gap-2.5 sm:grid-cols-3" data-testid="invitation-buckets">
-            <Bucket label={perSurvey ? copy('send.withCode') : copy('send.registered')} value={coverage.covered} />
-            <Bucket label={perSurvey ? copy('send.withoutCode') : copy('send.unregistered')} value={coverage.uncovered} />
+            <Bucket label={perSurvey ? copy('send.withCode') : personalLink ? copy('link.sentBucket') : copy('send.registered')} value={coverage.covered} />
+            <Bucket label={perSurvey ? copy('send.withoutCode') : personalLink ? copy('link.unsentBucket') : copy('send.unregistered')} value={coverage.uncovered} />
             <Bucket label={copy('revoked')} value={coverage.revoked} />
           </div>
-          {progress !== null && <SendProgressLine progress={progress} copy={copy} />}
+          {progress !== null && <SendProgressLine progress={progress} copy={copy} prefix={sendCopy} />}
           {outcome !== null && progress === null && (
             <SendOutcomePanel outcome={outcome} copy={copy} resume={sendable ? () => selection !== null && actions.invite(selection) : undefined} busy={busy} />
           )}
           {invitations.invitations.length === 0 ? (
-            progress === null && <p className="m-0 text-sm text-fg-secondary">{perSurvey ? copy('send.codesNone') : copy('send.sharedNone')}</p>
+            progress === null && (
+              <p className="m-0 text-sm text-fg-secondary">
+                {perSurvey ? copy('send.codesNone') : personalLink ? copy('link.none') : copy('send.sharedNone')}
+              </p>
+            )
           ) : (
             <div className="overflow-hidden rounded-xl border border-line-panel">
               <Table className="min-w-[36rem] table-fixed text-sm" data-testid="invitation-table">
@@ -568,7 +630,7 @@ export function DistributionView({
                   {rows.map((invitation) => {
                     const person = userById.get(invitation.userId)
                     const rowBusy = busy || busyInvitationId === invitation.id
-                    const state = rowState(invitation, perSurvey)
+                    const state = rowState(invitation, perSurvey, personalLink)
                     return (
                       <TableRow key={invitation.id} className="group/row">
                         <TableCell className="truncate font-medium">{person?.name ?? '—'}</TableCell>
@@ -580,7 +642,7 @@ export function DistributionView({
                           <span className="flex items-center justify-between gap-2">
                             <Chip
                               tone="neutral"
-                              label={state.key === null ? invitation.status : state.key.startsWith('send.') ? copy(state.key) : t(state.key)}
+                              label={state.key === null ? invitation.status : state.key.startsWith('send.') || state.key.startsWith('link.') ? copy(state.key) : t(state.key)}
                             />
                             {actionable && (
                               <DropdownMenu>
@@ -599,9 +661,16 @@ export function DistributionView({
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  {/* Revoke only. The per-row resend is gone: the server answers it
-                                      with a 410 since the invitation email was deleted, and a code
-                                      cannot be re-sent from here (its plaintext is never kept). */}
+                                  {/* The per-row resend exists on a `personal_link` survey only: the
+                                      server answers it with a 410 in the other two modes since the
+                                      invitation email was deleted, and a code cannot be re-sent from
+                                      here (its plaintext is never kept). A completed invitation has
+                                      nothing to resend. */}
+                                  {personalLink && sendable && invitation.status !== 'completed' ? (
+                                    <DropdownMenuItem disabled={rowBusy} onSelect={() => setResendTarget(invitation)}>
+                                      {copy('link.resend')}
+                                    </DropdownMenuItem>
+                                  ) : null}
                                   <DropdownMenuItem
                                     disabled={rowBusy || invitation.status === 'revoked'}
                                     onSelect={() => actions.revokeInvitation(invitation.id)}
@@ -678,13 +747,28 @@ export function DistributionView({
                 setConfirming(true)
               }}
             >
-              {perSurvey ? copy('send.sendCodes') : copy('send.register')}
+              {perSurvey ? copy('send.sendCodes') : personalLink ? copy('link.send') : copy('send.register')}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <RespondentTextsDialog surveyId={survey.id} open={textsOpen} onOpenChange={setTextsOpen} onSaved={setTextsSaved} />
+      <InvitationEmailDialog surveyId={survey.id} open={emailOpen} onOpenChange={setEmailOpen} onSaved={setEmailSaved} />
+
+      <ConfirmationDialog
+        open={resendTarget !== null}
+        onOpenChange={(open) => !open && setResendTarget(null)}
+        title={copy('link.resendTitle', { email: resendTarget?.email ?? '' })}
+        description={copy('link.resendBody')}
+        confirmText={copy('link.resend')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => {
+          const target = resendTarget
+          setResendTarget(null)
+          if (target !== null) actions.resendInvitation(target.id, target.email)
+        }}
+      />
 
       <ConfirmationDialog
         open={linkConfirm !== null}
@@ -704,16 +788,19 @@ export function DistributionView({
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={perSurvey ? copy('send.confirmCodesTitle') : copy('send.confirmSharedTitle')}
+        title={perSurvey ? copy('send.confirmCodesTitle') : personalLink ? copy('link.confirmTitle') : copy('send.confirmSharedTitle')}
         description={
           // The per-survey send mails everyone in the audience still without a key -- on a
           // department-targeted survey that includes people the client never listed (28 Oct
-          // 2026). It says so, and where the one-person send is, before anything leaves.
+          // 2026). It says so, and where the one-person send is, before anything leaves. The
+          // personal-link send says the same about links, and that these are real people.
           perSurvey
             ? `${copy('send.confirmCodesBody', { count: recipients })} ${copy('send.confirmCodesOnePerson')}`
-            : copy('send.confirmSharedBody', { count: recipients })
+            : personalLink
+              ? `${copy('link.confirmBody', { count: recipients })} ${copy('link.confirmOnePerson')}`
+              : copy('send.confirmSharedBody', { count: recipients })
         }
-        confirmText={perSurvey ? copy('send.sendCodes') : copy('send.register')}
+        confirmText={perSurvey ? copy('send.sendCodes') : personalLink ? copy('link.send') : copy('send.register')}
         cancelText={t('common.cancel')}
         onConfirm={() => {
           setConfirming(false)
@@ -735,24 +822,30 @@ type Copy = (key: string, vars?: Record<string, string | number>) => string
  * email was deleted nothing is sent and `sentAt` is never written, so every row read "Sin enviar"
  * for ever.
  */
-function rowState(invitation: SurveyInvitationDetail, perSurvey: boolean): { key: string | null } {
+function rowState(invitation: SurveyInvitationDetail, perSurvey: boolean, personalLink = false): { key: string | null } {
   if (invitation.status === 'revoked') return { key: 'surveys.distribution.status.revoked' }
   if (invitation.status === 'completed') return { key: 'surveys.distribution.status.completed' }
+  // `personal_link`: whether the person's link went, and whether they opened it -- the furthest an
+  // anonymous survey records (`SurveyInvitationStatuses.AnonymityCeiling`).
+  if (personalLink) {
+    if (invitation.status === 'opened' || invitation.status === 'started') return { key: 'link.rowOpened' }
+    return invitation.sentAt ? { key: 'link.rowSent' } : { key: 'link.rowUnsent' }
+  }
   if (perSurvey) return invitation.hasCode ? { key: 'send.rowHasCode' } : { key: 'send.rowNoCode' }
   return isKnownInvitationStatus(invitation.status) ? { key: 'send.rowInAudience' } : { key: null }
 }
 
 /** "Enviando códigos: 200 de 617…", with the meter, while a per-survey send is in flight. */
-function SendProgressLine({ progress, copy }: { progress: SendProgress; copy: Copy }) {
+function SendProgressLine({ progress, copy, prefix = 'send' }: { progress: SendProgress; copy: Copy; prefix?: 'send' | 'link' }) {
   // Floored: 616 of 617 is 99 %, never a rounded 100 % while someone is still waiting for a key.
   const percent = progress.total === null || progress.total === 0 ? 0 : Math.floor((progress.done / progress.total) * 100)
   return (
     <div role="status" data-testid="send-progress" className="flex flex-col gap-1.5 rounded-xl bg-surface-fill-subtle px-4 py-3">
       <p className="m-0 text-sm font-medium text-fg-primary">
-        {progress.total === null ? copy('send.progressStarting') : copy('send.progress', { done: progress.done, total: progress.total })}
+        {progress.total === null ? copy(`${prefix}.progressStarting`) : copy(`${prefix}.progress`, { done: progress.done, total: progress.total })}
       </p>
-      <Meter percent={percent} label={copy('send.progressLabel')} />
-      <p className="m-0 text-sm text-fg-secondary">{copy('send.progressHelp')}</p>
+      <Meter percent={percent} label={copy(`${prefix}.progressLabel`)} />
+      <p className="m-0 text-sm text-fg-secondary">{copy(`${prefix}.progressHelp`)}</p>
     </div>
   )
 }
@@ -779,15 +872,17 @@ function SendOutcomePanel({
       </p>
     )
   }
+  // Codes or links: the same numbers, said about what was actually mailed.
+  const p = outcome.kind === 'personal_link' ? 'link' : 'send'
   const sentence = outcome.stopped
     ? outcome.remaining === null
-      ? copy('send.stoppedUnknown', { count: outcome.issued })
-      : copy(outcome.remaining === 1 ? 'send.stoppedOne' : 'send.stopped', { count: outcome.issued, remaining: outcome.remaining })
+      ? copy(`${p}.stoppedUnknown`, { count: outcome.issued })
+      : copy(outcome.remaining === 1 ? `${p}.stoppedOne` : `${p}.stopped`, { count: outcome.issued, remaining: outcome.remaining })
     : outcome.remaining === 0 || outcome.remaining === null
       ? outcome.issued === 0
-        ? copy('send.doneNone')
-        : copy('send.doneAll', { count: outcome.issued })
-      : copy(outcome.remaining === 1 ? 'send.doneSomeOne' : 'send.doneSome', { count: outcome.issued, remaining: outcome.remaining })
+        ? copy(`${p}.doneNone`)
+        : copy(`${p}.doneAll`, { count: outcome.issued })
+      : copy(outcome.remaining === 1 ? `${p}.doneSomeOne` : `${p}.doneSome`, { count: outcome.issued, remaining: outcome.remaining })
   const unfinished = outcome.stopped || (outcome.remaining ?? 0) > 0
   return (
     <div
@@ -813,7 +908,7 @@ function SendOutcomePanel({
       </p>
       {outcome.failedEmails.length > 0 && (
         <div className="flex flex-col gap-1">
-          <p className="m-0 text-sm font-medium text-fg-primary">{copy('send.failedTitle', { count: outcome.failedEmails.length })}</p>
+          <p className="m-0 text-sm font-medium text-fg-primary">{copy(`${p}.failedTitle`, { count: outcome.failedEmails.length })}</p>
           <ul className="m-0 flex list-none flex-col gap-0.5 p-0" data-testid="send-failed">
             {outcome.failedEmails.map((email) => (
               <li key={email} className="break-all text-sm text-fg-secondary">
@@ -821,13 +916,13 @@ function SendOutcomePanel({
               </li>
             ))}
           </ul>
-          <p className="m-0 text-sm text-fg-secondary">{copy('send.failedHelp')}</p>
+          <p className="m-0 text-sm text-fg-secondary">{copy(`${p}.failedHelp`)}</p>
         </div>
       )}
       {unfinished && resume && (
         <div>
           <Button type="button" variant="outline" disabled={busy} onClick={resume}>
-            {copy('send.resume')}
+            {copy(`${p}.resume`)}
           </Button>
         </div>
       )}

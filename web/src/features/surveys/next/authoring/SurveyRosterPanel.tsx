@@ -238,6 +238,11 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
    * survey key, and it is reissued per row.
    */
   const perSurvey = state.status === 'ready' && state.view.credentialMode === 'per_survey'
+  // `personal_link` (ruled 2026-11-18): the person's key is the link on Distribución, and this
+  // survey was put in that mode precisely so that nobody is mailed a username and a password.
+  // The bulk resend below mails an ACCOUNT's username and password, so it is not offered here --
+  // the per-row "Reenviar enlace" on the invitation list is how a person is reached again.
+  const personalLink = state.status === 'ready' && state.view.credentialMode === 'personal_link'
   const surveyTitle =
     state.status !== 'ready'
       ? ''
@@ -292,7 +297,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
 
   // Only the people a resend can actually reach: an account that signs in by email has no
   // generated details, so offering to send it some would be an action that cannot succeed.
-  const sendable = perSurvey ? [] : visible.filter((row) => row.username !== null)
+  const sendable = perSurvey || personalLink ? [] : visible.filter((row) => row.username !== null)
   const chosen = [...selected].filter((id) => roster.some((row) => row.userId === id))
   const allShownChosen = sendable.length > 0 && sendable.every((row) => selected.has(row.userId))
 
@@ -803,6 +808,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         roleLabel={t(`superadmin.next.users.roles.${row.role}`)}
                         tracked={showState}
                         perSurvey={perSurvey}
+                        accountResend={!personalLink}
                         issuedHere={issuedHere[row.userId] ?? null}
                         remindedHere={remindedHere[row.userId] ?? null}
                         revokedHere={revokedHere.has(row.userId)}
@@ -971,6 +977,7 @@ function RosterRows({
   roleLabel,
   tracked,
   perSurvey,
+  accountResend = true,
   issuedHere,
   remindedHere,
   revokedHere,
@@ -993,6 +1000,8 @@ function RosterRows({
   roleLabel: string
   tracked: boolean
   perSurvey: boolean
+  /** False on a `personal_link` survey: nobody there may be mailed an account's username and password. */
+  accountResend?: boolean
   /** The day a reissue from this page mailed this person's key, overriding the loaded one. */
   issuedHere: string | null
   /** A reminder sent from this page, overriding the loaded history for the same reason. */
@@ -1059,7 +1068,7 @@ function RosterRows({
               checked={selected}
               // An account that signs in by email has no generated details, so there is nothing
               // a resend could send it.
-              disabled={row.username === null}
+              disabled={row.username === null || !accountResend}
               aria-label={copy('selectRow', { name: row.name })}
               onCheckedChange={onToggle}
             />

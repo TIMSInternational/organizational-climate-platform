@@ -131,8 +131,8 @@ public sealed record SurveyInvitationListResponse(
     SurveyInvitationSummaryDto Summary,
     SurveyAnonymityGuaranteeDto Anonymity,
     /// <summary>
-    /// The survey's credential mode, `shared` or `per_survey`, so the page that lists the
-    /// invitations can say what an invitation means on this survey.
+    /// The survey's credential mode, `shared`, `per_survey` or `personal_link`, so the page that
+    /// lists the invitations can say what an invitation means on this survey.
     /// </summary>
     string CredentialMode = "shared");
 
@@ -240,7 +240,9 @@ public sealed record SurveyInvitationBatchResult(
     /// recipients per call (each costs a bcrypt hash and a message against App Runner's 120 s
     /// request ceiling), so a 617-person audience is seven calls of the same request, and this
     /// says when to stop. It counts the ones whose mail failed too: they hold no key either.
-    /// Always 0 in `shared` mode.
+    /// In `personal_link` mode it is the same number for links: people in the resolved audience
+    /// whose own link has still not been mailed (100 per call, one message each). Always 0 in
+    /// `shared` mode.
     /// </summary>
     int Remaining = 0,
     /// <summary>
@@ -248,7 +250,20 @@ public sealed record SurveyInvitationBatchResult(
     /// not receive a key and not merely how many. An admin of this company already reads every
     /// invitee's address on the invitation list; this names no one that list does not.
     /// </summary>
-    IReadOnlyList<string>? CredentialsNotSentEmails = null);
+    IReadOnlyList<string>? CredentialsNotSentEmails = null,
+    /// <summary>
+    /// `personal_link`: invitees whose own link was mailed by this call. Their invitation is now
+    /// `sent` with a <c>SentAt</c>, and no later call mails them again -- the one-person resend is
+    /// the way to do that on purpose. Zero in the other two modes.
+    /// </summary>
+    int LinksSent = 0,
+    /// <summary>
+    /// `personal_link`: invitees whose link did not go. Their invitation stays unsent, so the same
+    /// request mails them again on the next call. <see cref="Remaining"/> counts them.
+    /// </summary>
+    int LinksNotSent = 0,
+    /// <summary>The addresses behind <see cref="LinksNotSent"/>.</summary>
+    IReadOnlyList<string>? LinksNotSentEmails = null);
 
 /// <param name="Eligible">Outstanding invitations whose reminder cadence had elapsed.</param>
 /// <param name="Queued">Reminder notifications added. Equal to <paramref name="Eligible"/> unless something failed validation.</param>

@@ -271,10 +271,12 @@ public static class CompanyEndpoints
         // where they were promised one per survey -- after the mail has gone.
         if (!string.IsNullOrWhiteSpace(request.CredentialMode))
         {
-            if (!CredentialModes.IsValid(request.CredentialMode))
+            // `ForCompany`, not `All`: `personal_link` is a survey's mode only -- see
+            // `CredentialModes.PersonalLink` for what a company in it would leave undecided.
+            if (!CredentialModes.IsValidForCompany(request.CredentialMode))
             {
                 return Results.Json(
-                    new { message = $"credentialMode must be one of: {string.Join(", ", CredentialModes.All)}" },
+                    new { message = $"credentialMode must be one of: {string.Join(", ", CredentialModes.ForCompany)}" },
                     statusCode: 400);
             }
 

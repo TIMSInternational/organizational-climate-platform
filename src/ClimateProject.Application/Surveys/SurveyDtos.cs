@@ -220,7 +220,11 @@ public sealed record SurveySettingsInput(
     bool? InvitationBrandingEnabled = null,
     bool? CollectParticipantIdentity = null,
     bool? OneSessionOnly = null,
-    /// <summary>`shared` | `per_survey`, or null to leave it alone / inherit the company.</summary>
+    /// <summary>
+    /// `shared` | `per_survey` | `personal_link`, or null to leave it alone / inherit the company.
+    /// Fixed at create, except that an update may move a survey to or from `personal_link` while
+    /// nothing has been issued under its current mode.
+    /// </summary>
     string? CredentialMode = null,
     /// <summary>Omitted = leave alone; an empty string clears it back to the default.</summary>
     LocalizedInput? RespondentIntro = null,

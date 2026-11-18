@@ -237,32 +237,11 @@ public static class CredentialsEmailComposer
         => survey is null ? copy.Keep : copy.SurveyKeep;
 
     /// <summary>
-    /// A day the way the respondent screens print one inside a sentence -- what
-    /// <c>Intl.DateTimeFormat(locale, { dateStyle: 'long' })</c> renders: "27 de octubre de
-    /// 2026" and "October 27, 2026".
+    /// A day the way the respondent screens print one inside a sentence. One spelling for every
+    /// mail, in <see cref="EmailDays"/>, shared with the personal-link invitation so the two
+    /// messages cannot print one close date two ways.
     /// </summary>
-    /// <remarks>
-    /// Spelled here rather than by <c>CultureInfo("es-CR")</c>, for the reason
-    /// <c>SurveyExportCopy</c> gives: a culture's month names come from whatever ICU the host
-    /// carries, and a container built with invariant globalization would silently print
-    /// English. This is deterministic and testable.
-    /// </remarks>
-    private static string Day(DateOnly day, bool spanish)
-        => spanish
-            ? $"{day.Day} de {SpanishMonths[day.Month - 1]} de {day.Year}"
-            : $"{EnglishMonths[day.Month - 1]} {day.Day}, {day.Year}";
-
-    private static readonly string[] SpanishMonths =
-    [
-        "enero", "febrero", "marzo", "abril", "mayo", "junio",
-        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-    ];
-
-    private static readonly string[] EnglishMonths =
-    [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December",
-    ];
+    private static string Day(DateOnly day, bool spanish) => EmailDays.Long(day, spanish);
 
     /// <summary>
     /// The sign-in link with the username on it, so the field arrives filled.

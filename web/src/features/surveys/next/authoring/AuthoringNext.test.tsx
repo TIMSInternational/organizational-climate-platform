@@ -401,6 +401,8 @@ const noop: DistributionActions = {
   regenerateLink: () => undefined,
   revokeLink: () => undefined,
   revokeInvitation: () => undefined,
+  resendInvitation: () => undefined,
+  setCredentialMode: () => undefined,
   setSelfDeclaredDemographics: () => undefined,
   setCollectParticipantIdentity: () => undefined,
 }
@@ -1444,5 +1446,73 @@ describe('Nueva encuesta (SurveyBuilder artboard)', () => {
     // was left blank, so it is the audience the step chose rather than nothing at all.
     expect(Number.isInteger(sent.targetAudienceCount) && (sent.targetAudienceCount as number) > 0).toBe(true)
     expect(Object.keys(sent).sort()).toEqual(Object.keys(buildCreateInput({ ...content, questions: [] } as never, 'c1')).concat('questions', 'targetAudienceCount').filter((k, i, a) => a.indexOf(k) === i).sort())
+  })
+})
+
+/**
+ * `personal_link` (ruled 2026-11-18 for PROCOMER): «Enviar invitaciones» mails each chosen person
+ * their own link, so the page says LINKS where the other modes say codes or records, warns that
+ * real people are written to, offers the email's own text and a one-person resend -- and the other
+ * two modes keep exactly what they had.
+ */
+describe('Distribución, personal_link', () => {
+  const personal = (count: number, row: Partial<SurveyInvitationDetail> = {}): SurveyInvitationList => ({
+    ...invitationList(count, row),
+    credentialMode: 'personal_link',
+  })
+
+  it('says links on the step, the send and the buckets, and the access switch reads on', () => {
+    distribution(personal(2, { sentAt: '2026-09-09T12:00:00Z' }))
+    const step = screen.getByTestId('step-invitations')
+    expect(step.textContent).toContain(es.surveys.next.distribution.link.title)
+    expect(within(step).getByRole('button', { name: new RegExp(es.surveys.next.distribution.link.send) })).toBeTruthy()
+    expect(screen.getByTestId('invitation-buckets').textContent).toContain(es.surveys.next.distribution.link.sentBucket)
+    expect(within(screen.getByTestId('invitation-table')).getAllByText(es.surveys.next.distribution.link.rowSent)).toHaveLength(2)
+    const mode = screen.getByTestId('access-mode')
+    expect(within(mode).getByRole('switch', { name: es.surveys.next.distribution.link.modeLabel }).getAttribute('aria-checked')).toBe('true')
+    expect(within(mode).getByTestId('invitation-email').textContent).toContain(es.surveys.next.distribution.link.email)
+    // The fixture's survey still has its public link open: the page says what that means here.
+    expect(within(mode).getByTestId('personal-link-public-open').textContent).toContain('revoque el enlace público')
+  })
+
+  it('warns, before anything leaves, that the send writes to real people', async () => {
+    distribution(personal(0))
+    await userEvent.click(within(screen.getByTestId('step-invitations')).getByRole('button', { name: new RegExp(es.surveys.next.distribution.link.send) }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog.textContent).toContain('Son correos reales a personas reales')
+    expect(dialog.textContent).not.toContain('código')
+  })
+
+  it('offers one person a fresh link from their row, after saying the old one stops working', async () => {
+    const resendInvitation = vi.fn()
+    distribution(personal(3, { sentAt: '2026-09-09T12:00:00Z' }), 'company_admin', true, {}, { ...noop, resendInvitation })
+    await userEvent.click(screen.getByRole('button', { name: 'Acciones de la invitación de persona1@meridiano.test' }))
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([es.surveys.next.distribution.link.resend, 'Revocar'])
+    await userEvent.click(screen.getByRole('menuitem', { name: es.surveys.next.distribution.link.resend }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog.textContent).toContain('el anterior dejará de funcionar')
+    await userEvent.click(within(dialog).getByRole('button', { name: es.surveys.next.distribution.link.resend }))
+    expect(resendInvitation).toHaveBeenCalledWith('i1', 'persona1@meridiano.test')
+  })
+
+  it('moves the survey with the switch, and the other modes keep their words, their menu and no email text', async () => {
+    const setCredentialMode = vi.fn()
+    distribution(invitationList(2), 'company_admin', true, {}, { ...noop, setCredentialMode })
+    const toggle = within(screen.getByTestId('access-mode')).getByRole('switch', { name: es.surveys.next.distribution.link.modeLabel })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(screen.queryByTestId('invitation-email')).toBeNull()
+    expect(screen.getByTestId('step-invitations').textContent).not.toContain(es.surveys.next.distribution.link.title)
+    await userEvent.click(screen.getByRole('button', { name: 'Acciones de la invitación de persona0@meridiano.test' }))
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Revocar'])
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(toggle)
+    expect(setCredentialMode).toHaveBeenCalledWith('personal_link')
+  })
+
+  it('turns personal_link off to the mode the model names, never a hard-coded shared', async () => {
+    const setCredentialMode = vi.fn()
+    distribution(personal(2), 'company_admin', true, { linkOffMode: 'per_survey' }, { ...noop, setCredentialMode })
+    await userEvent.click(within(screen.getByTestId('access-mode')).getByRole('switch', { name: es.surveys.next.distribution.link.modeLabel }))
+    expect(setCredentialMode).toHaveBeenCalledExactlyOnceWith('per_survey')
   })
 })

@@ -22,10 +22,15 @@ export function audienceEditability(survey: Pick<SurveyDetail, 'status' | 'isCon
   return survey.isContentEditable && survey.responseCount === 0 ? 'all' : 'people'
 }
 
-/** The survey's frozen credential mode (`settings.credentialMode`); absent reads as `shared`. */
-export function credentialModeOf(survey: Pick<SurveyDetail, 'settings'>): 'shared' | 'per_survey' {
+/**
+ * The survey's credential mode (`settings.credentialMode`); absent reads as `shared`. Includes
+ * `personal_link` (ruled 2026-11-18): reading it as `shared` told the operator that a person added
+ * to a personal-link survey would find it under «Mis encuestas» on signing in -- people who are
+ * given no password.
+ */
+export function credentialModeOf(survey: Pick<SurveyDetail, 'settings'>): 'shared' | 'per_survey' | 'personal_link' {
   const mode = (survey.settings as { credentialMode?: string | null } | undefined)?.credentialMode
-  return mode === 'per_survey' ? 'per_survey' : 'shared'
+  return mode === 'per_survey' || mode === 'personal_link' ? mode : 'shared'
 }
 
 /** Same members, ignoring order and repeats. */

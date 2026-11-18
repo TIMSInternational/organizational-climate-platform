@@ -40,7 +40,9 @@ const NAMES_SHOWN = 6
  * who loses access by name, and the two crossings of the "whole company" line. It also says
  * plainly that nobody is notified -- measured: the update writes no notification and no
  * invitation (`SurveyAudienceEditTests`) -- and, on a per-person-key survey, that a person
- * added has no key yet.
+ * added has no key yet. On a `personal_link` survey it says what the link does: a person added
+ * gets in only by their own link, sent from Distribución, and a person taken out finds that link
+ * no longer lets them answer (`PersonalLinkInvitationTests.Taking_a_person_out_of_the_audience_…`).
  */
 export function EditAudienceDialog({
   survey,
@@ -91,7 +93,12 @@ export function EditAudienceDialog({
   // blocks it (#630) -- an empty target set is NOT this, it is the whole company.
   const reachesNobody = change !== null && !targetsWholeCompany(next) && change.after.length === 0
   const live = survey.status === 'scheduled' || survey.status === 'active'
-  const perSurveyKeys = credentialModeOf(survey) === 'per_survey'
+  // What gaining and losing access means depends on how people get in: an account that lists the
+  // survey under «Mis encuestas», a per-survey key, or (`personal_link`) a mailed link that is
+  // the only way in -- no password, so «Mis encuestas» is no promise to make about it.
+  const accessMode = credentialModeOf(survey)
+  const gainedNote = accessMode === 'per_survey' ? 'gainedPerSurvey' : accessMode === 'personal_link' ? 'gainedPersonalLink' : 'gainedShared'
+  const lostNote = accessMode === 'personal_link' ? 'lostPersonalLink' : 'lostNote'
   // Offered: the active departments, plus any the survey already targets, so a retired one
   // can still be unticked rather than silently kept.
   const offeredDepartments = (departments ?? []).filter((d) => d.isActive !== false || survey.departmentIds.includes(d.id))
@@ -212,9 +219,11 @@ export function EditAudienceDialog({
                   <li className="mb-0" data-testid="audience-no-mail">{copy('nobodyNotified')}</li>
                   {!live && <li className="mb-0">{copy('draftNote')}</li>}
                   {live && change.gained.length > 0 && (
-                    <li className="mb-0" data-testid="audience-gained-note">{copy(perSurveyKeys ? 'gainedPerSurvey' : 'gainedShared')}</li>
+                    <li className="mb-0" data-testid="audience-gained-note">{copy(gainedNote)}</li>
                   )}
-                  {live && change.lost.length > 0 && <li className="mb-0">{copy('lostNote')}</li>}
+                  {live && change.lost.length > 0 && (
+                    <li className="mb-0" data-testid="audience-lost-note">{copy(lostNote)}</li>
+                  )}
                   {survey.status === 'active' && <li className="mb-0">{copy('liveNote')}</li>}
                   {hasPublicLink && <li className="mb-0" data-testid="audience-public-link">{copy('publicLink')}</li>}
                 </ul>

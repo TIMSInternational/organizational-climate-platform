@@ -75,6 +75,22 @@ public class EmailDeliveryRegistrationTests(ConfiguredEmailHostFixture fixture)
         Assert.IsType<EmailNotificationSender>(scope.ServiceProvider.GetRequiredService<INotificationSender>());
     }
 
+    /// <summary>
+    /// The personal-link sender (2026-11-18) is selected by the same rule, and SMTP keeps the
+    /// SMTP transport -- the one with the reserved-domain backstop -- rather than the
+    /// Development-only pickup folder.
+    /// </summary>
+    [Fact]
+    public void A_configured_provider_selects_the_real_personal_link_sender_over_smtp()
+    {
+        using var scope = fixture.Factory.Services.CreateScope();
+
+        Assert.IsType<ClimateProject.Infrastructure.Surveys.EmailPersonalLinkEmailSender>(
+            scope.ServiceProvider.GetRequiredService<ClimateProject.Application.Surveys.IPersonalLinkEmailSender>());
+        Assert.IsType<SmtpEmailTransport>(
+            scope.ServiceProvider.GetRequiredService<ClimateProject.Application.Email.IEmailTransport>());
+    }
+
     [Fact]
     public void A_configured_provider_replaces_the_invitation_stub_too()
     {

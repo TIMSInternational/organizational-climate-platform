@@ -58,6 +58,15 @@ describe('describeApiError', () => {
     expect(text).toBe(str('errors.api.codes.survey_ended_audience_frozen'))
   })
 
+  it('says why a personal link was not sent to somebody outside the audience, not "conflict"', () => {
+    const text = describeApiError(
+      new ApiError(409, "1 of the people this request names are not in the survey's audience…", 'personal_link_not_in_audience'),
+      t,
+    )
+    expect(text).toBe(str('errors.api.codes.personal_link_not_in_audience'))
+    expect(text).toContain('Editar audiencia')
+  })
+
   it('treats an unknown code as no code', () => {
     expect(describeApiError(new ApiError(404, SERVER_ENGLISH, 'not_found'), t)).toBe(str('errors.api.notFound'))
   })
@@ -85,6 +94,8 @@ describe('describeApiError', () => {
       'errors.api.codes.survey_ended_audience_frozen', 'errors.api.codes.credential_mode_frozen',
       'errors.api.codes.not_mass_invite', 'errors.api.codes.inactive', 'errors.api.codes.batch_too_large',
       'errors.api.codes.per_survey_person',
+      'errors.api.codes.credential_mode_in_use', 'errors.api.codes.personal_link_not_sent',
+      'errors.api.codes.personal_link_recipient_inactive', 'errors.api.codes.personal_link_not_in_audience',
     ]
     for (const locale of LOCALES) {
       const lt = createTranslator(CATALOGUES[locale])

@@ -12,6 +12,7 @@ import SurveyDistributionNextPage from './SurveyDistributionNextPage'
 import * as surveysApi from '../../api/surveys'
 import * as distributionApi from '../../api/surveyDistribution'
 import * as usersApi from '../../../org-structure/api/users'
+import { ApiError } from '../../../../api/authFetch'
 import es from '../../../../i18n/es.json'
 
 /**
@@ -231,6 +232,31 @@ describe('Distribución — sending per-survey codes to any audience size (G9)',
     expect((await screen.findByTestId('send-outcome')).textContent).toBe('Se registraron 6 personas en la audiencia.')
     expect(distributionApi.createSurveyInvitations).toHaveBeenCalledTimes(1)
     expect(screen.queryByTestId('send-progress')).toBeNull()
+  })
+})
+
+describe('Distribución — a personal link refused for somebody outside the audience (review of 2026-11-18)', () => {
+  const personal = (): SurveyInvitationList => ({ ...list('shared'), credentialMode: 'personal_link' })
+
+  it('says why nothing went and offers no resume that would only be refused again', async () => {
+    open(survey(), personal())
+    vi.mocked(distributionApi.createSurveyInvitations).mockRejectedValueOnce(
+      new ApiError(409, "1 of the people this request names are not in the survey's audience…", 'personal_link_not_in_audience'),
+    )
+    await pressSend(/Enviar enlaces/)
+    expect((await screen.findByRole('alert')).textContent).toBe(es.errors.api.codes.personal_link_not_in_audience)
+    expect(screen.queryByTestId('send-outcome')).toBeNull()
+    expect(screen.queryByRole('button', { name: es.surveys.next.distribution.link.resume })).toBeNull()
+    expect(document.body.textContent).not.toContain("survey's audience")
+    expect(distributionApi.createSurveyInvitations).toHaveBeenCalledTimes(1)
+  })
+
+  it('any other failure still stops with the resumable outcome, as before', async () => {
+    open(survey(), personal())
+    vi.mocked(distributionApi.createSurveyInvitations).mockRejectedValueOnce(new Error('boom'))
+    await pressSend(/Enviar enlaces/)
+    expect(await screen.findByTestId('send-outcome')).toBeTruthy()
+    expect(screen.getByRole('button', { name: es.surveys.next.distribution.link.resume })).toBeTruthy()
   })
 })
 

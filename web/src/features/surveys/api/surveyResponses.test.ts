@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setToken, clearToken } from '../../../auth/token'
 import {
+  PERSONAL_LINK_HEADER,
   SurveyRespondError,
   getSurveyRespondView,
+  personalLinkTokenOf,
   respondSendsCredentials,
   submitSurveyResponse,
 } from './surveyResponses'
@@ -98,6 +100,59 @@ describe('surveyResponses api', () => {
       // The body is still JSON: dropping the bearer must not drop the content type with it.
       expect(headerOf('Content-Type')).toBe('application/json')
     })
+  })
+
+  /**
+   * The personal link (ruled 2026-11-18, `personal_link`). On `/survey-invitations/{token}` every
+   * respond request carries the token in `X-Survey-Invitation`, so the API answers as the person
+   * the link was mailed to -- their account's department and demographics, never asked. A header
+   * and never the query string, which every access log on the way would keep.
+   */
+  describe('on a personal link', () => {
+    // Obviously fake: the client passes whatever the path holds, and a realistic 43-character
+    // token here reads as a leaked credential to the secret scanner.
+    const TOKEN = 'the-personal-link-token'
+
+    beforeEach(() => {
+      history.pushState({}, '', `/survey-invitations/${TOKEN}`)
+    })
+
+    afterEach(() => {
+      history.pushState({}, '', '/')
+    })
+
+    it('sends the token in the header on the read, and never in the URL', async () => {
+      vi.mocked(fetch).mockResolvedValue(ok({ id: 's1' }))
+
+      await getSurveyRespondView('http://api', 's1', { lang: 'es', sessionId: 'abc' })
+
+      expect(headerOf(PERSONAL_LINK_HEADER)).toBe(TOKEN)
+      expect(vi.mocked(fetch).mock.calls[0][0]).toBe('http://api/surveys/s1/respond?lang=es&sessionId=abc')
+    })
+
+    it('sends it on the autosave and the final post too, with the JSON content type intact', async () => {
+      vi.mocked(fetch).mockResolvedValue(ok({ responseId: 'r1' }))
+
+      await submitSurveyResponse('http://api', 's1', { isComplete: false }, { keepalive: true })
+
+      expect(headerOf(PERSONAL_LINK_HEADER)).toBe(TOKEN)
+      expect(headerOf('Content-Type')).toBe('application/json')
+    })
+  })
+
+  it('carries the header on the personal link route and nowhere else', async () => {
+    // A fresh body per call: a Response can be read once.
+    vi.mocked(fetch).mockImplementation(() => Promise.resolve(ok({ id: 's1' })))
+    for (const path of ['/s/Wit0Q1tKsuq5llHTSHvgd2TVImCK5zGZ55vYSigZW20', '/survey/8792ca95-72c4-4033-8c91-7d7ae47cb65d', '/']) {
+      history.pushState({}, '', path)
+      await getSurveyRespondView('http://api', 's1')
+    }
+    history.pushState({}, '', '/')
+
+    for (const call of [0, 1, 2]) expect(headerOf(PERSONAL_LINK_HEADER, call)).toBeNull()
+    expect(personalLinkTokenOf('/survey-invitations/abc')).toBe('abc')
+    expect(personalLinkTokenOf('/survey-invitations/')).toBeNull()
+    expect(personalLinkTokenOf('/s/abc')).toBeNull()
   })
 
   /**

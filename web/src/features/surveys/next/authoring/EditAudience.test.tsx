@@ -188,6 +188,33 @@ describe('Editar audiencia on the survey detail page (G14 follow-up)', () => {
     expect(within(dialog).getByTestId('audience-gained-note').textContent).toBe(K.gainedPerSurvey)
   })
 
+  it('on a personal-link survey: says how a person added gets in, and that one taken off can no longer answer with theirs', async () => {
+    const user = userEvent.setup()
+    renderView(survey({ userIds: ['a', 'b'], settings: { anonymous: true, credentialMode: 'personal_link' } as never }))
+    const dialog = await openDialog(user)
+
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Carla Mora' }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Ana Rojas' }))
+
+    // Not «Mis encuestas al iniciar sesión»: a personal-link respondent is given no password.
+    expect(within(dialog).getByTestId('audience-gained-note').textContent).toBe(K.gainedPersonalLink)
+    expect(within(dialog).getByTestId('audience-lost-note').textContent).toBe(K.lostPersonalLink)
+    const consequence = within(dialog).getByTestId('audience-consequence').textContent ?? ''
+    expect(consequence).not.toContain(K.gainedShared)
+    expect(consequence).not.toContain(K.lostNote)
+    expect(consequence).not.toContain('Mis encuestas')
+  })
+
+  it('keeps the shared lines on a shared survey', async () => {
+    const user = userEvent.setup()
+    renderView(survey({ userIds: ['a', 'b'] }))
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Carla Mora' }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Ana Rojas' }))
+    expect(within(dialog).getByTestId('audience-gained-note').textContent).toBe(K.gainedShared)
+    expect(within(dialog).getByTestId('audience-lost-note').textContent).toBe(K.lostNote)
+  })
+
   it('says the link and QR are untouched when the survey has one', async () => {
     const user = userEvent.setup()
     renderView(survey(), undefined, 'https://climate.example/s/abc')
