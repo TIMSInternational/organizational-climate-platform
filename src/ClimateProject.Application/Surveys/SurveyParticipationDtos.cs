@@ -198,6 +198,16 @@ public sealed record SurveyRosterDemographic(string Field, string? LabelEn, stri
 /// Nothing in the suite couples the CSV's columns to this record's fields, so the omission is a
 /// choice rather than an oversight — which is why it is written down here.
 /// </para>
+/// <para>
+/// <paramref name="InvitationId"/>, <paramref name="LinkStatus"/> and <paramref name="LinkSentOn"/>
+/// are the <c>personal_link</c> counterpart of the per-survey key columns (2026-11-18): this
+/// person's invitation row, its status as <c>survey_invitations.status</c> holds it, and the
+/// company-zone day their link was last mailed. All three null for somebody with no invitation,
+/// and always null on a <c>shared</c> or <c>per_survey</c> survey. The id is what lets the roster
+/// call the invitation's own resend and revoke routes for one person; the status is the one the
+/// invitation list already shows an administrator, capped at <c>opened</c> on an anonymous survey
+/// by <c>SurveyInvitationStatuses.AnonymityCeiling</c>, so nothing here is new to them.
+/// </para>
 /// </remarks>
 public sealed record SurveyRosterRow(
     Guid UserId,
@@ -215,7 +225,10 @@ public sealed record SurveyRosterRow(
     int ReminderCount = 0,
     string? DeliveryProblem = null,
     DateOnly? DeliveryProblemOn = null,
-    bool ExcludedFromResults = false);
+    bool ExcludedFromResults = false,
+    Guid? InvitationId = null,
+    string? LinkStatus = null,
+    DateOnly? LinkSentOn = null);
 
 /// <summary>
 /// What the mail service last reported going wrong with the mail of a person's CURRENT key, as

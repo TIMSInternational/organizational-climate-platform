@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chaseActionFor } from './chaseAction'
+import { chaseActionFor, linkActionFor } from './chaseAction'
 
 /**
  * The rule that decides which chase one person gets. It is worth pinning because for a month
@@ -55,5 +55,36 @@ describe('chaseActionFor', () => {
       { surveyUsername: null, credentialIssuedOn: '2026-10-20', status: 'not_started', lastSignInOn: null },
       'per_survey',
     )).toBe('reissue')
+  })
+})
+
+/**
+ * The personal-link rule: the first link goes through the invite route naming one person, every
+ * later one through the resend, which is the only route that mails somebody a second time.
+ */
+describe('linkActionFor', () => {
+  const sent = { invitationId: 'inv-1', status: 'sent', sentOn: '2026-11-18' }
+
+  it('sends a first link to somebody with no invitation', () => {
+    expect(linkActionFor({ status: 'not_started' }, { invitationId: null, status: null, sentOn: null })).toBe('send')
+  })
+
+  it('sends a first link to somebody whose invitation never went', () => {
+    expect(linkActionFor({ status: 'not_started' }, { invitationId: 'inv-1', status: 'pending', sentOn: null })).toBe('send')
+  })
+
+  it('resends to somebody whose link went, opened or not', () => {
+    expect(linkActionFor({ status: 'not_started' }, sent)).toBe('resend')
+    expect(linkActionFor({ status: 'started' }, { ...sent, status: 'opened' })).toBe('resend')
+  })
+
+  it('resends to somebody whose link was withdrawn, sent or not -- the invite route skips them', () => {
+    expect(linkActionFor({ status: 'not_started' }, { ...sent, status: 'revoked' })).toBe('resend')
+    expect(linkActionFor({ status: 'not_started' }, { invitationId: 'inv-1', status: 'revoked', sentOn: null })).toBe('resend')
+  })
+
+  it('leaves somebody who finished alone', () => {
+    expect(linkActionFor({ status: 'completed' }, sent)).toBe('none')
+    expect(linkActionFor({ status: 'not_started' }, { ...sent, status: 'completed' })).toBe('none')
   })
 })

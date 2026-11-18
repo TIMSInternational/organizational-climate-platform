@@ -315,6 +315,65 @@ public class PersonalLinkInvitationTests(PostgresContainerFixture postgres, Capt
         Assert.Equal(HttpStatusCode.OK, (await _factory.CreateClient().GetAsync($"/survey-invitations/{before.InvitationToken}")).StatusCode);
     }
 
+    // ------------------------------------------------------------------ the roster
+
+    /// <summary>
+    /// «Quién ya respondió» on a personal_link survey says whose link went and acts on that
+    /// person's own invitation: each row carries the invitation id, its status and the day the
+    /// link was mailed -- read from the table for every row, not from the 500-row invitation list.
+    /// A person whose mail failed holds an unsent invitation; a person never invited holds none.
+    /// On the other two modes the roster carries none of it, invited or not.
+    /// </summary>
+    [Fact]
+    public async Task The_roster_says_whose_link_went_and_names_the_invitation_each_row_acts_on()
+    {
+        var admin = await AdminClientAsync();
+        var survey = await ActiveSurveyAsync(admin, CredentialModes.PersonalLink);
+        var ana = await SeedPersonAsync(_comercio);
+        var bea = await SeedPersonAsync(_comercio);
+        var caro = await SeedPersonAsync(_comercio);
+        await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [ana.Id]));
+        _factory.FailFor.Add(caro.Email);
+        await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [caro.Id]));
+        _factory.FailFor.Clear();
+
+        var view = (await admin.GetFromJsonAsync<SurveyParticipationView>($"/surveys/{survey.Id}/participation"))!;
+
+        Assert.Equal(CredentialModes.PersonalLink, view.CredentialMode);
+        var anaRow = view.Roster.Single(r => r.UserId == ana.Id);
+        var anaInvitation = await InvitationAsync(survey.Id, ana.Id);
+        Assert.Equal(anaInvitation.Id, anaRow.InvitationId);
+        Assert.Equal(SurveyInvitationStatuses.Sent, anaRow.LinkStatus);
+        Assert.NotNull(anaRow.LinkSentOn);
+        Assert.Null(anaRow.SurveyUsername);
+
+        var caroRow = view.Roster.Single(r => r.UserId == caro.Id);
+        Assert.Equal((await InvitationAsync(survey.Id, caro.Id)).Id, caroRow.InvitationId);
+        Assert.Equal(SurveyInvitationStatuses.Pending, caroRow.LinkStatus);
+        Assert.Null(caroRow.LinkSentOn);
+
+        var beaRow = view.Roster.Single(r => r.UserId == bea.Id);
+        Assert.Null(beaRow.InvitationId);
+        Assert.Null(beaRow.LinkStatus);
+        Assert.Null(beaRow.LinkSentOn);
+
+        foreach (var mode in new[] { CredentialModes.PerSurvey, CredentialModes.Shared })
+        {
+            var other = await ActiveSurveyAsync(admin, mode);
+            var dani = await SeedPersonAsync(_comercio);
+            await InviteAsync(admin, other.Id, new CreateSurveyInvitationsRequest(UserIds: [dani.Id]));
+
+            var otherView = (await admin.GetFromJsonAsync<SurveyParticipationView>($"/surveys/{other.Id}/participation"))!;
+
+            Assert.All(otherView.Roster, row =>
+            {
+                Assert.Null(row.InvitationId);
+                Assert.Null(row.LinkStatus);
+                Assert.Null(row.LinkSentOn);
+            });
+        }
+    }
+
     // ------------------------------------------------------------------ the other modes, unchanged
 
     [Fact]

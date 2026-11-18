@@ -585,6 +585,15 @@ export interface SurveyRosterRow {
    * person still finished, and `status` keeps saying so.
    */
   excludedFromResults?: boolean
+  /**
+   * `personal_link` only (2026-11-18): this person's invitation, its status as
+   * `survey_invitations.status` holds it, and the company-zone day their link was last mailed.
+   * All null for somebody with no invitation, and always absent on the other two modes. The id is
+   * what the roster's «Reenviar enlace» and «Retirar el enlace» act on.
+   */
+  invitationId?: string | null
+  linkStatus?: string | null
+  linkSentOn?: string | null
 }
 
 /** `SurveyDeliveryProblems` on the server. */

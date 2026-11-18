@@ -66,6 +66,7 @@ function fetchWith(
   onRevoke?: (userId: string) => { status: number; body: unknown },
   onRemind?: (userId: string) => { status: number; body: unknown },
   onInvite?: (userIds: string[]) => { status: number; body: unknown },
+  onInvitation?: (invitationId: string, action: 'resend' | 'revoke') => { status: number; body: unknown },
 ) {
   const sent: Sent[] = []
   const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -103,6 +104,25 @@ function fetchWith(
       const answer = onReissue?.(reissue[1]) ?? {
         status: 200,
         body: { surveyId: SURVEY, userId: reissue[1], username: 'x', delivered: true, failureReason: null, issuedOn: '2026-10-22' },
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } }),
+      )
+    }
+    // `personal_link`: one invitation's resend or revoke. Neither sends a body, so both are matched
+    // before the generic POST below, which parses one.
+    const invitation = /\/surveys\/[^/]+\/invitations\/([^/]+)\/(resend|revoke)$/.exec(url)
+    if (invitation && (init?.method ?? 'GET').toUpperCase() === 'POST') {
+      sent.push({ url, body: null })
+      const action = invitation[2] as 'resend' | 'revoke'
+      const answer = onInvitation?.(invitation[1], action) ?? {
+        status: 200,
+        body: {
+          id: invitation[1], surveyId: SURVEY, userId: 'x', email: 'x@esph.test',
+          status: action === 'resend' ? 'sent' : 'revoked', isExpired: false, sentAt: '2026-11-18T15:00:00Z',
+          openedAt: null, startedAt: null, completedAt: null, reminderCount: 0, lastReminderSent: null,
+          expiresAt: '2026-12-01T00:00:00Z', createdAt: '2026-11-18T15:00:00Z',
+        },
       }
       return Promise.resolve(
         new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } }),
@@ -270,11 +290,299 @@ describe('SurveyRosterPanel', () => {
     renderPanel(payload)
     await screen.findByText('Marta Villalobos')
 
-    expect(within(rowOf('marta')).getByText('esph-marta')).toBeTruthy()
-    expect(
-      within(rowOf('marta')).getByRole('checkbox', { name: T.selectRow.replace('{name}', 'Marta Villalobos') }),
-    ).toHaveProperty('disabled', true)
-    expect(screen.getByRole('checkbox', { name: T.selectAll })).toHaveProperty('disabled', true)
+    // Nothing can be chosen for the account resend: no row checkbox, no select-all, and the
+    // account's usuario -- which this survey never uses -- is not drawn as a way in.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    expect(screen.queryByText('esph-marta')).toBeNull()
+    expect(screen.queryByRole('button', { name: T.send })).toBeNull()
+  })
+
+  /**
+   * The key column follows the survey's mode: a per-survey key, a personal link, or neither. A
+   * personal-link survey read «Código de acceso» / «Sin código» while its people were mailed
+   * links (Federico, PROCOMER's DEMO copy, 2026-11-18).
+   */
+  it('draws the key column its mode calls for -- a code, a link, or neither', async () => {
+    const table = async (mode: 'shared' | 'per_survey' | 'personal_link') => {
+      cleanup()
+      const payload = view({ credentialMode: mode })
+      vi.stubGlobal('fetch', fetchWith(payload).mock)
+      renderPanel(payload)
+      await screen.findByText('Marta Villalobos')
+      const headers = within(screen.getByRole('table')).getAllByRole('columnheader').map((cell) => cell.textContent)
+      return headers
+    }
+
+    const shared = await table('shared')
+    expect(shared).toContain(T.colUsuario)
+    expect(shared).not.toContain(T.colCode)
+    expect(shared).not.toContain(T.colLink)
+
+    const perSurvey = await table('per_survey')
+    expect(perSurvey).toContain(T.colUsuario)
+    expect(perSurvey).toContain(T.colCode)
+    expect(perSurvey).not.toContain(T.colLink)
+    expect(screen.getAllByText(T.noCode).length).toBeGreaterThan(0)
+
+    const personalLink = await table('personal_link')
+    expect(personalLink).toContain(T.colLink)
+    expect(personalLink).not.toContain(T.colCode)
+    expect(personalLink).not.toContain(T.colUsuario)
+    expect(screen.queryByText(T.noCode)).toBeNull()
+    expect(screen.queryByText(T.sendCode)).toBeNull()
+    expect(screen.queryByText(T.revoke)).toBeNull()
+    expect(screen.queryByText(T.revokeWhyNoCode)).toBeNull()
+  })
+
+  /**
+   * `personal_link` (ruled 2026-11-18): the row's key is the person's own link. It says whether
+   * the link went and whether it was opened, and each action calls the route that is right for a
+   * link -- the first through the invite route naming that person alone, a new one through the
+   * invitation's resend, a withdrawal through its revoke.
+   */
+  describe('a personal_link survey', () => {
+    // Ana: never invited. Bea: mailed, not opened, not answered. Hugo: mailed and opened, part-way.
+    // Marta: finished. Caro: her mail failed, so her invitation exists and holds no link.
+    const BEA = row({ userId: 'bea', name: 'Beatriz Solano', status: 'not_started' })
+    const CARO = row({ userId: 'caro', name: 'Carolina Vega', status: 'not_started' })
+    const personalLink = () =>
+      view({
+        credentialMode: 'personal_link',
+        surveyTitleEs: 'Clima PROCOMER 2026',
+        surveyTitleEn: null,
+        roster: [
+          { ...ANA, invitationId: null, linkStatus: null, linkSentOn: null },
+          { ...BEA, invitationId: 'inv-bea', linkStatus: 'sent', linkSentOn: '2026-11-18' },
+          { ...CARO, invitationId: 'inv-caro', linkStatus: 'pending', linkSentOn: null },
+          { ...HUGO, invitationId: 'inv-hugo', linkStatus: 'opened', linkSentOn: '2026-11-17' },
+          { ...MARTA, invitationId: 'inv-marta', linkStatus: 'opened', linkSentOn: '2026-11-16' },
+        ],
+      })
+    const day = (d: string) => formatParticipationDay(d, 'es')
+    const today = () => {
+      const now = new Date()
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    }
+    const button = (key: string, name: string) => screen.queryByRole('button', { name: key.replace('{name}', name) })
+    const BASE = import.meta.env.VITE_API_BASE_URL as string
+
+    it('says whose link went and who opened it, and offers the action each person needs', async () => {
+      const payload = personalLink()
+      vi.stubGlobal('fetch', fetchWith(payload).mock)
+      renderPanel(payload)
+      await screen.findByText('Ana Lucía Mora')
+
+      expect(within(rowOf('ana')).getByText(T.noLink)).toBeTruthy()
+      expect(within(rowOf('caro')).getByText(T.noLink)).toBeTruthy()
+      expect(within(rowOf('bea')).getByText(T.linkSent.replace('{date}', day('2026-11-18')))).toBeTruthy()
+      expect(within(rowOf('bea')).getByText(T.linkNotOpened)).toBeTruthy()
+      expect(within(rowOf('hugo')).getByText(T.linkOpened)).toBeTruthy()
+
+      // A first link for whoever holds none -- including Caro, whose invitation never went.
+      expect(button(T.sendLinkFor, 'Ana Lucía Mora')).not.toBeNull()
+      expect(button(T.sendLinkFor, 'Carolina Vega')).not.toBeNull()
+      // A new one for whoever holds one; nothing for whoever finished.
+      expect(button(T.resendLinkFor, 'Beatriz Solano')).not.toBeNull()
+      expect(button(T.resendLinkFor, 'Hugo Peralta')).not.toBeNull()
+      expect(button(T.sendLinkFor, 'Marta Villalobos')).toBeNull()
+      expect(button(T.resendLinkFor, 'Marta Villalobos')).toBeNull()
+
+      // Withdrawing: only a link that went, to somebody who has not answered.
+      expect(button(T.revokeLinkFor, 'Beatriz Solano')).toHaveProperty('disabled', false)
+      expect(button(T.revokeLinkFor, 'Ana Lucía Mora')).toHaveProperty('disabled', true)
+      expect(within(rowOf('ana')).getByText(T.revokeLinkWhyNoLink)).toBeTruthy()
+      expect(button(T.revokeLinkFor, 'Hugo Peralta')).toHaveProperty('disabled', true)
+      expect(within(rowOf('hugo')).getByText(T.revokeLinkWhyAnswered)).toBeTruthy()
+
+      // None of the per-survey key's words, and none of its routes' buttons.
+      expect(screen.queryByText(T.noCode)).toBeNull()
+      expect(screen.queryByText(T.revokeWhyNoCode)).toBeNull()
+      expect(screen.queryByRole('button', { name: T.sendCode })).toBeNull()
+      expect(screen.queryByRole('button', { name: T.revoke })).toBeNull()
+      expect(screen.queryByRole('button', { name: T.reissue })).toBeNull()
+      expect(screen.queryByRole('button', { name: T.handover })).toBeNull()
+    })
+
+    it('sends a first link through the invite route naming only that person, and reads the links it counted', async () => {
+      const payload = personalLink()
+      // The API's answer for a link that went: `credentialsIssued` is 0 in this mode, always.
+      const { mock, sent } = fetchWith(payload, undefined, undefined, undefined, undefined, () => ({
+        status: 201,
+        body: {
+          requested: 1, created: 1, invitationIds: ['inv-ana'], skippedUserIds: [], notificationsQueued: 0,
+          undeliverableRecipients: 0, note: null, credentialsIssued: 0, credentialsNotSent: 0, remaining: 0,
+          credentialsNotSentEmails: [], linksSent: 1, linksNotSent: 0, linksNotSentEmails: [],
+        },
+      }))
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+
+      await user.click((await screen.findByRole('button', { name: T.sendLinkFor.replace('{name}', 'Ana Lucía Mora') })))
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(T.sendLinkTitle.replace('{name}', 'Ana Lucía Mora'))).toBeTruthy()
+      expect(
+        within(dialog).getByText(T.sendLinkBody.replace('{email}', 'ana@esph.test').replace('{survey}', 'Clima PROCOMER 2026')),
+      ).toBeTruthy()
+      expect(sent).toHaveLength(0)
+
+      await user.click(within(dialog).getByRole('button', { name: T.sendLink }))
+
+      await waitFor(() => expect(sent).toHaveLength(1))
+      expect(sent[0].url).toBe(`${BASE}/surveys/${SURVEY}/invitations`)
+      expect(sent[0].body).toEqual({ userIds: ['ana'] })
+      expect(
+        await screen.findByText(T.sendLinkSent.replace('{name}', 'Ana Lucía Mora').replace('{email}', 'ana@esph.test')),
+      ).toBeTruthy()
+      expect(screen.queryByText(T.sendLinkAlreadyHad.replace('{name}', 'Ana Lucía Mora'))).toBeNull()
+      // The row now holds a link from today, and its action is the resend -- of the new invitation.
+      expect(within(rowOf('ana')).getByText(T.linkSent.replace('{date}', day(today())))).toBeTruthy()
+      expect(button(T.sendLinkFor, 'Ana Lucía Mora')).toBeNull()
+      await user.click(button(T.resendLinkFor, 'Ana Lucía Mora')!)
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.resendLink }))
+      await waitFor(() => expect(sent).toHaveLength(2))
+      expect(sent[1].url).toBe(`${BASE}/surveys/${SURVEY}/invitations/inv-ana/resend`)
+    })
+
+    it('says «ya tenía» when nothing was sent, and that the survey is not open on its refusal', async () => {
+      const nothing = personalLink()
+      vi.stubGlobal(
+        'fetch',
+        fetchWith(nothing, undefined, undefined, undefined, undefined, () => ({
+          status: 201,
+          body: {
+            requested: 1, created: 0, invitationIds: [], skippedUserIds: ['caro'], notificationsQueued: 0,
+            undeliverableRecipients: 0, note: null, credentialsIssued: 0, credentialsNotSent: 0, remaining: 0,
+            linksSent: 0, linksNotSent: 0, linksNotSentEmails: [],
+          },
+        })).mock,
+      )
+      const user = userEvent.setup()
+      renderPanel(nothing)
+      await user.click((await screen.findByRole('button', { name: T.sendLinkFor.replace('{name}', 'Carolina Vega') })))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.sendLink }))
+      expect(await screen.findByText(T.sendLinkAlreadyHad.replace('{name}', 'Carolina Vega'))).toBeTruthy()
+      // Nothing went, so the row did not move.
+      expect(within(rowOf('caro')).getByText(T.noLink)).toBeTruthy()
+
+      cleanup()
+      const closed = personalLink()
+      vi.stubGlobal(
+        'fetch',
+        fetchWith(closed, undefined, undefined, undefined, undefined, () => ({
+          status: 409,
+          body: { message: "A survey in status 'closed' cannot be distributed.", code: 'survey_not_distributable' },
+        })).mock,
+      )
+      renderPanel(closed)
+      await user.click((await screen.findByRole('button', { name: T.sendLinkFor.replace('{name}', 'Ana Lucía Mora') })))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.sendLink }))
+      expect(await screen.findByText(T.sendLinkNotOpen)).toBeTruthy()
+    })
+
+    it('says the mail did not go when the link was not sent, and leaves the row without one', async () => {
+      const payload = personalLink()
+      vi.stubGlobal(
+        'fetch',
+        fetchWith(payload, undefined, undefined, undefined, undefined, () => ({
+          status: 201,
+          body: {
+            requested: 1, created: 1, invitationIds: ['inv-ana'], skippedUserIds: [], notificationsQueued: 0,
+            undeliverableRecipients: 0, note: null, credentialsIssued: 0, credentialsNotSent: 0, remaining: 1,
+            linksSent: 0, linksNotSent: 1, linksNotSentEmails: ['ana@esph.test'],
+          },
+        })).mock,
+      )
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await user.click((await screen.findByRole('button', { name: T.sendLinkFor.replace('{name}', 'Ana Lucía Mora') })))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.sendLink }))
+      expect(
+        await screen.findByText(T.sendLinkNotSent.replace('{name}', 'Ana Lucía Mora').replace('{email}', 'ana@esph.test')),
+      ).toBeTruthy()
+      expect(within(rowOf('ana')).getByText(T.noLink)).toBeTruthy()
+    })
+
+    it('resends through the invitation route, saying first that the link they hold stops working', async () => {
+      const payload = personalLink()
+      const { mock, sent } = fetchWith(payload)
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+
+      await user.click((await screen.findByRole('button', { name: T.resendLinkFor.replace('{name}', 'Beatriz Solano') })))
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(T.resendLinkTitle.replace('{name}', 'Beatriz Solano'))).toBeTruthy()
+      expect(
+        within(dialog).getByText(T.resendLinkBody.replace('{email}', 'bea@esph.test').replace('{survey}', 'Clima PROCOMER 2026')),
+      ).toBeTruthy()
+      await user.click(within(dialog).getByRole('button', { name: T.resendLink }))
+
+      await waitFor(() => expect(sent).toHaveLength(1))
+      expect(sent[0].url).toBe(`${BASE}/surveys/${SURVEY}/invitations/inv-bea/resend`)
+      expect(
+        await screen.findByText(T.resendLinkSent.replace('{name}', 'Beatriz Solano').replace('{email}', 'bea@esph.test')),
+      ).toBeTruthy()
+      expect(within(rowOf('bea')).getByText(T.linkSent.replace('{date}', day(today())))).toBeTruthy()
+    })
+
+    it('says a failed resend kept the old link, and a closed survey in its own words', async () => {
+      const payload = personalLink()
+      vi.stubGlobal(
+        'fetch',
+        fetchWith(payload, undefined, undefined, undefined, undefined, undefined, (_id, action) =>
+          action === 'resend'
+            ? { status: 502, body: { message: 'The new link could not be emailed.', code: 'personal_link_not_sent' } }
+            : { status: 500, body: {} },
+        ).mock,
+      )
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await user.click((await screen.findByRole('button', { name: T.resendLinkFor.replace('{name}', 'Beatriz Solano') })))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.resendLink }))
+      expect(
+        await screen.findByText(T.resendLinkNotSent.replace('{name}', 'Beatriz Solano').replace('{email}', 'bea@esph.test')),
+      ).toBeTruthy()
+      expect(within(rowOf('bea')).getByText(T.linkSent.replace('{date}', day('2026-11-18')))).toBeTruthy()
+
+      cleanup()
+      vi.stubGlobal(
+        'fetch',
+        fetchWith(payload, undefined, undefined, undefined, undefined, undefined, () => ({
+          status: 409,
+          body: { message: 'This survey is no longer distributable; its window has closed or it is not published.' },
+        })).mock,
+      )
+      renderPanel(payload)
+      await user.click((await screen.findByRole('button', { name: T.resendLinkFor.replace('{name}', 'Beatriz Solano') })))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.resendLink }))
+      expect(await screen.findByText(T.sendLinkNotOpen)).toBeTruthy()
+    })
+
+    it('withdraws a link through the invitation revoke route, and the row offers a new one', async () => {
+      const payload = personalLink()
+      const { mock, sent } = fetchWith(payload)
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+
+      await user.click((await screen.findByRole('button', { name: T.revokeLinkFor.replace('{name}', 'Beatriz Solano') })))
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(T.revokeLinkTitle.replace('{name}', 'Beatriz Solano'))).toBeTruthy()
+      expect(
+        within(dialog).getByText(T.revokeLinkBody.replace('{name}', 'Beatriz Solano').replace('{survey}', 'Clima PROCOMER 2026')),
+      ).toBeTruthy()
+      await user.click(within(dialog).getByRole('button', { name: T.revokeLink }))
+
+      await waitFor(() => expect(sent).toHaveLength(1))
+      expect(sent[0].url).toBe(`${BASE}/surveys/${SURVEY}/invitations/inv-bea/revoke`)
+      // Never the per-survey key's DELETE.
+      expect(sent.some((call) => call.url.includes('/credentials/'))).toBe(false)
+      expect(await screen.findByText(T.revokeLinkDone.replace('{name}', 'Beatriz Solano'))).toBeTruthy()
+      expect(within(rowOf('bea')).getByText(T.linkRevoked)).toBeTruthy()
+      expect(button(T.revokeLinkFor, 'Beatriz Solano')).toBeNull()
+      expect(button(T.resendLinkFor, 'Beatriz Solano')).not.toBeNull()
+    })
   })
 
   it('opens a row to the demographics the import uploaded', async () => {
