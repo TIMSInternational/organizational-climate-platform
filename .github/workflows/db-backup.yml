@@ -16,10 +16,21 @@ on:
   schedule:
     # Costa Rica is UTC-6 with no DST. GitHub may start a scheduled run late under load; the
     # alarm allows two hours of slack for that.
-    # Every 6 hours since 2026-11-15 (Federico): 01:00, 07:00, 13:00 and 19:00 in Costa Rica.
-    # A restore loses at most 6 hours of answers instead of 24; on a launch day hundreds of
-    # people answer within hours. Each dump is a few MB; the 26-hour "stopped" alarm still holds.
-    - cron: "0 1,7,13,19 * * *"
+    # Every 6 hours since 2026-11-15 (Federico): 01:23, 07:23, 13:23 and 19:23 UTC (the same four
+    # hours in Costa Rica, shifted by six). The target is that a restore loses at most 6 hours of
+    # answers instead of 24; on a launch day hundreds of people answer within hours. Each dump is
+    # a few MB; the 26-hour "stopped" alarm still holds.
+    #
+    # MEASURED 2026-11-18: THE TARGET IS NOT WHAT GITHUB DELIVERS. The schedule was `0 1,7,13,19`
+    # from 2026-11-16T02:38Z. In the next 7 scheduled slots GitHub started 2 runs
+    # (2026-11-17T02:25Z and 16:49Z); all three slots on 16 Nov were dropped, the alarm fired at
+    # 26 hours, and two manual dispatches covered the gap (`gh run list --workflow db-backup.yml`).
+    # GitHub's documentation names the start of every hour as its high-load time, when scheduled
+    # runs are delayed and, under enough load, dropped, and advises another minute of the hour.
+    # Hence :23. If runs are still missing after a few days, the next step is an AWS EventBridge
+    # schedule -- the synthetic probe's rate(15 minutes) rule invoked its Lambda 96 times on each
+    # of the 7 days to 2026-11-17 (AWS/Lambda Invocations, daily Sum) -- not more cron lines here.
+    - cron: "23 1,7,13,19 * * *"
   workflow_dispatch:
 
 # Never two dumps at once, and never cancel one in flight: a cancelled run publishes no metric,
