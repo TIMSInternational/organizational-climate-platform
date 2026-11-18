@@ -9,6 +9,11 @@ alarm; only the schedule changed (`db-backup.yml`, `0 1,7,13,19 * * *` = 01:00, 
 Rica). The 26-hour `climate-project-db-backup-stopped` alarm still pages if dumps stop. Retention is
 unchanged at 35 days (about 140 dumps of a few MB). The alarm's first OK, listed as open below, was
 measured OK since 2026-10-13T02:36Z (DescribeAlarms, 2026-11-15).
+**MEASURED 2026-11-18: the 6-hour schedule is not being delivered.** From 2026-11-16T02:38Z GitHub
+started 2 of 7 scheduled dumps; all three on 16 Nov were dropped and the 26-hour alarm fired (cleared
+by two manual dispatches). The cron moved off the top of the hour, which GitHub documents as its
+high-load time, to `23 1,7,13,19 * * *`. Until the run list shows four dumps a day, the real RPO is
+"up to 26 hours, then the alarm". If it does not improve, the trigger moves to AWS EventBridge.
 
 Raised OPEN 2026-09-28 against `5e95df7b`. The sections from "The measurement" to "What is not in
 question" are the record that led to the decision and are kept unedited; the decision and what
