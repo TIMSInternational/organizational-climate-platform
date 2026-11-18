@@ -1,4 +1,4 @@
-import { Check, CircleHelp, Clock, OctagonAlert } from 'lucide-react'
+import { Check, CircleHelp, Clock, OctagonExclamationPoint } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Chip } from '../../../components/ui'
 import { useTranslation } from '../../../i18n'
@@ -68,7 +68,7 @@ export interface SemaforoChipProps {
 }
 
 const SHAPE_ICONS: Record<SemaforoShape, ReactNode> = {
-  octagon: <OctagonAlert />,
+  octagon: <OctagonExclamationPoint />,
   clock: <Clock />,
   check: <Check />,
 }
