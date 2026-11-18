@@ -30,7 +30,17 @@ import {
  * `survey_invitations` could only ever hold what an administrator's own actions put
  * there, and the distribution screen's funnel was structurally empty.
  *
- * ## Nothing hands this link out yet, and that is on purpose here
+ * ## Who hands this link out (amended 2026-11-18)
+ *
+ * A `personal_link` survey does: «Enviar invitaciones» mails each invitee this route with their
+ * own token, and on such a survey the respond requests this page makes carry the token
+ * (`X-Survey-Invitation`, added by `surveyResponses.ts` from the route) so the API answers AS
+ * that person -- their account's department and demographics, never asked, the survey's
+ * anonymity unchanged. See `docs/decisions/personal-link-invitations.md`. The section below is
+ * the state before that ruling, and still true of `shared` and `per_survey` surveys, whose
+ * tokens no mail carries.
+ *
+ * ## Before 2026-11-18: nothing handed this link out, and that was on purpose
  *
  * Grep for the writer, not the reader: `SurveyInvitation.InvitationToken` is minted in
  * `SurveyDistributionEndpoints` (create, and again on regenerate) and read back only by

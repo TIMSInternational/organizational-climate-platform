@@ -778,6 +778,7 @@ public static class SurveyEndpoints
             return Results.Json(new { message = "StartDate must be before EndDate", code = AdminRefusals.SurveyDatesOutOfOrder }, statusCode: 400);
         }
 
+        var previousEndDate = survey.EndDate;
         survey.StartDate = startDate;
         survey.EndDate = endDate;
         if (request.TargetAudienceCount.HasValue) survey.TargetAudienceCount = request.TargetAudienceCount.Value;
@@ -900,6 +901,29 @@ public static class SurveyEndpoints
         }
 
         var updatedAt = DateTimeOffset.UtcNow;
+
+        // A `personal_link` survey's links were MAILED, each with the close the survey had then.
+        // Moving the close afterwards -- PROCOMER's and ESPH's windows have both been moved after
+        // launch -- would otherwise leave every link dying at the old one (or outliving a close
+        // brought forward), with no way to reach those people again short of a resend each.
+        // Only the invitations that followed the close move; one shortened on purpose by
+        // `ExpiresInDays` keeps its own date. Same save as the survey, so the two cannot disagree.
+        // The other two modes mail no link, and are left exactly as they were.
+        if (endDate != previousEndDate
+            && (survey.Settings.CredentialMode ?? CredentialModes.Shared) == CredentialModes.PersonalLink)
+        {
+            var following = await db.SurveyInvitations
+                .Where(i => i.SurveyId == survey.Id
+                            && i.Status != SurveyInvitationStatuses.Revoked
+                            && i.ExpiresAt == previousEndDate)
+                .ToListAsync(cancellationToken);
+            foreach (var invitation in following)
+            {
+                invitation.ExpiresAt = endDate;
+                invitation.UpdatedAt = updatedAt;
+            }
+        }
+
         survey.UpdatedAt = updatedAt;
         await db.SaveChangesAsync(cancellationToken);
 

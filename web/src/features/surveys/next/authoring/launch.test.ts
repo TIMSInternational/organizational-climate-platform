@@ -124,6 +124,29 @@ describe('launchChecklist', () => {
     expect(steps.some((step) => step.state === 'missing')).toBe(false)
   })
 
+  /**
+   * `personal_link` (2026-11-18): each person's own link is the door. Measured on the local
+   * stack with three links mailed out of 63: the tile said «Falta el enlace público», nudging an
+   * operator to open exactly the link that lets anybody answer. The link step is never what this
+   * mode asks for; the links still owed are.
+   */
+  it('never asks a personal_link survey for a public link, and counts a link as covered once mailed', () => {
+    const partly = launchChecklist({
+      audience: 63, publicLink: null, summary: summary({ total: 3, pending: 0, sent: 1, opened: 2 }), perSurvey: false, personalLink: true,
+    })
+    expect(partly.map((step) => [step.id, step.state])).toEqual([
+      ['audience', 'done'],
+      ['link', 'idle'],
+      ['invitations', 'missing'],
+    ])
+    const minted = invitationCoverage({ summary: summary({ total: 63, pending: 60 }), audience: 63, perSurvey: false, personalLink: true })
+    expect(minted).toEqual({ covered: 3, uncovered: 60, revoked: 0 })
+    const all = launchChecklist({
+      audience: 63, publicLink: null, summary: summary({ total: 63, pending: 0, sent: 63 }), perSurvey: false, personalLink: true,
+    })
+    expect(readySteps(all)).toBe(3)
+  })
+
   it('still blocks when NEITHER door is open, because then nobody can answer', () => {
     const steps = launchChecklist({ audience: 0, publicLink: null, summary: summary(), perSurvey: false })
     expect(steps.find((step) => step.id === 'link')?.state).toBe('missing')

@@ -215,7 +215,13 @@ export function launchChecklist(input: {
           : 'missing'
   return [
     { id: 'audience', state: audience },
-    { id: 'link', state: input.publicLink !== null ? 'done' : doorOpen ? 'idle' : 'missing' },
+    // A `personal_link` survey's door is each person's own link; an open share link is the one
+    // thing that mode exists to avoid, so its absence is never what the page asks for (measured
+    // 2026-11-18: three links mailed, and the readiness tile said «Falta el enlace público»).
+    {
+      id: 'link',
+      state: input.publicLink !== null ? 'done' : doorOpen || input.personalLink === true ? 'idle' : 'missing',
+    },
     { id: 'invitations', state: invitationsDone ? 'done' : doorOpen ? 'idle' : 'missing' },
   ]
 }

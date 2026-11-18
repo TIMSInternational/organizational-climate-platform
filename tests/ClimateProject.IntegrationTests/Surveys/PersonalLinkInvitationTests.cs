@@ -184,15 +184,22 @@ public class PersonalLinkInvitationTests(PostgresContainerFixture postgres, Capt
         Assert.Equal(1, first.Remaining);
         Assert.Equal([ana.Email], LinksTo(everyone).Select(l => l.ToEmail));
 
-        // Dani, by name. Bea is still unsent, and is NOT mailed by a request that does not name her.
+        // Bea's address works again BEFORE the next call, so a send that wrongly included her
+        // would reach her and show up below. (Measured: with her address still refused, a
+        // mutation that mailed every unsent invitation passed this test -- the extra attempt
+        // failed silently. 2026-11-18, mutation I1.)
+        _factory.FailFor.Clear();
+
+        // Dani, by name. Bea is still unsent, and is NOT mailed -- nor even attempted -- by a
+        // request that does not name her.
         var second = await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [dani.Id]));
         Assert.Equal(1, second.LinksSent);
+        Assert.Equal(0, second.LinksNotSent);
         Assert.Equal(0, second.Remaining);
         Assert.Equal(new[] { ana.Email, dani.Email }.Order(StringComparer.Ordinal), LinksTo(everyone).Select(l => l.ToEmail).Order(StringComparer.Ordinal));
         Assert.Empty(LinksTo(bea.Email, caro.Email));
 
-        // Comercio: Bea (whose mail now works) and Caro. Ana already has hers and is not mailed again.
-        _factory.FailFor.Clear();
+        // Comercio: Bea and Caro. Ana already has hers and is not mailed again.
         var third = await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(DepartmentIds: [_comercio]));
         Assert.Equal(2, third.LinksSent);
         Assert.Equal(0, third.Remaining);
@@ -507,6 +514,37 @@ public class PersonalLinkInvitationTests(PostgresContainerFixture postgres, Capt
         Assert.Equal(HttpStatusCode.BadRequest, back.StatusCode);
         Assert.Contains("credential_mode_in_use", await back.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         Assert.Equal(CredentialModes.PersonalLink, await WithDbAsync(db => db.Surveys.AsNoTracking().Where(s => s.Id == survey.Id).Select(s => s.Settings.CredentialMode).FirstAsync()));
+    }
+
+    /// <summary>
+    /// A mailed link lives as long as the survey: moving the close moves the links that followed
+    /// it, so nobody holding one is locked out at the old close. A shared survey's invitations,
+    /// which no mail carries, are left exactly as they were.
+    /// </summary>
+    [Fact]
+    public async Task Moving_the_close_moves_the_mailed_links_with_it_in_personal_link_mode_only()
+    {
+        var admin = await AdminClientAsync();
+        var personal = await ActiveSurveyAsync(admin, CredentialModes.PersonalLink);
+        var shared = await ActiveSurveyAsync(admin, CredentialModes.Shared);
+        var ana = await SeedPersonAsync(_comercio);
+        await InviteAsync(admin, personal.Id, new CreateSurveyInvitationsRequest(UserIds: [ana.Id]));
+        await InviteAsync(admin, shared.Id, new CreateSurveyInvitationsRequest(UserIds: [ana.Id]));
+        var sharedBefore = (await InvitationAsync(shared.Id, ana.Id)).ExpiresAt;
+
+        foreach (var survey in new[] { personal, shared })
+        {
+            (await admin.PutAsJsonAsync($"/surveys/{survey.Id}", new UpdateSurveyRequest(EndDate: survey.EndDate.AddDays(10))))
+                .EnsureSuccessStatusCode();
+        }
+
+        var newClose = await WithDbAsync(db => db.Surveys.AsNoTracking().Where(s => s.Id == personal.Id).Select(s => s.EndDate).FirstAsync());
+        Assert.Equal(newClose, (await InvitationAsync(personal.Id, ana.Id)).ExpiresAt);
+        Assert.Equal(sharedBefore, (await InvitationAsync(shared.Id, ana.Id)).ExpiresAt);
+
+        // And the link still opens after the old close would have passed.
+        var token = Assert.Single(LinksTo(ana.Email)).Token;
+        Assert.Equal(HttpStatusCode.OK, (await _factory.CreateClient().GetAsync($"/survey-invitations/{token}")).StatusCode);
     }
 
     [Fact]
