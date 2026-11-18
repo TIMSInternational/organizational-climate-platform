@@ -34,7 +34,27 @@ public sealed class EmailOptions
     /// </summary>
     public const string ProviderSmtp = "smtp";
 
-    public static readonly string[] KnownProviders = [ProviderNone, ProviderSmtp];
+    /// <summary>
+    /// DEVELOPMENT ONLY: write every message as an <c>.eml</c> file (and its HTML body beside it)
+    /// into <see cref="PickupDirectory"/>, and open no socket at all.
+    ///
+    /// <para>
+    /// Added 2026-11-18 so a person verifying a mail on the local stack can READ what the
+    /// product composed for a seeded <c>@acme.test</c> person. <see cref="ProviderSmtp"/> cannot
+    /// do that by design -- its transport refuses every RFC 2606/6761 reserved domain before a
+    /// provider is contacted, even a local capture server -- and <see cref="ProviderNone"/>
+    /// composes nothing. Nothing written here leaves the machine, which is also why the reserved
+    /// domains are not refused.
+    /// </para>
+    /// <para>
+    /// The API and the worker refuse to start with it outside the Development environment: in
+    /// any deployed environment it would be a service that reports every message delivered and
+    /// delivers none -- the half-configured deploy this class exists to catch.
+    /// </para>
+    /// </summary>
+    public const string ProviderPickup = "pickup";
+
+    public static readonly string[] KnownProviders = [ProviderNone, ProviderSmtp, ProviderPickup];
 
     /// <summary>Submission port used when none is configured. 587 is the STARTTLS submission port every managed provider offers.</summary>
     public const int DefaultSmtpPort = 587;
@@ -122,6 +142,9 @@ public sealed class EmailOptions
     /// </summary>
     public string? SesEventsTopicArn { get; set; }
 
+    /// <summary>Where <see cref="ProviderPickup"/> writes. Required for it, and read by nothing else.</summary>
+    public string? PickupDirectory { get; set; }
+
     public int MaxSendsPerSecond { get; set; } = DefaultMaxSendsPerSecond;
 
     public int TimeoutSeconds { get; set; } = DefaultTimeoutSeconds;
@@ -139,9 +162,19 @@ public sealed class EmailOptions
     private string NormalisedProvider
         => string.IsNullOrWhiteSpace(Provider) ? ProviderNone : Provider.Trim();
 
-    /// <summary>True when a real provider is selected. False means the logging stub stays registered.</summary>
-    public bool IsConfigured
+    /// <summary>
+    /// True when the real senders compose mail -- SMTP, or the Development-only pickup folder.
+    /// False means the logging stubs stay registered and nothing is composed.
+    /// </summary>
+    public bool IsConfigured => IsSmtp || IsPickup;
+
+    /// <summary>Mail goes to an SMTP provider.</summary>
+    public bool IsSmtp
         => string.Equals(NormalisedProvider, ProviderSmtp, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Mail is written to <see cref="PickupDirectory"/> and never leaves the machine. Development only.</summary>
+    public bool IsPickup
+        => string.Equals(NormalisedProvider, ProviderPickup, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The reason this configuration cannot start a host, or null when it can.
@@ -163,6 +196,23 @@ public sealed class EmailOptions
 
         if (!IsConfigured)
         {
+            return null;
+        }
+
+        if (IsPickup)
+        {
+            if (string.IsNullOrWhiteSpace(PickupDirectory))
+            {
+                return $"Missing Email:PickupDirectory configuration (required because Email:Provider is '{ProviderPickup}').";
+            }
+
+            if (string.IsNullOrWhiteSpace(AppBaseUrl)
+                || !Uri.TryCreate(AppBaseUrl, UriKind.Absolute, out var pickupBase)
+                || (pickupBase.Scheme != Uri.UriSchemeHttp && pickupBase.Scheme != Uri.UriSchemeHttps))
+            {
+                return $"Email:AppBaseUrl must be an absolute http or https URL (required because Email:Provider is '{ProviderPickup}'; the links in the written mail are built from it).";
+            }
+
             return null;
         }
 

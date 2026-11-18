@@ -75,6 +75,7 @@ public static class WorkerHostFactory
         // and no UI anywhere to give the game away. Same options, same selection rule, same
         // fail-fast: a half-configured Email section refuses to start this host exactly as it
         // refuses to start the API.
+        var emailPickupAllowed = builder.Environment.IsDevelopment();
         builder.Services.AddOptions<EmailOptions>()
             .Configure<IConfiguration, ILoggerFactory>((options, configuration, loggerFactory) =>
             {
@@ -83,6 +84,13 @@ public static class WorkerHostFactory
                 if (options.Validate() is { } error)
                 {
                     throw new InvalidOperationException(error);
+                }
+
+                // The API's rule, for the API's reason: the pickup folder delivers nothing.
+                if (options.IsPickup && !emailPickupAllowed)
+                {
+                    throw new InvalidOperationException(
+                        $"Email:Provider '{EmailOptions.ProviderPickup}' writes mail to a local folder and is allowed only in the Development environment.");
                 }
 
                 EmailDeliveryStartupReport.Write(loggerFactory.CreateLogger(EmailLogCategory), options);
@@ -98,7 +106,9 @@ public static class WorkerHostFactory
         // worker instance pace themselves independently -- which is the headroom
         // EmailOptions.DefaultMaxSendsPerSecond already budgets for.
         builder.Services.AddSingleton(sp => new EmailSendRateLimiter(sp.GetRequiredService<EmailOptions>().MaxSendsPerSecond));
-        builder.Services.AddScoped<IEmailTransport, SmtpEmailTransport>();
+        builder.Services.AddScoped<IEmailTransport>(sp => sp.GetRequiredService<EmailOptions>().IsPickup
+            ? ActivatorUtilities.CreateInstance<PickupDirectoryEmailTransport>(sp)
+            : ActivatorUtilities.CreateInstance<SmtpEmailTransport>(sp));
 
         // The transport registrations above are not optional trimmings on this factory line: the
         // real sender resolves them per scope, so copying the selection rule without them would

@@ -387,6 +387,7 @@ builder.Services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 // makes the settings it cannot work without mandatory -- and a half-configured provider then
 // fails the host at startup rather than booting into a service that reports every notification
 // as sent and delivers none. See EmailOptions for the full rule.
+var emailPickupAllowed = builder.Environment.IsDevelopment();
 builder.Services.AddOptions<EmailOptions>()
     .Configure<IConfiguration, ILoggerFactory>((options, configuration, loggerFactory) =>
     {
@@ -395,6 +396,15 @@ builder.Services.AddOptions<EmailOptions>()
         if (options.Validate() is { } error)
         {
             throw new InvalidOperationException(error);
+        }
+
+        // The pickup folder delivers nothing and reports every message delivered. On a laptop
+        // that is the point; anywhere else it is the half-configured deploy EmailOptions exists
+        // to catch, so it stops the host.
+        if (options.IsPickup && !emailPickupAllowed)
+        {
+            throw new InvalidOperationException(
+                $"Email:Provider '{EmailOptions.ProviderPickup}' writes mail to a local folder and is allowed only in the Development environment.");
         }
 
         EmailDeliveryStartupReport.Write(
@@ -421,7 +431,9 @@ builder.Services.AddSingleton<ClimateProject.Application.Email.ISnsSubscriptionC
 // Singleton, and that is load-bearing: the rate limiter paces sends process-wide, so a
 // per-request instance would pace nothing. See EmailSendRateLimiter.
 builder.Services.AddSingleton(sp => new EmailSendRateLimiter(sp.GetRequiredService<EmailOptions>().MaxSendsPerSecond));
-builder.Services.AddScoped<IEmailTransport, SmtpEmailTransport>();
+builder.Services.AddScoped<IEmailTransport>(sp => sp.GetRequiredService<EmailOptions>().IsPickup
+    ? ActivatorUtilities.CreateInstance<PickupDirectoryEmailTransport>(sp)
+    : ActivatorUtilities.CreateInstance<SmtpEmailTransport>(sp));
 
 // The two delivery seams (#97 left both stubbed; #100 fills them in). Resolved from
 // configuration rather than registered as a fixed type -- a factory rather than an `if` over
@@ -454,6 +466,13 @@ builder.Services.AddScoped<ICredentialsEmailSender>(sp => sp.GetRequiredService<
 builder.Services.AddScoped<ISurveyReminderEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
     ? ActivatorUtilities.CreateInstance<EmailSurveyReminderEmailSender>(sp)
     : ActivatorUtilities.CreateInstance<LoggingSurveyReminderEmailSender>(sp));
+
+// The personal-link invitation (ruled 2026-11-18, `personal_link` mode): one person's own
+// /survey-invitations/{token} link, sent inline by the invite and resend routes. Same selection
+// rule: unconfigured mail reports a permanent failure and the invitation stays unsent.
+builder.Services.AddScoped<IPersonalLinkEmailSender>(sp => sp.GetRequiredService<EmailOptions>().IsConfigured
+    ? ActivatorUtilities.CreateInstance<EmailPersonalLinkEmailSender>(sp)
+    : ActivatorUtilities.CreateInstance<LoggingPersonalLinkEmailSender>(sp));
 
 // What turns a queued survey invitation into a link the recipient can follow. Registered
 // unconditionally rather than inside the selection rule below: it reads a token, it does not

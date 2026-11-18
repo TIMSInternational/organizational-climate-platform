@@ -34,6 +34,43 @@ public class EmailOptionsTests
         Assert.Null(options.Validate());
     }
 
+    /// <summary>
+    /// The Development-only pickup folder: real senders compose (so a person can read the mail
+    /// on the local stack), nothing is sent, and it needs only a folder and the links' origin.
+    /// The hosts refuse it outside Development -- that half is the host's, not this class's.
+    /// </summary>
+    [Fact]
+    public void A_pickup_folder_needs_a_directory_and_a_link_origin_and_nothing_smtp()
+    {
+        var options = new EmailOptions
+        {
+            Provider = EmailOptions.ProviderPickup,
+            PickupDirectory = "/tmp/occ-mail",
+            AppBaseUrl = "http://localhost:5173",
+        };
+
+        Assert.Null(options.Validate());
+        Assert.True(options.IsConfigured);
+        Assert.True(options.IsPickup);
+        Assert.False(options.IsSmtp);
+    }
+
+    [Fact]
+    public void A_pickup_folder_without_a_directory_fails()
+    {
+        var options = new EmailOptions { Provider = EmailOptions.ProviderPickup, AppBaseUrl = "http://localhost:5173" };
+
+        Assert.Contains("PickupDirectory", options.Validate());
+    }
+
+    [Fact]
+    public void A_pickup_folder_without_a_link_origin_fails()
+    {
+        var options = new EmailOptions { Provider = EmailOptions.ProviderPickup, PickupDirectory = "/tmp/occ-mail" };
+
+        Assert.Contains("AppBaseUrl", options.Validate());
+    }
+
     [Fact]
     public void A_fully_configured_smtp_provider_is_valid()
     {

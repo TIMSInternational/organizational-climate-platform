@@ -180,12 +180,103 @@ public static class SurveyResponseEndpoints
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    private static async Task<RespondentResolution> ResolveRespondentAsync(
+    /// <summary>
+    /// The request header a personal link's page sends its token in
+    /// (<c>web/src/features/surveys/api/surveyResponses.ts</c>), on both respond routes.
+    ///
+    /// <para>A header and not a query parameter: a query string is written into every access log
+    /// between the browser and the API, and this value opens the survey as its holder.</para>
+    /// </summary>
+    public const string PersonalLinkHeader = "X-Survey-Invitation";
+
+    /// <summary>
+    /// The person a `personal_link` token names, answering as a signed-in respondent would --
+    /// the department and demographics on their ACCOUNT, never asked on screen; the survey's
+    /// anonymity, unchanged; their own derived resume session; their roster row; and, on an
+    /// identified survey, their invitation completed. Ruled 2026-11-18
+    /// (<c>docs/decisions/personal-link-invitations.md</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Only on a `personal_link` survey.</b> On any other survey this returns null and
+    /// the request is resolved exactly as it was before the header existed: nobody holds a
+    /// shared- or per-survey invitation's token, and if somebody did it must not become a third
+    /// way in.</para>
+    /// <para><b>The invitation is the authorization.</b> Targets are not re-checked: the operator
+    /// may invite a named person the survey's department targets do not cover (the invite
+    /// route's <c>userIds</c> selector), and the link they were mailed must open. What IS checked
+    /// is everything that makes the link dead -- revoked, expired, another survey's token -- and
+    /// that its person is still an active member of the survey's company.</para>
+    /// <para><b>Every refusal is the same 403</b>, whichever of those it was: the token is a
+    /// credential, and telling its holder which check failed is the landing card's job
+    /// (<c>GET /survey-invitations/{token}</c>), not this route's.</para>
+    /// </remarks>
+    private static async Task<RespondentResolution?> ResolvePersonalLinkRespondentAsync(
         Survey survey,
-        ClaimsPrincipal principal,
+        string? token,
         ClimateProjectDbContext db,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrEmpty(token)
+            || (survey.Settings.CredentialMode ?? CredentialModes.Shared) != CredentialModes.PersonalLink)
+        {
+            return null;
+        }
+
+        if (!SurveyStatuses.AcceptsResponses(survey.Status))
+        {
+            return new RespondentResolution(null, Unavailable());
+        }
+
+        var refused = new RespondentResolution(null, Results.Json(
+            new { message = "This invitation link no longer opens this survey." },
+            statusCode: 403));
+
+        if (!SurveyAccessTokens.HasExpectedShape(token))
+        {
+            return refused;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var invitation = await db.SurveyInvitations.AsNoTracking()
+            .Where(i => i.InvitationToken == token
+                        && i.SurveyId == survey.Id
+                        && i.Status != SurveyInvitationStatuses.Revoked
+                        && i.ExpiresAt > now)
+            .Select(i => new { i.UserId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (invitation is null)
+        {
+            return refused;
+        }
+
+        var person = await db.Users.AsNoTracking()
+            .Where(u => u.Id == invitation.UserId && u.CompanyId == survey.CompanyId && u.IsActive)
+            .Select(u => new { u.Id, u.DepartmentId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (person is null)
+        {
+            return refused;
+        }
+
+        // The survey's flag decides what is stored, exactly as for a signed-in respondent:
+        // knowing who is answering changes only what an anonymous survey declines to write.
+        return new RespondentResolution(new Respondent(person.Id, person.DepartmentId, survey.Settings.Anonymous), null);
+    }
+
+    private static async Task<RespondentResolution> ResolveRespondentAsync(
+        Survey survey,
+        ClaimsPrincipal principal,
+        string? personalLinkToken,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        // First, and over a bearer the browser may also be carrying: a personal link answers as
+        // the person it was mailed to whoever else is signed in on that device.
+        if (await ResolvePersonalLinkRespondentAsync(survey, personalLinkToken, db, cancellationToken) is { } byLink)
+        {
+            return byLink;
+        }
+
         var isAnonymousSurvey = survey.Settings.Anonymous;
         var isAuthenticated = principal.Identity?.IsAuthenticated ?? false;
 
@@ -289,6 +380,7 @@ public static class SurveyResponseEndpoints
         string? lang,
         string? sessionId,
         ClaimsPrincipal principal,
+        HttpRequest httpRequest,
         ClimateProjectDbContext db,
         IConfiguration configuration,
         CancellationToken cancellationToken)
@@ -299,7 +391,8 @@ public static class SurveyResponseEndpoints
             return NotFound();
         }
 
-        var resolution = await ResolveRespondentAsync(survey, principal, db, cancellationToken);
+        var resolution = await ResolveRespondentAsync(
+            survey, principal, httpRequest.Headers[PersonalLinkHeader].FirstOrDefault(), db, cancellationToken);
         if (resolution.Error is not null)
         {
             return resolution.Error;
@@ -409,7 +502,8 @@ public static class SurveyResponseEndpoints
             return NotFound();
         }
 
-        var resolution = await ResolveRespondentAsync(survey, httpContext.User, db, cancellationToken);
+        var resolution = await ResolveRespondentAsync(
+            survey, httpContext.User, httpContext.Request.Headers[PersonalLinkHeader].FirstOrDefault(), db, cancellationToken);
         if (resolution.Error is not null)
         {
             return resolution.Error;

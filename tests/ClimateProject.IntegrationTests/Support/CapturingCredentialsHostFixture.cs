@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.Surveys;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,13 +48,28 @@ public sealed record SentReminder(
     string ToEmail, string Username, string? Language, string? RecipientName,
     string? SurveyName = null, string? CompanyName = null);
 
-public sealed class CapturingCredentialsFactory(string connectionString, ConcurrentQueue<SentCredentials> sent, ConcurrentBag<string> failFor, ConcurrentQueue<SentReminder> reminders)
+/// <summary>
+/// What the product handed to the personal-link invitation, for one person: the token their link
+/// carries and the person-independent mail. There is no username or password field, because the
+/// sender has no parameter for either -- the record could not hold one if the route tried.
+/// </summary>
+public sealed record SentPersonalLink(string ToEmail, string Token, SurveyPersonalLinkMail Mail);
+
+public sealed class CapturingCredentialsFactory(
+    string connectionString,
+    ConcurrentQueue<SentCredentials> sent,
+    ConcurrentBag<string> failFor,
+    ConcurrentQueue<SentReminder> reminders,
+    ConcurrentQueue<SentPersonalLink> links)
     : AuthWebApplicationFactory(connectionString)
 {
     public ConcurrentQueue<SentCredentials> Sent { get; } = sent;
 
     /// <summary>Reminders this host recorded instead of sending. Separate queue, separate type.</summary>
     public ConcurrentQueue<SentReminder> Reminders { get; } = reminders;
+
+    /// <summary>Personal-link invitations this host recorded instead of sending.</summary>
+    public ConcurrentQueue<SentPersonalLink> Links { get; } = links;
 
     /// <summary>Recipients this host refuses, so a row can be shown failing while its account stands.</summary>
     public ConcurrentBag<string> FailFor { get; } = failFor;
@@ -67,7 +83,25 @@ public sealed class CapturingCredentialsFactory(string connectionString, Concurr
             services.AddScoped<ICredentialsEmailSender>(_ => new CapturingCredentialsSender(Sent, FailFor));
             services.RemoveAll<ISurveyReminderEmailSender>();
             services.AddScoped<ISurveyReminderEmailSender>(_ => new CapturingSurveyReminderSender(Reminders, FailFor));
+            services.RemoveAll<IPersonalLinkEmailSender>();
+            services.AddScoped<IPersonalLinkEmailSender>(_ => new CapturingPersonalLinkSender(Links, FailFor));
         });
+    }
+}
+
+internal sealed class CapturingPersonalLinkSender(ConcurrentQueue<SentPersonalLink> links, ConcurrentBag<string> failFor)
+    : IPersonalLinkEmailSender
+{
+    public Task<EmailSendOutcome> SendAsync(
+        string toEmail, string invitationToken, SurveyPersonalLinkMail mail, CancellationToken cancellationToken)
+    {
+        if (failFor.Contains(toEmail))
+        {
+            return Task.FromResult(EmailSendOutcome.PermanentFailure("refused for the test"));
+        }
+
+        links.Enqueue(new SentPersonalLink(toEmail, invitationToken, mail));
+        return Task.FromResult(EmailSendOutcome.Success());
     }
 }
 
@@ -133,13 +167,14 @@ public sealed class CapturingCredentialsHostFixture : IDisposable
     private static readonly ConcurrentQueue<SentCredentials> SharedSent = new();
     private static readonly ConcurrentQueue<SentReminder> SharedReminders = new();
     private static readonly ConcurrentBag<string> SharedFailFor = [];
+    private static readonly ConcurrentQueue<SentPersonalLink> SharedLinks = new();
     private static CapturingCredentialsFactory? _factory;
 
     public CapturingCredentialsFactory HostFor(string connectionString)
     {
         lock (Gate)
         {
-            return _factory ??= new CapturingCredentialsFactory(connectionString, SharedSent, SharedFailFor, SharedReminders);
+            return _factory ??= new CapturingCredentialsFactory(connectionString, SharedSent, SharedFailFor, SharedReminders, SharedLinks);
         }
     }
 

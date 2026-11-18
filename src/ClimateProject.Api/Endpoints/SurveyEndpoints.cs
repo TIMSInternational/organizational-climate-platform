@@ -784,7 +784,30 @@ public static class SurveyEndpoints
 
         if (request.Settings is not null)
         {
-            var settingsError = ApplySettings(survey.Settings, request.Settings, survey.Language, credentialModeFrozen: true);
+            var settingsInput = request.Settings;
+
+            // The one exception to the freeze below: a move to or from `personal_link`, and only
+            // while nothing has been issued under the mode the survey is in (ruled 2026-11-18 --
+            // docs/decisions/personal-link-invitations.md). PROCOMER's survey already exists, and
+            // the freeze's own reason -- "credentials may already have been issued under it" -- is
+            // checked here rather than assumed. `shared` <-> `per_survey` stays frozen exactly as
+            // #617 left it.
+            if (settingsInput.CredentialMode is { } requestedMode
+                && CredentialModes.IsValid(requestedMode)
+                && requestedMode != (survey.Settings.CredentialMode ?? CredentialModes.Shared)
+                && (requestedMode == CredentialModes.PersonalLink
+                    || survey.Settings.CredentialMode == CredentialModes.PersonalLink))
+            {
+                if (await CredentialModeInUseAsync(db, survey.Id, cancellationToken) is { } inUse)
+                {
+                    return inUse;
+                }
+
+                survey.Settings.CredentialMode = requestedMode;
+                settingsInput = settingsInput with { CredentialMode = null };
+            }
+
+            var settingsError = ApplySettings(survey.Settings, settingsInput, survey.Language, credentialModeFrozen: true);
             if (settingsError is not null)
             {
                 return settingsError;
@@ -1832,6 +1855,33 @@ public static class SurveyEndpoints
                 db.QuestionOptions.Add(option);
             }
         }
+    }
+
+    /// <summary>
+    /// Refuses a credential-mode change once anything has been issued under the survey's current
+    /// mode: a per-survey key (<c>survey_credentials</c>) or a personal link that was mailed
+    /// (<c>survey_invitations.sent_at</c>). Null when nothing has, which is the only state in which
+    /// changing how people get in cannot strand somebody holding the old way in.
+    /// </summary>
+    private static async Task<IResult?> CredentialModeInUseAsync(
+        ClimateProjectDbContext db, Guid surveyId, CancellationToken cancellationToken)
+    {
+        var keys = await db.SurveyCredentials.AnyAsync(c => c.SurveyId == surveyId, cancellationToken);
+        var links = await db.SurveyInvitations.AnyAsync(i => i.SurveyId == surveyId && i.SentAt != null, cancellationToken);
+        if (!keys && !links)
+        {
+            return null;
+        }
+
+        return Results.Json(
+            new
+            {
+                code = "credential_mode_in_use",
+                message = "settings.credentialMode cannot be changed: this survey has already sent "
+                          + (keys ? "per-survey sign-in details" : "personal links")
+                          + " under its current mode, and people may be holding them.",
+            },
+            statusCode: 400);
     }
 
     internal static IResult? ApplySettings(SurveySettings settings, SurveySettingsInput input, string language, bool credentialModeFrozen)

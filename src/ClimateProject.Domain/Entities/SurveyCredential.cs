@@ -125,9 +125,34 @@ public static class CredentialModes
     /// </summary>
     public const string PerSurvey = "per_survey";
 
-    public static readonly IReadOnlyList<string> All = [Shared, PerSurvey];
+    /// <summary>
+    /// No username and no password at all: «Enviar invitaciones» mails each invitee their own
+    /// <c>/survey-invitations/{token}</c> link, and that link IS the key -- it opens this one
+    /// survey as that person, with their department and demographics read from their account.
+    /// Ruled 2026-11-18 by Federico for PROCOMER's application of 1 December, amending the
+    /// 2026-10-19 ruling (#606) for this mode only. Reminders stay deleted.
+    /// See <c>docs/decisions/personal-link-invitations.md</c>.
+    /// </summary>
+    /// <remarks>
+    /// A SURVEY mode only, never a company's (<see cref="ForCompany"/>). A company's mode also
+    /// decides what the roster import mails (<c>BulkImportEndpoints</c>) and whether an account
+    /// may be given a password (<c>UserEndpoints.IsSurveyCodesOnlyAsync</c>), and neither of
+    /// those has a ruled answer for a company whose people are never given a password.
+    /// </remarks>
+    public const string PersonalLink = "personal_link";
+
+    /// <summary>Every mode a SURVEY may be in.</summary>
+    public static readonly IReadOnlyList<string> All = [Shared, PerSurvey, PersonalLink];
+
+    /// <summary>
+    /// The modes a COMPANY may default its surveys to. <see cref="PersonalLink"/> is deliberately
+    /// absent -- see its remarks.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ForCompany = [Shared, PerSurvey];
 
     public static bool IsValid(string? mode) => mode is not null && All.Contains(mode);
+
+    public static bool IsValidForCompany(string? mode) => mode is not null && ForCompany.Contains(mode);
 
     /// <summary>
     /// A survey's own mode, else the company's, else <see cref="Shared"/>. Resolved once at
