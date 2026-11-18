@@ -180,6 +180,29 @@ public class SurveyDuplicationTests
     }
 
     // ------------------------------------------------------------------
+    // «Mantener al final» (Question.KeepAtEnd, 2026-11-18)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// PROCOMER's operator duplicates the DEMO survey and marks the two questions on the copy;
+    /// a copy of THAT copy must still ask them last. Only the marked question carries it: a
+    /// mapping that set every copied question's flag from one source question would pass a
+    /// one-question check.
+    /// </summary>
+    [Fact]
+    public void The_copy_asks_the_same_questions_at_the_end()
+    {
+        var source = BilingualSource();
+        source.Questions.Single(q => q.Id == BranchQuestionId).KeepAtEnd = true;
+
+        var copy = SurveyDuplication.Duplicate(
+            source, CopySurveyId, DuplicatingAdminId, Now, SequentialIds(CopiedTriggerId, CopiedBranchId));
+
+        Assert.True(copy.Questions.Single(q => q.Id == CopiedBranchId).KeepAtEnd);
+        Assert.False(copy.Questions.Single(q => q.Id == CopiedTriggerId).KeepAtEnd);
+    }
+
+    // ------------------------------------------------------------------
     // Both language halves survive.
     // ------------------------------------------------------------------
 

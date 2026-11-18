@@ -4504,7 +4504,10 @@
             "p4": "Muy probable",
             "p5": "Totalmente probable"
           }
-        }
+        },
+        "keepAtEnd": "Mantener al final",
+        "keepAtEndHint": "Se pregunta después de todas las demás, en este orden, aunque la encuesta se presente en orden aleatorio.",
+        "keepAtEndChip": "Al final"
       },
       "template": {
         "eyebrow": "Plantilla de encuesta · {category}",
@@ -5464,7 +5467,8 @@
           "commentRequired": "Pregunta {number} · comentario obligatorio",
           "commentPrompt": "Pregunta {number} · indicación del comentario",
           "category": "Pregunta {number} · dimensión",
-          "options": "Pregunta {number} · opciones"
+          "options": "Pregunta {number} · opciones",
+          "keepAtEnd": "Pregunta {number} · mantener al final"
         },
         "value": {
           "yes": "Sí",

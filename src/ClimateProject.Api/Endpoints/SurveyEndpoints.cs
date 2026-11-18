@@ -1813,6 +1813,7 @@ public static class SurveyEndpoints
                 Required = item.Input.Required,
                 Order = item.Input.Order,
                 Category = item.Input.Category,
+                KeepAtEnd = item.Input.KeepAtEnd,
                 // Recorded, never dereferenced. See CreateSurveyQuestionInput and #110.
                 SourceQuestionBankItemId = item.Input.SourceQuestionBankItemId,
             };
@@ -1959,7 +1960,8 @@ public static class SurveyEndpoints
                 question.CommentRequired,
                 SurveyContent.Resolve(question.CommentPromptEn, question.CommentPromptEs, locale, survey.Language, $"{path}.commentPrompt", fallbackFields),
                 question.Order,
-                question.Category);
+                question.Category,
+                question.KeepAtEnd);
         }).ToList();
 
         var departmentIds = await db.SurveyDepartmentTargets

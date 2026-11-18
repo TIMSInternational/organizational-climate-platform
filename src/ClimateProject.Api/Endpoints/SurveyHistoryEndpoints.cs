@@ -226,7 +226,8 @@ public static class SurveyHistoryEndpoints
                     question.CommentRequired,
                     SurveyContent.Resolve(question.CommentPromptEn, question.CommentPromptEs, locale, language, $"{path}.commentPrompt", fallbackFields),
                     question.Order,
-                    question.Category);
+                    question.Category,
+                    question.KeepAtEnd);
             })
             .ToList();
 

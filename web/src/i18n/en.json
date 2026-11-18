@@ -4504,7 +4504,10 @@
             "p4": "Very likely",
             "p5": "Extremely likely"
           }
-        }
+        },
+        "keepAtEnd": "Keep at the end",
+        "keepAtEndHint": "Asked after every other question, in this order, even when the survey is shown in random order.",
+        "keepAtEndChip": "At the end"
       },
       "template": {
         "eyebrow": "Survey template · {category}",
@@ -5464,7 +5467,8 @@
           "commentRequired": "Question {number} · comment required",
           "commentPrompt": "Question {number} · comment prompt",
           "category": "Question {number} · dimension",
-          "options": "Question {number} · options"
+          "options": "Question {number} · options",
+          "keepAtEnd": "Question {number} · keep at the end"
         },
         "value": {
           "yes": "Yes",

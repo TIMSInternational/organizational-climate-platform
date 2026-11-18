@@ -59,6 +59,8 @@ export interface AuthoringQuestion {
   category: string | null
   required: boolean
   commentRequired: boolean
+  /** «Mantener al final» — `Question.KeepAtEnd`. Sent back on every save, like `required`. */
+  keepAtEnd: boolean
   scaleMin: number | null
   scaleMax: number | null
   text: Record<Locale, AuthoredText>
@@ -147,6 +149,8 @@ function seed(question: SurveyQuestion): AuthoringQuestion {
     category: question.category,
     required: question.required,
     commentRequired: question.commentRequired,
+    // Absent from an API older than the column, and that is false.
+    keepAtEnd: question.keepAtEnd === true,
     scaleMin: question.scaleMin,
     scaleMax: question.scaleMax,
     text: emptyByLocale(),
@@ -243,6 +247,8 @@ export function toQuestionInputs(questions: AuthoringQuestion[]): unknown[] {
     commentPrompt: localized(question.commentPrompt),
     order: question.order,
     category: question.category,
+    // The PUT replaces the questions whole, so omitting it would clear it.
+    keepAtEnd: question.keepAtEnd,
   }))
 }
 

@@ -1055,7 +1055,7 @@ function templateCopy(): Awaited<ReturnType<typeof questionAuthoring.getSurveyQu
   const authored = (text: string) => ({ es: { text, authored: true }, en: { text: '', authored: false } })
   const blank = { es: { text: '', authored: false }, en: { text: '', authored: false } }
   const copied = (order: number, text: string): AuthoringQuestion => ({
-    id: `c${order}`, type: 'likert', order, category: order === 0 ? 'trust' : 'workload', required: true, commentRequired: false,
+    id: `c${order}`, type: 'likert', order, category: order === 0 ? 'trust' : 'workload', required: true, commentRequired: false, keepAtEnd: false,
     scaleMin: 1, scaleMax: 5, text: authored(text), scaleLabelMin: blank, scaleLabelMax: blank, commentPrompt: blank, options: null,
   })
   return {

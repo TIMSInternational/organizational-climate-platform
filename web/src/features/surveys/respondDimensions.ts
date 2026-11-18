@@ -68,6 +68,16 @@ import { UNCATEGORISED_DIMENSION, dimensionKeyOf } from './surveyResultsMap'
  * Two cases still print no headings, because a heading there would say nothing: every
  * category null or blank (there is no structure to show), and a single distinct
  * category (one heading over the whole form is a title, not a section).
+ *
+ * ## «Mantener al final» is not gathered up
+ *
+ * A question marked `keepAtEnd` arrives last from `orderQuestions` and must be asked last,
+ * so it is never pulled up under the first heading of its category the way an interleaved
+ * question is. The unmarked questions are grouped exactly as before; the marked ones follow
+ * them in the order they arrived, each under its own category's heading — joining the last
+ * section when they share its category, starting a new one when they do not. A category can
+ * therefore head two sections on a form that marks one of its questions; that is the true
+ * description of what is asked, and nothing keys on a section's name.
  */
 
 /** One run of questions asked under one dimension heading. */
@@ -161,9 +171,14 @@ export function respondDimensions(
   // structure the page must then be trusted not to print.
   if (randomizeQuestions) return unsectioned(questions)
 
+  // The marked questions stay out of the grouping and are appended after it -- see the
+  // module note. With none marked, `body` is every question and nothing below changes.
+  const body = questions.filter((question) => question.keepAtEnd !== true)
+  const atEnd = questions.filter((question) => question.keepAtEnd === true)
+
   // Insertion order IS first-appearance order, which is the ordering rule.
   const grouped = new Map<string, SurveyRespondQuestion[]>()
-  for (const question of questions) {
+  for (const question of body) {
     const key = dimensionKeyOf(question)
     const existing = grouped.get(key)
     if (existing) existing.push(question)
@@ -172,7 +187,8 @@ export function respondDimensions(
 
   // One key covers both "nobody categorised anything" (the key is the sentinel) and
   // "every question is in one dimension". Zero keys is the empty form.
-  if (grouped.size < 2) return unsectioned(questions)
+  const distinct = new Set([...grouped.keys(), ...atEnd.map(dimensionKeyOf)])
+  if (distinct.size < 2) return unsectioned([...body, ...atEnd])
 
   // First-appearance order: the author's own ordering, which survives because this is
   // the only path left -- a randomised survey returned above.
@@ -190,6 +206,17 @@ export function respondDimensions(
       lastIndex: position + sectionQuestions.length - 1,
     })
     position += sectionQuestions.length
+  }
+  for (const question of atEnd) {
+    const key = dimensionKeyOf(question)
+    const last = sections.at(-1)
+    if (last !== undefined && last.key === key) {
+      last.questions.push(question)
+      last.lastIndex = position
+    } else {
+      sections.push({ key, questions: [question], firstIndex: position, lastIndex: position })
+    }
+    position += 1
   }
   return { sectioned: true, sections }
 }

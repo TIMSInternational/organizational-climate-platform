@@ -231,6 +231,64 @@ afterEach(() => {
 })
 
 /**
+ * «Mantener al final» (ruled 2026-11-18), on the page the respondent actually turns. The order
+ * is `orderQuestions`' and the grouping `respondDimensions`', each proved in its own file; what
+ * is proved here is that this page asks the questions in the order those two return -- the
+ * marked question on the LAST page, wherever its author wrote it.
+ */
+describe('SurveyRespondForm «Mantener al final»', () => {
+  async function textsAcrossPages(texts: readonly string[]) {
+    const seen: (string | undefined)[] = []
+    for (let guard = 0; guard < 50; guard += 1) {
+      seen.push(texts.find((text) => screen.queryByText(text) !== null))
+      const next = screen.queryByRole('button', { name: 'Siguiente' })
+      if (next === null) return seen
+      await userEvent.click(next)
+    }
+    throw new Error('more than 50 pages: the walk is not turning')
+  }
+
+  const TEXTS = ['Pregunta A', 'Pregunta B', 'Pregunta C', 'Pregunta D']
+
+  it('asks a marked question last on a survey shown in its authored order, headings and all', async () => {
+    respondWith(
+      view({
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', order: 0, category: 'psychological_safety', keepAtEnd: true }),
+          question({ id: 'b', text: 'Pregunta B', order: 1, category: 'psychological_safety' }),
+          question({ id: 'c', text: 'Pregunta C', order: 2, category: 'workload' }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await screen.findByText('Pregunta B')
+    expect(await textsAcrossPages(TEXTS)).toEqual(['Pregunta B', 'Pregunta C', 'Pregunta A'])
+  })
+
+  it('asks a marked question last on a randomised survey, whatever order the session drew', async () => {
+    respondWith(
+      view({
+        randomizeQuestions: true,
+        questions: [
+          question({ id: 'a', text: 'Pregunta A', order: 0, keepAtEnd: true }),
+          question({ id: 'b', text: 'Pregunta B', order: 1 }),
+          question({ id: 'c', text: 'Pregunta C', order: 2 }),
+          question({ id: 'd', text: 'Pregunta D', order: 3 }),
+        ],
+      }),
+    )
+    renderForm()
+
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    const asked = await textsAcrossPages(TEXTS)
+    expect(asked).toHaveLength(4)
+    expect(asked[3]).toBe('Pregunta A')
+    expect([...asked].sort()).toEqual(TEXTS)
+  })
+})
+
+/**
  * 1. The questions are asked under the headings the analysis reports under.
  *
  * The grouping itself belongs to `respondDimensions` and is proved there. What is

@@ -1517,7 +1517,9 @@ public static class SurveyResponseEndpoints
                 question.CommentRequired,
                 SurveyContent.Resolve(question.CommentPromptEn, question.CommentPromptEs, locale, survey.Language, $"{path}.commentPrompt", fallbackFields),
                 question.Order,
-                question.Category);
+                question.Category,
+                // The respond form asks these after every other question (orderQuestions).
+                question.KeepAtEnd);
         }).ToList();
     }
 

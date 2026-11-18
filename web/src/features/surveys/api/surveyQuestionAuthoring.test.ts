@@ -13,6 +13,8 @@ interface QuestionOverrides {
   scaleLabelMin?: string | null
   scaleLabelMax?: string | null
   commentPrompt?: string | null
+  /** Omitted unless a test sets it: an API older than the column sends no member at all. */
+  keepAtEnd?: boolean
 }
 
 function question(o: QuestionOverrides = {}) {
@@ -36,6 +38,7 @@ function question(o: QuestionOverrides = {}) {
     commentPrompt: o.commentPrompt === undefined ? 'Say more' : o.commentPrompt,
     order: 0,
     category: 'Bienestar',
+    ...(o.keepAtEnd === undefined ? {} : { keepAtEnd: o.keepAtEnd }),
   }
 }
 
@@ -106,6 +109,29 @@ describe('survey question authoring', () => {
     expect(sent.commentRequired).toBe(false)
     expect(sent.commentPrompt).toEqual({ en: 'Say more', es: 'Say more' })
     expect(sent.order).toBe(0)
+  })
+
+  /**
+   * «Mantener al final» rides the same PUT as `required`, and that PUT replaces the questions
+   * whole: an editor that read the flag and did not send it back would clear it on every save
+   * of an unrelated change.
+   */
+  it('reads «Mantener al final» and sends it back on save', async () => {
+    stubReads({ keepAtEnd: true }, { keepAtEnd: true })
+    const authoring = await getSurveyQuestionAuthoring(BASE_URL, 's1')
+
+    expect(authoring.questions[0].keepAtEnd).toBe(true)
+    const [sent] = toQuestionInputs(authoring.questions) as [Record<string, unknown>]
+    expect(sent.keepAtEnd).toBe(true)
+  })
+
+  it('reads a question with no keepAtEnd member as not kept at the end, and says so on save', async () => {
+    stubReads({}, {})
+    const authoring = await getSurveyQuestionAuthoring(BASE_URL, 's1')
+
+    expect(authoring.questions[0].keepAtEnd).toBe(false)
+    const [sent] = toQuestionInputs(authoring.questions) as [Record<string, unknown>]
+    expect(sent.keepAtEnd).toBe(false)
   })
 
   /**

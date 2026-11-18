@@ -32,7 +32,10 @@ public sealed record SurveyQuestionDto(
     bool CommentRequired,
     string? CommentPrompt,
     int Order,
-    string? Category);
+    string? Category,
+    // Asked after every other question, in its own Order (Question.KeepAtEnd). Positional and
+    // without a default on purpose: every place that builds this DTO must say where it reads it.
+    bool KeepAtEnd);
 
 /// <summary>
 /// <c>InvitationCustomMessage</c>/<c>InvitationCustomSubject</c> are resolved here for
@@ -188,7 +191,11 @@ public sealed record CreateSurveyQuestionInput(
     // producer exists, every bank usage number is a correct count of zero. Said plainly here
     // because the alternative -- reading the metrics code and concluding the wizard fills
     // this in -- is exactly the mistake source_library_item_id has been inviting since #112.
-    Guid? SourceQuestionBankItemId = null);
+    Guid? SourceQuestionBankItemId = null,
+    // Asked after every other question, in its own Order, randomised or not (Question.KeepAtEnd,
+    // ruled 2026-11-18). Like Required, a questions PUT that omits it stores false: the request
+    // replaces the questions whole.
+    bool KeepAtEnd = false);
 
 /// <summary>
 /// Every member is nullable and means "leave this alone" when omitted, so a partial

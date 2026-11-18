@@ -51,7 +51,12 @@ public sealed record SurveyVersionQuestionSnapshot(
     string? CommentPromptEn,
     string? CommentPromptEs,
     string? Category,
-    IReadOnlyList<SurveyVersionOptionSnapshot> Options);
+    IReadOnlyList<SurveyVersionOptionSnapshot> Options,
+    /// <summary>
+    /// Added 2026-11-18 (Question.KeepAtEnd). Every snapshot taken before that date
+    /// deserialises it as false, which is what those questions were: asked in their place.
+    /// </summary>
+    bool KeepAtEnd = false);
 
 /// <summary>
 /// Everything about how the survey was configured to run, flattened into the one
@@ -208,7 +213,8 @@ public static class SurveyVersioning
                 (optionsByQuestion.TryGetValue(q.Id, out var options) ? options : [])
                     .OrderBy(o => o.Order)
                     .Select(o => new SurveyVersionOptionSnapshot(o.Order, o.Value, o.LabelEn, o.LabelEs))
-                    .ToList()))
+                    .ToList(),
+                q.KeepAtEnd))
             .ToList();
 
         var settings = new SurveyVersionSettingsSnapshot(
@@ -451,6 +457,7 @@ public static class SurveyVersioning
             if (was.CommentRequired != now.CommentRequired) yield return $"{path}.commentRequired";
             if (!Equals(Pair(was.CommentPromptEn, was.CommentPromptEs), Pair(now.CommentPromptEn, now.CommentPromptEs))) yield return $"{path}.commentPrompt";
             if (!string.Equals(was.Category, now.Category, StringComparison.Ordinal)) yield return $"{path}.category";
+            if (was.KeepAtEnd != now.KeepAtEnd) yield return $"{path}.keepAtEnd";
 
             // Options compare as an ordered whole -- value, order and both labels. A
             // changed VALUE is the serious one: it is the join key every stored answer

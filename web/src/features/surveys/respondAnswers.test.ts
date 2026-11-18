@@ -356,6 +356,96 @@ describe('orderQuestions', () => {
   })
 })
 
+/**
+ * «Mantener al final» (`Question.KeepAtEnd`, ruled 2026-11-18). PROCOMER's 2026 climate survey
+ * has 57 questions, randomised, and asks for two of them -- a confidentiality item and the 0-10
+ * eNPS -- to close it while the other 55 stay shuffled. The fixture is that shape: the two
+ * marked questions sit in the MIDDLE of the authored order, so "last" cannot pass by luck of
+ * where they were written.
+ */
+describe('orderQuestions — «Mantener al final»', () => {
+  const MANY_SEEDS = Array.from({ length: 60 }, (_unused, index) => `session-${index}`)
+
+  function procomer(): SurveyRespondQuestion[] {
+    return Array.from({ length: 57 }, (_unused, index) => {
+      if (index === 20) return question({ id: 'confidencialidad', order: index, keepAtEnd: true })
+      if (index === 41) return question({ id: 'enps', order: index, type: 'rating', options: null, scaleMin: 0, scaleMax: 10, keepAtEnd: true })
+      return question({ id: `p${index}`, order: index })
+    })
+  }
+
+  const unmarked = () => procomer().filter((q) => q.keepAtEnd !== true)
+
+  it('asks the marked questions last under every seed, in their own order', () => {
+    for (const seed of MANY_SEEDS) {
+      const asked = orderQuestions(procomer(), true, seed).map((q) => q.id)
+      expect(asked.slice(-2), `seed ${seed}: ${asked.join()}`).toEqual(['confidencialidad', 'enps'])
+      expect(asked).toHaveLength(57)
+      expect(new Set(asked).size).toBe(57)
+    }
+  })
+
+  it('keeps their order when the author wrote them the other way round', () => {
+    // Their own `order` decides, not which one was marked first: the eNPS authored before the
+    // confidentiality item is asked before it.
+    const questions = procomer().map((q) =>
+      q.id === 'enps' ? { ...q, order: 5 } : q.id === 'confidencialidad' ? { ...q, order: 50 } : q,
+    )
+    for (const seed of MANY_SEEDS) {
+      expect(orderQuestions(questions, true, seed).map((q) => q.id).slice(-2)).toEqual(['enps', 'confidencialidad'])
+    }
+  })
+
+  it('still shuffles the other 55, exactly as a survey without the two would be', () => {
+    const authored = unmarked().map((q) => q.id)
+    const bodies = MANY_SEEDS.map((seed) => orderQuestions(procomer(), true, seed).slice(0, 55).map((q) => q.id))
+
+    for (const [index, body] of bodies.entries()) {
+      // The same shuffle, draw for draw: the marked questions were set aside before it ran.
+      expect(body).toEqual(orderQuestions(unmarked(), true, MANY_SEEDS[index]).map((q) => q.id))
+      expect(body, `seed ${MANY_SEEDS[index]} asked the authored order`).not.toEqual(authored)
+    }
+    // A fresh order per session, which is what randomisation is for.
+    expect(new Set(bodies.map((body) => body.join())).size).toBe(MANY_SEEDS.length)
+  })
+
+  it('changes nothing for a survey that marks none, whether the member is false or absent', () => {
+    const absent = unmarked()
+    const explicit = absent.map((q) => ({ ...q, keepAtEnd: false }))
+    for (const seed of MANY_SEEDS.slice(0, 10)) {
+      expect(orderQuestions(explicit, true, seed).map((q) => q.id)).toEqual(orderQuestions(absent, true, seed).map((q) => q.id))
+    }
+  })
+
+  it('puts the marked questions after the held-back open questions too', () => {
+    const questions: SurveyRespondQuestion[] = [
+      question({ id: 'enps', order: 0, keepAtEnd: true }),
+      question({ id: 'c1', order: 1 }),
+      question({ id: 'open', order: 2, type: 'open_ended', options: null }),
+      question({ id: 'c2', order: 3 }),
+      question({ id: 'c3', order: 4 }),
+    ]
+    for (const seed of MANY_SEEDS) {
+      expect(orderQuestions(questions, true, seed).map((q) => q.id).slice(-2)).toEqual(['open', 'enps'])
+    }
+  })
+
+  it('moves a marked open question to the end with the other marked ones', () => {
+    const questions: SurveyRespondQuestion[] = [
+      question({ id: 'why', order: 0, type: 'open_ended', options: null, keepAtEnd: true }),
+      question({ id: 'open', order: 1, type: 'open_ended', options: null }),
+      question({ id: 'c1', order: 2 }),
+      question({ id: 'c2', order: 3 }),
+    ]
+    expect(orderQuestions(questions, true, 's1').map((q) => q.id).slice(-2)).toEqual(['open', 'why'])
+  })
+
+  it('asks them last when randomisation is off, and everything else in the authored order', () => {
+    const asked = orderQuestions(procomer(), false, 's1').map((q) => q.id)
+    expect(asked).toEqual([...unmarked().map((q) => q.id), 'confidencialidad', 'enps'])
+  })
+})
+
 describe('moveRankingEntry', () => {
   it('moves an entry and keeps the rest in order', () => {
     expect(moveRankingEntry(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])
