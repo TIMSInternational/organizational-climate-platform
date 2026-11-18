@@ -86,7 +86,7 @@ const COMPANY = 'c1'
 function q(order: number, textEn: string, category: string | null = 'trust'): AuthoringQuestion {
   const both = (en: string, es: string) => ({ en: { text: en, authored: true }, es: { text: es, authored: true } })
   return {
-    id: `q${order}`, type: 'likert', order, category, required: true, commentRequired: false, scaleMin: 1, scaleMax: 5,
+    id: `q${order}`, type: 'likert', order, category, required: true, commentRequired: false, keepAtEnd: false, scaleMin: 1, scaleMax: 5,
     text: both(textEn, `${textEn} (es)`), scaleLabelMin: both('Strongly disagree', 'Muy en desacuerdo'),
     scaleLabelMax: both('Strongly agree', 'Muy de acuerdo'), commentPrompt: { en: { text: '', authored: false }, es: { text: '', authored: false } }, options: null,
   }
@@ -200,6 +200,54 @@ describe('SurveyQuestionsEditorPage — locked', () => {
     renderAt('/surveys/s1/questions', 'leader')
     await screen.findByTestId('locked-banner')
     expect(screen.queryByRole('button', { name: a.duplicateAndEdit })).toBeNull()
+  })
+})
+
+/**
+ * «Mantener al final» (ruled 2026-11-18): PROCOMER's operator opens «Editar preguntas» on the
+ * copy of the DEMO and marks two questions to be asked last. The toggle sits with «La respuesta
+ * es obligatoria» in the open question, and the list says which questions carry it.
+ */
+describe('SurveyQuestionsEditorPage — «Mantener al final» (ruled 2026-11-18)', () => {
+  it('marks the open question to be asked last, says so in the list, and saves the flag on it alone', async () => {
+    arrangeSurvey('draft', 0)
+    vi.mocked(saveSurveyQuestions).mockResolvedValue()
+    renderAt('/surveys/s1/questions')
+
+    const toggle = await screen.findByRole('switch', { name: a.keepAtEnd })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText(a.keepAtEndHint)).toBeTruthy()
+    expect(screen.queryByText(a.keepAtEndChip)).toBeNull()
+
+    await userEvent.click(toggle)
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(screen.getAllByText(a.keepAtEndChip)).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    const sent = vi.mocked(saveSurveyQuestions).mock.calls[0][2]
+    expect(sent.map((x) => [x.id, x.keepAtEnd])).toEqual([['q0', true], ['q1', false]])
+  })
+
+  it('lets a TIMS operator mark it on an active survey nobody has answered', async () => {
+    arrangeSurvey('active', 0)
+    vi.mocked(saveSurveyQuestions).mockResolvedValue()
+    renderAt('/surveys/s1/questions', 'super_admin')
+
+    await userEvent.click(await screen.findByRole('switch', { name: a.keepAtEnd }))
+    await userEvent.click(screen.getByRole('button', { name: a.save }))
+    expect(vi.mocked(saveSurveyQuestions).mock.calls[0][2].map((x) => x.keepAtEnd)).toEqual([true, false])
+  })
+
+  it('still names a marked question once the survey is locked, with no toggle to change it', async () => {
+    vi.mocked(getSurveyQuestionAuthoring).mockResolvedValue({
+      surveyId: 's1', title: 'Q4', language: 'both', status: 'active', locales: ['en', 'es'],
+      questions: [q(0, 'First'), { ...q(1, 'Second', 'workload'), keepAtEnd: true }],
+    })
+    vi.mocked(getSurvey).mockResolvedValue({ id: 's1', companyId: COMPANY, title: 'Q4 Climate Survey', description: null, type: 'periodic', status: 'active', responseCount: 3, targetAudienceCount: 24, startDate: '2026-09-03T12:00:00Z', endDate: '2026-10-10T12:00:00Z' } as SurveyDetail)
+    renderAt('/surveys/s1/questions', 'super_admin')
+
+    expect(await screen.findByText(a.keepAtEndChip)).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: a.keepAtEnd })).toBeNull()
   })
 })
 

@@ -52,6 +52,7 @@ const QUESTION_PARTS = [
   'commentPrompt',
   'category',
   'options',
+  'keepAtEnd',
 ] as const
 type QuestionPart = (typeof QUESTION_PARTS)[number]
 
@@ -203,6 +204,9 @@ function questionValue(ctx: ValueContext, question: SurveyQuestion | undefined, 
       return question.category ? dimensionLabel(question.category, ctx.t) : EMPTY
     case 'options':
       return optionsValue(question)
+    case 'keepAtEnd':
+      // A version captured before the flag existed carries no member: it was asked in place.
+      return yesNo(ctx.t, question.keepAtEnd === true)
   }
 }
 

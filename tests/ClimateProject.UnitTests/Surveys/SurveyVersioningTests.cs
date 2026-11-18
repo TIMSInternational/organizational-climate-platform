@@ -172,6 +172,56 @@ public class SurveyVersioningTests
         Assert.Equal(["Mucho", "Nada"], readQuestion.Options.Select(o => o.LabelEs));
     }
 
+    [Fact]
+    public void A_snapshot_keeps_keep_at_end_through_its_jsonb_column()
+    {
+        var marked = Question();
+        marked.KeepAtEnd = true;
+        var content = Capture(question: marked);
+
+        Assert.True(Assert.Single(content.Questions).KeepAtEnd);
+
+        var row = new SurveyVersion
+        {
+            Id = Guid.NewGuid(),
+            SurveyId = Survey().Id,
+            VersionNumber = 1,
+            Reason = SurveyVersionReasons.Publish,
+            CreatedBy = Guid.NewGuid(),
+            QuestionsSnapshot = SurveyVersioning.SerializeQuestions(content.Questions),
+            SettingsSnapshot = SurveyVersioning.SerializeSettings(content.Settings),
+        };
+
+        Assert.Contains("\"keepAtEnd\":true", row.QuestionsSnapshot);
+        Assert.True(Assert.Single(SurveyVersioning.ReadContent(row).Questions).KeepAtEnd);
+    }
+
+    /// <summary>
+    /// Every version captured before 2026-11-18 has no <c>keepAtEnd</c> member. It must read
+    /// as false -- the order those surveys were actually asked in -- and not fail to read.
+    /// </summary>
+    [Fact]
+    public void A_snapshot_written_before_keep_at_end_existed_reads_as_asked_in_place()
+    {
+        var content = Capture();
+        var json = SurveyVersioning.SerializeQuestions(content.Questions).Replace(",\"keepAtEnd\":false", "");
+        Assert.DoesNotContain("keepAtEnd", json);
+
+        var row = new SurveyVersion
+        {
+            Id = Guid.NewGuid(),
+            SurveyId = Survey().Id,
+            VersionNumber = 1,
+            Reason = SurveyVersionReasons.Publish,
+            CreatedBy = Guid.NewGuid(),
+            QuestionsSnapshot = json,
+        };
+
+        var read = Assert.Single(SurveyVersioning.ReadContent(row).Questions);
+        Assert.Equal(QuestionId, read.Id);
+        Assert.False(read.KeepAtEnd);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -235,6 +285,16 @@ public class SurveyVersioningTests
         after.DescriptionEn = "   ";
 
         Assert.Empty(SurveyVersioning.Diff(Capture(before), Capture(after)));
+    }
+
+    [Fact]
+    public void Marking_a_question_keep_at_end_is_reported_as_a_change_to_that_question()
+    {
+        var marked = Question();
+        marked.KeepAtEnd = true;
+
+        Assert.Equal(["questions[0].keepAtEnd"], SurveyVersioning.Diff(Capture(), Capture(question: marked)));
+        Assert.Equal(["questions[0].keepAtEnd"], SurveyVersioning.Diff(Capture(question: marked), Capture()));
     }
 
     [Fact]

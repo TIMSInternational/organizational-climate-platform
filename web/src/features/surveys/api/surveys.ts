@@ -67,6 +67,13 @@ export interface SurveyQuestion {
   commentPrompt: string | null
   order: number
   category: string | null
+  /**
+   * Asked after every other question, in its own `order`, randomised or not
+   * (`Question.KeepAtEnd`, «Mantener al final», ruled 2026-11-18). Optional because a payload
+   * from an API that predates the column has no such member, and that reads as false — the
+   * order those surveys have always been asked in. See `orderQuestions`.
+   */
+  keepAtEnd?: boolean
 }
 
 export interface SurveySettings {

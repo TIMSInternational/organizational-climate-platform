@@ -20,7 +20,7 @@ const DIFF_PATHS = [
   'settings.invitationIncludeCredentials', 'settings.invitationSendImmediately', 'settings.invitationBrandingEnabled',
   'settings.oneSessionOnly', 'settings.respondentIntro', 'settings.closingMessage', 'departmentIds',
   ...['added', 'removed', 'type', 'text', 'scaleMin', 'scaleMax', 'scaleLabelMin', 'scaleLabelMax', 'required',
-    'commentRequired', 'commentPrompt', 'category', 'options'].map((part) => `questions[2].${part}`),
+    'commentRequired', 'commentPrompt', 'category', 'options', 'keepAtEnd'].map((part) => `questions[2].${part}`),
 ]
 
 const tEs = createTranslator(es as never)

@@ -32,6 +32,9 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(q => q.Required).HasColumnName("required").IsRequired().HasDefaultValue(false);
         builder.Property(q => q.Order).HasColumnName("order").IsRequired();
         builder.Property(q => q.Category).HasColumnName("category").HasMaxLength(100);
+        // NOT NULL with a false default, so every question that predates the column keeps the
+        // order it has always been asked in. See Question.KeepAtEnd.
+        builder.Property(q => q.KeepAtEnd).HasColumnName("keep_at_end").IsRequired().HasDefaultValue(false);
         // Provenance for a question copied out of the library (#58). SetNull, not Cascade:
         // retiring a library item must never delete questions already asked, nor the answers
         // stored against them -- it only loses the link.

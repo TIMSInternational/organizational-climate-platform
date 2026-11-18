@@ -72,10 +72,10 @@ describe('arrangedQuestions', () => {
   const authored = (text: string) => ({ es: { text, authored: true }, en: { text: '', authored: false } })
   const blank = { es: { text: '', authored: false }, en: { text: '', authored: false } }
   const copied: AuthoringQuestion[] = [
-    { id: 's0', type: 'multiple_choice', order: 0, category: null, required: false, commentRequired: true, scaleMin: null, scaleMax: null,
+    { id: 's0', type: 'multiple_choice', order: 0, category: null, required: false, commentRequired: true, keepAtEnd: false, scaleMin: null, scaleMax: null,
       text: authored('¿Cómo llega?'), scaleLabelMin: blank, scaleLabelMax: blank, commentPrompt: authored('¿Algo más?'),
       options: [{ value: 'walk', label: authored('A pie') }, { value: 'bus', label: authored('Bus') }] },
-    { id: 's1', type: 'likert', order: 1, category: 'workload', required: true, commentRequired: false, scaleMin: 1, scaleMax: 5,
+    { id: 's1', type: 'likert', order: 1, category: 'workload', required: true, commentRequired: false, keepAtEnd: false, scaleMin: 1, scaleMax: 5,
       text: authored('Mi carga es sostenible.'), scaleLabelMin: authored('Muy en desacuerdo'), scaleLabelMax: authored('Muy de acuerdo'),
       commentPrompt: blank, options: null },
   ]

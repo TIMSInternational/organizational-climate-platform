@@ -287,3 +287,62 @@ describe('respondDimensions', () => {
     expect(rows.map((q) => q.id)).toEqual(['a1', 'b1', 'a2'])
   })
 })
+
+/**
+ * «Mantener al final» on a survey that is NOT randomised and does print headings. The grouping
+ * pulls an interleaved question up under the first heading of its category -- exactly what
+ * must not happen to a question the author asked to keep last.
+ */
+describe('respondDimensions — «Mantener al final»', () => {
+  const asked = (model: ReturnType<typeof dims>) => model.sections.flatMap((section) => section.questions.map((q) => q.id))
+
+  it('leaves a marked question last instead of gathering it under its category’s first heading', () => {
+    // `orderQuestions` has already put the marked one last; the grouping must not undo it.
+    const model = dims(
+      [
+        question({ id: 'a1', category: 'Trust' }),
+        question({ id: 'b1', category: 'Workload' }),
+        question({ id: 'trust-last', category: 'Trust', keepAtEnd: true }),
+      ],
+      false,
+    )
+    expect(asked(model)).toEqual(['a1', 'b1', 'trust-last'])
+    expect(model.sections.map((section) => [section.key, section.firstIndex, section.lastIndex])).toEqual([
+      ['Trust', 1, 1],
+      ['Workload', 2, 2],
+      ['Trust', 3, 3],
+    ])
+  })
+
+  it('joins the last section when it shares its category, rather than repeating the heading', () => {
+    const model = dims(
+      [
+        question({ id: 'a1', category: 'Trust' }),
+        question({ id: 'b1', category: 'Workload' }),
+        question({ id: 'b-last', category: 'Workload', keepAtEnd: true }),
+        question({ id: 'enps', category: 'enps', keepAtEnd: true }),
+      ],
+      false,
+    )
+    expect(asked(model)).toEqual(['a1', 'b1', 'b-last', 'enps'])
+    expect(model.sections.map((section) => [section.key, section.firstIndex, section.lastIndex])).toEqual([
+      ['Trust', 1, 1],
+      ['Workload', 2, 3],
+      ['enps', 4, 4],
+    ])
+  })
+
+  it('keeps a marked question last on a form with one category, printing no heading', () => {
+    const model = dims(
+      [question({ id: 'x', category: 'Trust' }), question({ id: 'y', category: 'Trust', keepAtEnd: true }), question({ id: 'z', category: 'Trust' })],
+      false,
+    )
+    expect(model.sectioned).toBe(false)
+    expect(asked(model)).toEqual(['x', 'z', 'y'])
+  })
+
+  it('asks a randomised form exactly as handed over, marked questions included', () => {
+    const rows = [question({ id: 'b', category: 'Workload' }), question({ id: 'a', category: 'Trust' }), question({ id: 'm', category: 'Trust', keepAtEnd: true })]
+    expect(asked(dims(rows, true))).toEqual(['b', 'a', 'm'])
+  })
+})

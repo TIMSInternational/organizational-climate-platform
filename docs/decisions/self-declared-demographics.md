@@ -129,3 +129,26 @@ holds: `DashboardEndpoints.EmployeeLastOutcomeAsync` passes it into `SurveyAggre
 (department segment floor + complement rule), and `SurveyResultsEndpoints.GetRealTimeStatsAsync`
 counts it under `SurveyResultsPrivacy.MeetsSegmentFloor`. See
 `participation-is-not-linked-to-answers.md`.
+
+## Addendum 2026-11-18: one sentence removed from the anonymity notice
+
+Removed 2026-11-18, ruled by Federico at PROCOMER's request; the preceding sentence still
+discloses that a department or single demographic value can show with one respondent.
+
+The sentence removed from `surveyRespond.anonymousBody` (the copy `AnonymityNotice` prints, which
+§2 above changed once before), in both catalogues and for every client:
+
+> En un grupo pequeño, quien sepa quién participó podría deducir sus respuestas.
+>
+> In a small group, someone who knows who took part may infer their answers.
+
+The two sentences before it are unchanged, character for character. The second of them is the
+respondent's side of the 2026-10-15 ruling (`privacy-floor-is-three.md`,
+`SurveyResultsPrivacy.MinimumSingleSegmentRespondents`): a single department or demographic value
+can be reported to administrators from one response, and the respondent reads that before the
+first answer. Every web test that checks the notice reads the key from the catalogue
+(`copy.es('surveyRespond.anonymousBody')` in `SurveyRespondForm.test.tsx`,
+`EmployeeHomeView.test.tsx`, `RespondentTextsDialog.test.tsx`), so none asserted the removed
+words. Nothing else in `src/`, `tests/`, `web/src/`, the PDF/report writers or the email
+composers carried the removed sentence: `git grep` for it in both languages on 2026-11-18 found
+it only in `web/src/i18n/es.json` and `en.json`.

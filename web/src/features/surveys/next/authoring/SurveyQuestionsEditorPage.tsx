@@ -355,6 +355,7 @@ export default function SurveyQuestionsEditorPage() {
                         <Chip tone="neutral" label={scaleChip(t, question, locales)} />
                         {hasAnswerLabels(question) && <Chip tone="neutral" label={copy('answerLabelsChip')} />}
                         {locked && question.commentRequired && <Chip tone="neutral" label={copy('withComment')} />}
+                        {question.keepAtEnd && <Chip tone="neutral" label={copy('keepAtEndChip')} />}
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-fg-secondary">
                           {written.length === locales.length && <Check aria-hidden="true" className="size-3" />}
                           {locales.map((l) => l.toUpperCase()).join(' · ')}
@@ -600,6 +601,17 @@ export default function SurveyQuestionsEditorPage() {
                             {copy('commentRequired')}
                           </label>
                         )}
+                        {/* «Mantener al final» (ruled 2026-11-18): asked after every other question, in
+                            this list's order, randomised or not — `orderQuestions`. The hint says so,
+                            because "al final" alone does not say it survives the shuffle. */}
+                        <label className="mb-0 inline-flex items-center gap-2 text-sm text-fg-secondary">
+                          <Switch
+                            checked={question.keepAtEnd}
+                            aria-describedby={`keep-at-end-hint-${question.id}`}
+                            onCheckedChange={(value) => update(index, { keepAtEnd: value === true })}
+                          />
+                          {copy('keepAtEnd')}
+                        </label>
                         <span className="ml-auto flex gap-2">
                           {index > 0 && (
                             <Button type="button" variant="outline" onClick={() => { setQuestions((c) => moveQuestion(c, index, index - 1)); setOpenIndex(index - 1) }}>
@@ -616,6 +628,9 @@ export default function SurveyQuestionsEditorPage() {
                           </Button>
                         </span>
                       </div>
+                      <p id={`keep-at-end-hint-${question.id}`} className="m-0 -mt-1.5 text-sm leading-[1.45] text-fg-secondary">
+                        {copy('keepAtEndHint')}
+                      </p>
                     </div>
                   )}
                 </li>

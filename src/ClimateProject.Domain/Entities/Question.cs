@@ -28,6 +28,18 @@ public class Question
     public string? Category { get; set; }
 
     /// <summary>
+    /// Asked after every other question, in its own <see cref="Order"/>, whether or not the
+    /// survey is randomised (ruled 2026-11-18 at PROCOMER's request: a confidentiality item and
+    /// the 0-10 eNPS close the instrument while the other questions stay shuffled).
+    ///
+    /// <para>It moves only the order a respondent is ASKED in, which the respond form computes
+    /// client-side (<c>orderQuestions</c>, <c>web/src/features/surveys/respondAnswers.ts</c>).
+    /// Results, exports and reports order by <see cref="Order"/> and never read it. False on
+    /// every question that existed before the column, which is the order they were asked in.</para>
+    /// </summary>
+    public bool KeepAtEnd { get; set; }
+
+    /// <summary>
     /// The library item this question was copied from, or null if it was authored directly (#58).
     ///
     /// <para>Provenance only. Instantiation is a COPY, never a reference: an answer is stored

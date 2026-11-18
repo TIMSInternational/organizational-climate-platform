@@ -130,6 +130,8 @@ public static class SurveyDuplication
                 Required = question.Required,
                 Order = question.Order,
                 Category = question.Category,
+                // A copy is asked in the same order as its original, so the flag travels too.
+                KeepAtEnd = question.KeepAtEnd,
                 // Provenance travels with the copy. A duplicated survey really is another
                 // use of the source question, so dropping these here would make the bank
                 // under-report exactly the questions that are reused most (#110).

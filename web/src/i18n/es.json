@@ -4504,7 +4504,10 @@
             "p4": "Muy probable",
             "p5": "Totalmente probable"
           }
-        }
+        },
+        "keepAtEnd": "Mantener al final",
+        "keepAtEndHint": "Se pregunta después de todas las demás, en este orden, aunque la encuesta se presente en orden aleatorio.",
+        "keepAtEndChip": "Al final"
       },
       "template": {
         "eyebrow": "Plantilla de encuesta · {category}",
@@ -5464,7 +5467,8 @@
           "commentRequired": "Pregunta {number} · comentario obligatorio",
           "commentPrompt": "Pregunta {number} · indicación del comentario",
           "category": "Pregunta {number} · dimensión",
-          "options": "Pregunta {number} · opciones"
+          "options": "Pregunta {number} · opciones",
+          "keepAtEnd": "Pregunta {number} · mantener al final"
         },
         "value": {
           "yes": "Sí",
@@ -6530,7 +6534,7 @@
     "receiptSub": "de {total} preguntas",
     "protectedChip": "Protegido",
     "anonymousTitle": "Esta encuesta es anónima",
-    "anonymousBody": "Sus respuestas se guardan sin su nombre, cuenta, dirección IP ni navegador. Los resultados de un departamento, o de un solo dato demográfico, pueden mostrarse aunque haya respondido una sola persona. En un grupo pequeño, quien sepa quién participó podría deducir sus respuestas.",
+    "anonymousBody": "Sus respuestas se guardan sin su nombre, cuenta, dirección IP ni navegador. Los resultados de un departamento, o de un solo dato demográfico, pueden mostrarse aunque haya respondido una sola persona.",
     "identifiedTitle": "Esta encuesta es anónima",
     "identifiedBody": "Su empresa nunca verá su nombre junto a sus respuestas. Los datos los recibe y analiza un equipo externo e independiente, TIMS International, que entrega a su empresa únicamente resultados agrupados.",
     "contentLanguageTitle": "No todo está disponible en su idioma",

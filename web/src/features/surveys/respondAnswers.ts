@@ -358,9 +358,22 @@ function randomFrom(seed: number): () => number {
  * "After it" means all of them, not the last one: a survey with two open questions asks
  * both at the end, keeping their authored order relative to each other.
  *
+ * ## «Mantener al final» comes after everything, randomised or not
+ *
+ * A question the author marked `keepAtEnd` is asked after every other question — after the
+ * shuffled ones and after the held-back free text — in its own authored `order`, whether or
+ * not the survey is randomised. Ruled 2026-11-18 at PROCOMER's request: a confidentiality
+ * item and the 0–10 eNPS close the instrument while the other 55 stay shuffled.
+ *
+ * The rest are ordered exactly as before. The marked questions are taken out BEFORE the
+ * shuffle, so a survey that marks none hands the shuffle the very same list and gets the very
+ * same order from the same seed; a survey that marks some shuffles the others among
+ * themselves. Only the order a respondent is ASKED in moves: results, exports and reports
+ * order by `order` and never read the flag.
+ *
  * This function itself is seed-agnostic and makes no claim about respondents. It sorts
- * by `order`, holds the free-text questions back, and, when asked, shuffles the rest
- * with a seeded Fisher-Yates.
+ * by `order`, sets the marked questions aside for the end, holds the free-text questions
+ * back, and, when asked, shuffles the rest with a seeded Fisher-Yates.
  */
 export function orderQuestions(
   questions: readonly SurveyRespondQuestion[],
@@ -368,16 +381,19 @@ export function orderQuestions(
   seed: string,
 ): SurveyRespondQuestion[] {
   const ordered = [...questions].sort((left, right) => left.order - right.order)
-  if (!randomize || ordered.length < 2) return ordered
+  // `=== true`: a payload from an API older than the flag carries no member, which is false.
+  const atEnd = ordered.filter((question) => question.keepAtEnd === true)
+  const rest = atEnd.length === 0 ? ordered : ordered.filter((question) => question.keepAtEnd !== true)
+  if (!randomize || rest.length < 2) return [...rest, ...atEnd]
 
   // `answerShapeOf` already names the free-text questions -- `open_ended -> 'text'` is
   // the only text shape there is -- so this needs no question-type list of its own to
   // keep in step with the vocabulary.
-  const closed = ordered.filter((question) => answerShapeOf(question) !== 'text')
-  const open = ordered.filter((question) => answerShapeOf(question) === 'text')
+  const closed = rest.filter((question) => answerShapeOf(question) !== 'text')
+  const open = rest.filter((question) => answerShapeOf(question) === 'text')
 
   seededShuffle(closed, seed)
-  return [...closed, ...open]
+  return [...closed, ...open, ...atEnd]
 }
 
 /**
