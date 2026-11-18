@@ -665,12 +665,20 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
         // answer stopped counting, and it is TRUE for super admins only: a client administrator
         // who knew whose response left could subtract results to recover it, so for every other
         // caller -- including the one here -- it is always false (ResponseExclusionTests pins that).
+        //
+        // Extended 2026-11-18: `invitationId`, `linkSentOn` and `linkStatus` -- the personal_link
+        // counterpart of the key fields (SurveyParticipationDtos.SurveyRosterRow). Safe for the same
+        // reasons: `linkSentOn` is the DAY we mailed the link (our history, like lastRemindedOn);
+        // `linkStatus` is the invitation status the invitation list already shows an administrator,
+        // capped at `opened` on an anonymous survey by SurveyInvitationStatuses.AnonymityCeiling, so
+        // it never says who finished; `invitationId` only lets the row call the invitation's own
+        // resend/revoke routes. On this shared QR survey all three are null.
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
             ["answered", "answeredCount", "collectsParticipantIdentity", "credentialMode", "notStartedCount", "pending", "pendingCount", "roster", "startedCount", "surveyId", "surveyTitleEn", "surveyTitleEs", "tracksCompletionOnly", "tracksIndividuals"],
             document.RootElement.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(
-            ["credentialIssuedOn", "deliveryProblem", "deliveryProblemOn", "demographics", "email", "excludedFromResults", "lastActivityOn", "lastRemindedOn", "lastSignInOn", "name", "reminderCount", "role", "status", "surveyUsername", "userId", "username"],
+            ["credentialIssuedOn", "deliveryProblem", "deliveryProblemOn", "demographics", "email", "excludedFromResults", "invitationId", "lastActivityOn", "lastRemindedOn", "lastSignInOn", "linkSentOn", "linkStatus", "name", "reminderCount", "role", "status", "surveyUsername", "userId", "username"],
             document.RootElement.GetProperty("roster").EnumerateArray().First().EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(_operaciones.ToString(), json, StringComparison.OrdinalIgnoreCase);
     }
