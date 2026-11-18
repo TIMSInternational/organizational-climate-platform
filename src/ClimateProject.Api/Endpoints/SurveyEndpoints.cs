@@ -902,27 +902,10 @@ public static class SurveyEndpoints
 
         var updatedAt = DateTimeOffset.UtcNow;
 
-        // A `personal_link` survey's links were MAILED, each with the close the survey had then.
-        // Moving the close afterwards -- PROCOMER's and ESPH's windows have both been moved after
-        // launch -- would otherwise leave every link dying at the old one (or outliving a close
-        // brought forward), with no way to reach those people again short of a resend each.
-        // Only the invitations that followed the close move; one shortened on purpose by
-        // `ExpiresInDays` keeps its own date. Same save as the survey, so the two cannot disagree.
-        // The other two modes mail no link, and are left exactly as they were.
-        if (endDate != previousEndDate
-            && (survey.Settings.CredentialMode ?? CredentialModes.Shared) == CredentialModes.PersonalLink)
-        {
-            var following = await db.SurveyInvitations
-                .Where(i => i.SurveyId == survey.Id
-                            && i.Status != SurveyInvitationStatuses.Revoked
-                            && i.ExpiresAt == previousEndDate)
-                .ToListAsync(cancellationToken);
-            foreach (var invitation in following)
-            {
-                invitation.ExpiresAt = endDate;
-                invitation.UpdatedAt = updatedAt;
-            }
-        }
+        // A live survey's close moved: the mailed links that followed it move with it, in the same
+        // save. Exact match here -- on a survey that has not closed, a link that followed the close
+        // still carries it to the tick.
+        await MoveLinksWithTheCloseAsync(db, survey, previousEndDate, endDate, includeLaterExpiries: false, updatedAt, cancellationToken);
 
         survey.UpdatedAt = updatedAt;
         await db.SaveChangesAsync(cancellationToken);
@@ -1097,7 +1080,9 @@ public static class SurveyEndpoints
     /// close already past, the lifecycle sweep would close it again within five minutes. That is
     /// all a close ever wrote (status, updated_at, and an early close's end date), so nothing else
     /// needs undoing: the link, the QR and every per-survey key keep working, and anybody who
-    /// already answered is still recognised as having answered.</para>
+    /// already answered is still recognised as having answered. One thing does need MOVING, in the
+    /// same save: on a `personal_link` survey each mailed link carries the close it was sent with,
+    /// so the links follow the new close (<see cref="MoveLinksWithTheCloseAsync"/>).</para>
     /// <para>The new status is <c>active</c> when the opening is past -- the usual case -- and
     /// <c>scheduled</c> when a survey closed before it ever opened is reopened, so it opens on its
     /// own date rather than early.</para>
@@ -1179,6 +1164,16 @@ public static class SurveyEndpoints
         survey.Status = target;
         survey.EndDate = newEnd;
         survey.UpdatedAt = now;
+
+        // The only way to extend a survey after it closed (`AllowsScheduleEdit` excludes closed, so
+        // `PUT /surveys/{id}` cannot), so the mailed links have to follow the new close HERE, in
+        // the same save -- or every one of them answers "expired" on a reopened survey, and
+        // «Enviar enlaces» cannot repair it (a link that went is never mailed twice): a resend per
+        // person. `includeLaterExpiries`, because a close does not always leave the links on
+        // `previousEnd`: the lifecycle sweep closes at EndDate and writes nothing, so they equal
+        // it; an EARLY close moved EndDate back to the moment it happened and left them on the
+        // planned close, later than `previousEnd`.
+        await MoveLinksWithTheCloseAsync(db, survey, previousEnd, newEnd, includeLaterExpiries: true, now, cancellationToken);
 
         SurveyAuditTrail.Record(
             db, survey.Id, SurveyAuditActions.StatusChanged, SurveyAuditEntityTypes.Status, actor, now,
@@ -1878,6 +1873,54 @@ public static class SurveyEndpoints
                 option.QuestionId = questionId;
                 db.QuestionOptions.Add(option);
             }
+        }
+    }
+
+    /// <summary>
+    /// A `personal_link` survey's links were MAILED, each with the close the survey had then. When
+    /// the close moves -- <c>PUT /surveys/{id}</c> on a live survey, or <c>POST /surveys/{id}/reopen</c>
+    /// on a closed one; PROCOMER's and ESPH's windows have both been moved after launch, and ESPH's
+    /// surveys were reopened after closing -- every invitation that followed the old close moves to
+    /// the new one. Without it every link dies at the old close (or outlives a close brought
+    /// forward), and the only way to reach those people again is a resend each. Tracked entities,
+    /// mutated but not saved: the caller saves them with the survey, so the two cannot disagree.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Which invitations "followed the close".</b> Unrevoked ones whose expiry equals
+    /// <paramref name="previousEnd"/> -- and, with <paramref name="includeLaterExpiries"/>, any
+    /// later than it. One shortened on purpose by <c>ExpiresInDays</c> is earlier, and keeps its
+    /// own date. A revoked one stays dead.</para>
+    /// <para><b>Why reopen needs the later ones.</b> An early close sets EndDate to the moment it
+    /// happened (<see cref="ApplyStatusAsync"/>), so on reopen the links still carry the PLANNED
+    /// close, after <paramref name="previousEnd"/>. The cost, stated: a link shortened by
+    /// <c>ExpiresInDays</c> to a day after an early close is lengthened to the new close too.</para>
+    /// <para>The other two modes mail no link, and are left exactly as they were.</para>
+    /// </remarks>
+    private static async Task MoveLinksWithTheCloseAsync(
+        ClimateProjectDbContext db,
+        Survey survey,
+        DateTimeOffset previousEnd,
+        DateTimeOffset newEnd,
+        bool includeLaterExpiries,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken)
+    {
+        if (newEnd == previousEnd
+            || (survey.Settings.CredentialMode ?? CredentialModes.Shared) != CredentialModes.PersonalLink)
+        {
+            return;
+        }
+
+        var unrevoked = db.SurveyInvitations
+            .Where(i => i.SurveyId == survey.Id && i.Status != SurveyInvitationStatuses.Revoked);
+        var following = await (includeLaterExpiries
+                ? unrevoked.Where(i => i.ExpiresAt >= previousEnd)
+                : unrevoked.Where(i => i.ExpiresAt == previousEnd))
+            .ToListAsync(cancellationToken);
+        foreach (var invitation in following)
+        {
+            invitation.ExpiresAt = newEnd;
+            invitation.UpdatedAt = updatedAt;
         }
     }
 

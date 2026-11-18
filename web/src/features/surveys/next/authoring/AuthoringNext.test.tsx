@@ -1508,4 +1508,11 @@ describe('Distribución, personal_link', () => {
     await userEvent.click(toggle)
     expect(setCredentialMode).toHaveBeenCalledWith('personal_link')
   })
+
+  it('turns personal_link off to the mode the model names, never a hard-coded shared', async () => {
+    const setCredentialMode = vi.fn()
+    distribution(personal(2), 'company_admin', true, { linkOffMode: 'per_survey' }, { ...noop, setCredentialMode })
+    await userEvent.click(within(screen.getByTestId('access-mode')).getByRole('switch', { name: es.surveys.next.distribution.link.modeLabel }))
+    expect(setCredentialMode).toHaveBeenCalledExactlyOnceWith('per_survey')
+  })
 })

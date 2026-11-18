@@ -75,7 +75,11 @@ public class PersonalLinkInvitationTests(PostgresContainerFixture postgres, Capt
 
     // ------------------------------------------------------------------ helpers
 
-    private async Task<HttpClient> AdminClientAsync()
+    /// <summary>
+    /// A company admin of the test company by default; with <see cref="Roles.SuperAdmin"/>, a TIMS
+    /// operator with no company of their own -- the only role <c>POST /surveys/{id}/reopen</c> serves.
+    /// </summary>
+    private async Task<HttpClient> AdminClientAsync(string role = Roles.CompanyAdmin)
     {
         var client = _factory.CreateClient();
         var email = $"admin-{Guid.NewGuid():N}@{_domain}";
@@ -85,8 +89,8 @@ public class PersonalLinkInvitationTests(PostgresContainerFixture postgres, Capt
         {
             var db = scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>();
             var user = await db.Users.FirstAsync(u => u.Email == email);
-            user.Role = Roles.CompanyAdmin;
-            user.CompanyId = _companyId;
+            user.Role = role;
+            user.CompanyId = role == Roles.SuperAdmin ? null : _companyId;
             await db.SaveChangesAsync();
         }
 
@@ -148,6 +152,13 @@ public class PersonalLinkInvitationTests(PostgresContainerFixture postgres, Capt
         using var scope = _factory.Services.CreateScope();
         return await action(scope.ServiceProvider.GetRequiredService<ClimateProjectDbContext>());
     }
+
+    /// <summary>«Editar audiencia» on a live survey: the named people, replacing whoever was named before.</summary>
+    private static async Task TargetPeopleAsync(HttpClient admin, Guid surveyId, params Guid[] people)
+        => (await admin.PutAsJsonAsync($"/surveys/{surveyId}", new UpdateSurveyRequest(UserIds: [.. people]))).EnsureSuccessStatusCode();
+
+    private Task<DateTimeOffset> StoredEndDateAsync(Guid surveyId) => WithDbAsync(db =>
+        db.Surveys.AsNoTracking().Where(s => s.Id == surveyId).Select(s => s.EndDate).FirstAsync());
 
     /// <summary>A browser that followed the link out of the mail: no session, the token in the header.</summary>
     private HttpClient LinkHolder(string token)
@@ -545,6 +556,183 @@ public class PersonalLinkInvitationTests(PostgresContainerFixture postgres, Capt
         // And the link still opens after the old close would have passed.
         var token = Assert.Single(LinksTo(ana.Email)).Token;
         Assert.Equal(HttpStatusCode.OK, (await _factory.CreateClient().GetAsync($"/survey-invitations/{token}")).StatusCode);
+    }
+
+    // ------------------------------------------------------------------ the audience decides
+
+    /// <summary>
+    /// «Editar audiencia» on a live personal-link survey means what it says: a person taken out of
+    /// the audience after their link was mailed can no longer answer -- not open the questions, not
+    /// finish the answer they started, not get a fresh link -- and putting them back opens the SAME
+    /// link again. The respond path re-checks the audience exactly as the signed-in path does.
+    /// </summary>
+    [Fact]
+    public async Task Taking_a_person_out_of_the_audience_stops_their_mailed_link_until_they_are_put_back()
+    {
+        var admin = await AdminClientAsync();
+        var survey = await ActiveSurveyAsync(admin, CredentialModes.PersonalLink, anonymous: true);
+        var ana = await SeedPersonAsync(_comercio);
+        var bea = await SeedPersonAsync(_comercio);
+        await TargetPeopleAsync(admin, survey.Id, ana.Id, bea.Id);
+        await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(AllTargeted: true));
+        var token = Assert.Single(LinksTo(ana.Email)).Token;
+        var holder = LinkHolder(token);
+
+        // In the audience: Ana opens the survey and leaves an answer half done.
+        var view = (await holder.GetFromJsonAsync<SurveyRespondView>($"/surveys/{survey.Id}/respond?sessionId=ana"))!;
+        (await holder.PostAsJsonAsync($"/surveys/{survey.Id}/responses", new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(view.Questions[0].Id, Value: "A medias")], SessionId: "ana", IsComplete: false)))
+            .EnsureSuccessStatusCode();
+
+        // Out of it.
+        await TargetPeopleAsync(admin, survey.Id, bea.Id);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await holder.GetAsync($"/surveys/{survey.Id}/respond?sessionId=ana")).StatusCode);
+        var finished = await holder.PostAsJsonAsync($"/surveys/{survey.Id}/responses", new SubmitSurveyResponseRequest(
+            Answers: [new SurveyAnswerInput(view.Questions[0].Id, Value: "Terminada")], SessionId: "ana", IsComplete: true));
+        Assert.Equal(HttpStatusCode.Forbidden, finished.StatusCode);
+        Assert.False(await WithDbAsync(db => db.Responses.AnyAsync(r => r.SurveyId == survey.Id && r.IsComplete)));
+
+        // Nor is a fresh link mailed to her -- and the one she holds is kept, not rotated away.
+        var invitation = await InvitationAsync(survey.Id, ana.Id);
+        var resent = await admin.PostAsync($"/surveys/{survey.Id}/invitations/{invitation.Id}/resend", null);
+        Assert.Equal(HttpStatusCode.Conflict, resent.StatusCode);
+        Assert.Contains(SurveyDistributionEndpoints.PersonalLinkNotInAudience, await resent.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Single(LinksTo(ana.Email));
+        Assert.Equal(token, (await InvitationAsync(survey.Id, ana.Id)).InvitationToken);
+
+        // Bea, still in the audience, is untouched.
+        var beaHolder = LinkHolder(Assert.Single(LinksTo(bea.Email)).Token);
+        Assert.Equal(HttpStatusCode.OK, (await beaHolder.GetAsync($"/surveys/{survey.Id}/respond")).StatusCode);
+
+        // Back in: the same link opens again, and her half-done answer is still hers to finish.
+        await TargetPeopleAsync(admin, survey.Id, ana.Id, bea.Id);
+        var resumed = (await holder.GetFromJsonAsync<SurveyRespondView>($"/surveys/{survey.Id}/respond?sessionId=ana"))!;
+        Assert.Equal("A medias", Assert.Single(resumed.InProgress!.Answers).Value);
+    }
+
+    /// <summary>
+    /// A personal link is never mailed to somebody outside the survey's audience, whichever
+    /// selector names them: the link would open nothing, and widening who may answer is «Editar
+    /// audiencia»'s decision, not a send's. The whole request is refused before anything is minted
+    /// or mailed, and says why.
+    /// </summary>
+    [Fact]
+    public async Task A_personal_link_is_never_mailed_to_anyone_outside_the_audience()
+    {
+        var admin = await AdminClientAsync();
+        var survey = await ActiveSurveyAsync(admin, CredentialModes.PersonalLink);
+        var ana = await SeedPersonAsync(_comercio);
+        var dani = await SeedPersonAsync(_finanzas);
+        await TargetPeopleAsync(admin, survey.Id, ana.Id);
+
+        foreach (var request in new[]
+                 {
+                     new CreateSurveyInvitationsRequest(UserIds: [ana.Id, dani.Id]),
+                     new CreateSurveyInvitationsRequest(DepartmentIds: [_finanzas]),
+                 })
+        {
+            var refused = await admin.PostAsJsonAsync($"/surveys/{survey.Id}/invitations", request);
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            var body = await refused.Content.ReadAsStringAsync();
+            Assert.Contains(SurveyDistributionEndpoints.PersonalLinkNotInAudience, body, StringComparison.Ordinal);
+            Assert.Contains(dani.Id.ToString(), body, StringComparison.Ordinal);
+        }
+
+        Assert.Empty(LinksTo(ana.Email, dani.Email));
+        Assert.False(await WithDbAsync(db => db.SurveyInvitations.AnyAsync(i => i.SurveyId == survey.Id)));
+
+        // The audience itself goes, and only it.
+        var sent = await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(AllTargeted: true));
+        Assert.Equal(1, sent.LinksSent);
+        Assert.Equal([ana.Email], LinksTo(ana.Email, dani.Email).Select(l => l.ToEmail));
+    }
+
+    // ------------------------------------------------------------------ reopening
+
+    /// <summary>
+    /// A survey closed by its own date and then reopened (ESPH's were, on 11 Nov) takes its mailed
+    /// links with it to the new close: the reopen is the only way to extend a closed survey, and
+    /// without this every link answered "expired" with a resend per person as the only repair. A
+    /// link shortened on purpose keeps its own date; a revoked one stays dead.
+    /// </summary>
+    [Fact]
+    public async Task Reopening_a_survey_whose_close_passed_takes_the_mailed_links_to_the_new_close()
+    {
+        var admin = await AdminClientAsync();
+        var survey = await ActiveSurveyAsync(admin, CredentialModes.PersonalLink);
+        var ana = await SeedPersonAsync(_comercio);
+        var bea = await SeedPersonAsync(_comercio);
+        var caro = await SeedPersonAsync(_comercio);
+        await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [ana.Id, caro.Id]));
+        await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [bea.Id], ExpiresInDays: 1));
+        (await admin.PostAsync($"/surveys/{survey.Id}/invitations/{(await InvitationAsync(survey.Id, caro.Id)).Id}/revoke", null))
+            .EnsureSuccessStatusCode();
+
+        // The close passes: the survey's window and every link that followed it end an hour ago,
+        // Bea's shortened one a day before that.
+        var pastClose = DateTimeOffset.UtcNow.AddHours(-1);
+        var beaShortened = pastClose.AddDays(-1);
+        await WithDbAsync(async db =>
+        {
+            var stored = await db.Surveys.SingleAsync(s => s.Id == survey.Id);
+            stored.StartDate = pastClose.AddDays(-7);
+            stored.EndDate = pastClose;
+            foreach (var invitation in await db.SurveyInvitations.Where(i => i.SurveyId == survey.Id).ToListAsync())
+            {
+                invitation.ExpiresAt = invitation.UserId == bea.Id ? beaShortened : pastClose;
+            }
+
+            return await db.SaveChangesAsync();
+        });
+
+        // Closed after its date, as the lifecycle sweep closes it: status only, EndDate kept.
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Closed)).EnsureSuccessStatusCode();
+        pastClose = await StoredEndDateAsync(survey.Id);
+        var token = Assert.Single(LinksTo(ana.Email)).Token;
+        var landing = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Gone, (await landing.GetAsync($"/survey-invitations/{token}")).StatusCode);
+
+        var operatorClient = await AdminClientAsync(Roles.SuperAdmin);
+        var reopened = await operatorClient.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/reopen", new ReopenSurveyRequest(DateTimeOffset.UtcNow.AddDays(3), "PROCOMER pidió tres días más"));
+        Assert.Equal(HttpStatusCode.OK, reopened.StatusCode);
+
+        var newClose = await StoredEndDateAsync(survey.Id);
+        Assert.Equal(newClose, (await InvitationAsync(survey.Id, ana.Id)).ExpiresAt);
+        Assert.Equal(HttpStatusCode.OK, (await landing.GetAsync($"/survey-invitations/{token}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await LinkHolder(token).GetAsync($"/surveys/{survey.Id}/respond")).StatusCode);
+
+        Assert.Equal(beaShortened.ToUnixTimeMilliseconds(), (await InvitationAsync(survey.Id, bea.Id)).ExpiresAt.ToUnixTimeMilliseconds());
+        Assert.True((await InvitationAsync(survey.Id, caro.Id)).ExpiresAt <= pastClose);
+    }
+
+    /// <summary>
+    /// An EARLY close moves the survey's EndDate back to the moment it happened and leaves the
+    /// links on the planned close. Reopening it to a close later than the planned one takes them
+    /// there too, instead of letting them die at the old plan.
+    /// </summary>
+    [Fact]
+    public async Task Reopening_a_survey_closed_early_takes_the_mailed_links_to_the_new_close()
+    {
+        var admin = await AdminClientAsync();
+        var survey = await ActiveSurveyAsync(admin, CredentialModes.PersonalLink);
+        var ana = await SeedPersonAsync(_comercio);
+        await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [ana.Id]));
+        var plannedClose = await StoredEndDateAsync(survey.Id);
+
+        (await SurveyTestHarness.SetStatusAsync(admin, survey.Id, SurveyStatuses.Closed)).EnsureSuccessStatusCode();
+        Assert.True(await StoredEndDateAsync(survey.Id) < plannedClose);
+        Assert.Equal(plannedClose, (await InvitationAsync(survey.Id, ana.Id)).ExpiresAt);
+
+        var operatorClient = await AdminClientAsync(Roles.SuperAdmin);
+        (await operatorClient.PostAsJsonAsync(
+            $"/surveys/{survey.Id}/reopen", new ReopenSurveyRequest(plannedClose.AddDays(10), "Se cerró antes de tiempo por error")))
+            .EnsureSuccessStatusCode();
+
+        var newClose = await StoredEndDateAsync(survey.Id);
+        Assert.True(newClose > plannedClose);
+        Assert.Equal(newClose, (await InvitationAsync(survey.Id, ana.Id)).ExpiresAt);
     }
 
     [Fact]

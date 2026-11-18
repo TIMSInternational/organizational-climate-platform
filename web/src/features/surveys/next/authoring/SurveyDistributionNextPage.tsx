@@ -144,6 +144,9 @@ export function DistributionView({
   const { t, locale } = useTranslation()
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.distribution.${key}`, vars)
   const { survey, distribution, invitations, departments, users, scoped } = model
+  // Where the access switch takes the survey when it is turned off: its mode before
+  // `personal_link`, or the company's -- never a hard-coded `shared` (`linkOffModeFor`).
+  const linkOffMode = model.linkOffMode ?? null
   const title = survey.title ?? t('surveys.untitled')
   const [mode, setMode] = useState<AudienceMode>('allTargeted')
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([])
@@ -454,8 +457,13 @@ export function DistributionView({
             label={copy('link.modeLabel')}
             description={copy('link.modeHelp')}
             checked={personalLink}
-            disabled={!actionable || busy}
-            onChange={(next) => actions.setCredentialMode(next ? 'personal_link' : 'shared')}
+            // Off is offered only when there is a known mode to return to: guessing `shared` put a
+            // `per_survey` survey in a mode the API then freezes it in, and nobody could sign in.
+            disabled={!actionable || busy || (personalLink && linkOffMode === null)}
+            onChange={(next) => {
+              if (next) actions.setCredentialMode('personal_link')
+              else if (linkOffMode !== null) actions.setCredentialMode(linkOffMode)
+            }}
           />
           {personalLink ? (
             <div className="flex flex-col gap-2 border-t border-line-default pt-4" data-testid="invitation-email">

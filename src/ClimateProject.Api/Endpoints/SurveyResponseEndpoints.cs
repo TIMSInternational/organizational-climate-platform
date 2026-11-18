@@ -201,11 +201,18 @@ public static class SurveyResponseEndpoints
     /// the request is resolved exactly as it was before the header existed: nobody holds a
     /// shared- or per-survey invitation's token, and if somebody did it must not become a third
     /// way in.</para>
-    /// <para><b>The invitation is the authorization.</b> Targets are not re-checked: the operator
-    /// may invite a named person the survey's department targets do not cover (the invite
-    /// route's <c>userIds</c> selector), and the link they were mailed must open. What IS checked
-    /// is everything that makes the link dead -- revoked, expired, another survey's token -- and
-    /// that its person is still an active member of the survey's company.</para>
+    /// <para><b>The invitation names the person; the audience decides whether they may answer</b>
+    /// -- the same rule the signed-in path applies below, through the same
+    /// <c>SurveyQueries.Audience</c>. Checked is everything that makes the link dead -- revoked,
+    /// expired, another survey's token -- and that its person is an active member of the survey's
+    /// company who is still in its audience. The last is what makes «Editar audiencia» mean what
+    /// it says on this mode too: a person taken out of the audience after their link was mailed
+    /// can no longer answer, nor finish an answer they started, and putting them back opens the
+    /// same link again. Before 2026-11-18's review the targets were not re-checked here, and a
+    /// person removed from the audience went on answering as themselves, counted in results and
+    /// in participation. The invite and resend routes refuse a person outside the audience
+    /// (<c>personal_link_not_in_audience</c>), so no link is ever mailed that this would refuse
+    /// on arrival.</para>
     /// <para><b>Every refusal is the same 403</b>, whichever of those it was: the token is a
     /// credential, and telling its holder which check failed is the landing card's job
     /// (<c>GET /survey-invitations/{token}</c>), not this route's.</para>
@@ -249,8 +256,11 @@ public static class SurveyResponseEndpoints
             return refused;
         }
 
-        var person = await db.Users.AsNoTracking()
-            .Where(u => u.Id == invitation.UserId && u.CompanyId == survey.CompanyId && u.IsActive)
+        // `Audience` is active members of the survey's company, targeted by department or by
+        // name (or everyone, when it targets neither): one query answers "still theirs to answer".
+        var person = await SurveyQueries
+            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+            .Where(u => u.Id == invitation.UserId)
             .Select(u => new { u.Id, u.DepartmentId })
             .FirstOrDefaultAsync(cancellationToken);
         if (person is null)

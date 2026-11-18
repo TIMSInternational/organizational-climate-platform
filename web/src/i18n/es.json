@@ -1815,7 +1815,8 @@
         "company_people_referenced": "Algo fuera de esta empresa todavía depende de ella o de su gente. No se eliminó nada; avise al equipo de desarrollo.",
         "credential_mode_in_use": "La forma de acceso ya no se puede cambiar: esta encuesta ya envió enlaces o códigos con la forma actual y hay personas que los tienen.",
         "personal_link_not_sent": "No se pudo enviar el enlace nuevo por correo. Se conservó el anterior, que sigue funcionando.",
-        "personal_link_recipient_inactive": "La cuenta de esta persona ya no está activa en la empresa, así que un enlace no le abriría la encuesta."
+        "personal_link_recipient_inactive": "La cuenta de esta persona ya no está activa en la empresa, así que un enlace no le abriría la encuesta.",
+        "personal_link_not_in_audience": "Hay personas en este envío que no están en la audiencia de la encuesta, así que su enlace no les abriría la encuesta. No se envió nada. Agréguelas primero con «Editar audiencia» o déjelas fuera del envío."
       }
     }
   },
@@ -4783,7 +4784,9 @@
           "draftNote": "Es un borrador: nadie la ve todavía. La audiencia rige cuando se active.",
           "gainedShared": "Quien gana acceso la ve en «Mis encuestas» al iniciar sesión mientras esté activa.",
           "gainedPerSurvey": "Esta encuesta usa una clave por persona: quien gana acceso todavía no tiene la suya. Emítala desde Distribución; ese envío sí manda correo.",
+          "gainedPersonalLink": "Esta encuesta entra por enlace personal: quien gana acceso solo puede responder con el suyo. Si todavía no lo recibió, envíelo desde Distribución; ese envío sí manda correo.",
           "lostNote": "Quien pierde acceso ya no puede abrirla ni enviar una respuesta empezada. Lo que ya envió se conserva.",
+          "lostPersonalLink": "Quien pierde acceso ya no puede responder con su enlace personal, ni terminar una respuesta empezada. Lo que ya envió se conserva. Si vuelve a la audiencia, el mismo enlace vuelve a servirle.",
           "liveNote": "Está activa: el cambio rige en cuanto guarda.",
           "publicLink": "El enlace y el QR no cambian: quien los abre sin iniciar sesión puede responder igual.",
           "directoryUnread": "No se pudo leer el directorio de la empresa, así que no se puede decir a quién afecta el cambio. Recargue la página.",

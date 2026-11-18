@@ -98,6 +98,16 @@ public static class SurveyDistributionEndpoints
 
     private const int NotificationTitleMaxLength = 500;
 
+    /// <summary>
+    /// The refusal of a personal link to somebody outside the survey's audience, on the invite
+    /// route and on the one-person resend. The respond path refuses such a person's link
+    /// (<c>SurveyResponseEndpoints.ResolvePersonalLinkRespondentAsync</c>, the audience rule the
+    /// signed-in path applies), so mailing it would hand them a link that opens nothing -- and
+    /// widening who may answer is «Editar audiencia»'s decision, taken there on purpose, never a
+    /// side effect of a send (CLAUDE.md, 28 Oct 2026).
+    /// </summary>
+    public const string PersonalLinkNotInAudience = "personal_link_not_in_audience";
+
     public static void MapSurveyDistributionEndpoints(this WebApplication app)
     {
         var admin = app.MapGroup("/surveys").RequireAuthorization();
@@ -457,6 +467,34 @@ public static class SurveyDistributionEndpoints
         // The same number for `personal_link`: people in the resolved audience whose own link
         // has not been mailed yet.
         var withoutLinkBefore = 0;
+
+        if (personalLink && !request.AllTargeted)
+        {
+            // A person named here, by name or through a department, who is not in the survey's
+            // audience would be mailed a link the respond path refuses on arrival. Refused whole
+            // and before anything is written or sent, naming how many: the operator either
+            // widens the audience first («Editar audiencia») or sends to fewer people. Never
+            // trimmed in silence -- a send that quietly drops people the operator named reads as
+            // done when it is not. `allTargeted` IS the audience, so it cannot meet this.
+            var inAudience = await SurveyQueries
+                .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => u.Id)
+                .ToListAsync(cancellationToken);
+            var outside = userIds.Except(inAudience).Order().ToList();
+            if (outside.Count > 0)
+            {
+                return Results.Json(
+                    new
+                    {
+                        message = $"{outside.Count} of the people this request names are not in the survey's audience, so a personal link "
+                                  + "would not open it for them. Add them to the audience first, or leave them out of the send.",
+                        code = PersonalLinkNotInAudience,
+                        outsideAudience = outside,
+                    },
+                    statusCode: 409);
+            }
+        }
 
         if (personalLink)
         {
@@ -1065,6 +1103,23 @@ public static class SurveyDistributionEndpoints
         {
             return Results.Json(
                 new { message = "The invited person's account is no longer active in this company.", code = "personal_link_recipient_inactive" },
+                statusCode: 409);
+        }
+
+        // Nor for somebody taken out of the audience after their first link went: the respond
+        // path refuses them, so a fresh link would open nothing either. Refused before the token
+        // is rotated, so the link they hold -- which opens again if they are put back -- is kept.
+        var inAudience = await SurveyQueries
+            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+            .AnyAsync(u => u.Id == recipient.Id, cancellationToken);
+        if (!inAudience)
+        {
+            return Results.Json(
+                new
+                {
+                    message = "This person is not in the survey's audience, so a personal link would not open it for them. Add them to the audience first.",
+                    code = PersonalLinkNotInAudience,
+                },
                 statusCode: 409);
         }
 

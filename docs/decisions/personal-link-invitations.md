@@ -44,7 +44,13 @@ the reminder switch on and the invitation backdated a week.
   invitation with a `SentAt`. Otherwise `400 credential_mode_in_use`. The #617 freeze is
   otherwise exactly as it was: `shared` ↔ `per_survey` is still `credential_mode_frozen`
   (`SurveyCredentialModeTests` unchanged and green).
-- **Where an operator sets it:** Distribución, «Cómo entran las personas», one switch. On
+- **Where an operator sets it:** Distribución, «Cómo entran las personas», one switch. Turning
+  it **off** returns the survey to the mode it had when the page loaded, or, if it was already
+  `personal_link`, to the company's mode — never a hard-coded `shared` (`linkOffModeFor`). A
+  `per_survey` survey switched on and off that landed on `shared` could not be put back
+  (`shared` → `per_survey` is frozen), in a company whose accounts have no password. With
+  neither mode known (the company's settings unreadable) the switch does not offer off at all.
+  On
   such a survey the launch checklist never asks for the public link (measured on the local
   stack: with three links mailed the readiness tile said «Falta el enlace público», nudging an
   operator to open exactly the door this mode exists to avoid); it asks for the links still
@@ -54,6 +60,12 @@ the reminder switch on and the invitation backdated a week.
 
 `POST /surveys/{id}/invitations` in this mode:
 
+- **Only people in the survey's audience** (`SurveyQueries.Audience`). A request whose
+  `userIds` or `departmentIds` name anybody outside it is refused whole, before anything is
+  minted or mailed: `409 personal_link_not_in_audience`, with `outsideAudience` listing who. The
+  respond path refuses such a person's link (below), so mailing it would hand them a link that
+  opens nothing — and widening who may answer is «Editar audiencia»'s decision, not a send's.
+  `A_personal_link_is_never_mailed_to_anyone_outside_the_audience`.
 - **Recipients are the audience THIS request resolves** — `userIds`, `departmentIds` or
   `allTargeted`, through the same `ResolveAudienceAsync` as every mode — **and nobody else.**
   A row minted by an earlier call for somebody else is not a request to mail them now. This is
@@ -79,6 +91,17 @@ keeps its own). Without it, extending PROCOMER's window after the send — ESPH'
 after launch — would have locked every holder out at the old close, with a resend per person as
 the only repair. The other two modes mail no link and are untouched
 (`Moving_the_close_moves_the_mailed_links_with_it_in_personal_link_mode_only`).
+
+**Reopening does the same** (`POST /surveys/{id}/reopen`, the only way to extend a survey after
+it closed — `PUT` refuses dates on a closed survey). Both go through
+`SurveyEndpoints.MoveLinksWithTheCloseAsync`. On reopen it also takes invitations whose expiry is
+LATER than the old close: the lifecycle sweep closes at EndDate and leaves the links equal to it,
+but an early close moves EndDate back to the moment it happened and leaves the links on the
+planned close. The cost, stated: a link shortened by `ExpiresInDays` to a day after an early
+close is lengthened to the new close too. Without this, every link on a reopened survey answered
+410 "expired" and «Enviar enlaces» could not repair it (a link that went is never mailed twice)
+— `Reopening_a_survey_whose_close_passed_takes_the_mailed_links_to_the_new_close`,
+`Reopening_a_survey_closed_early_takes_the_mailed_links_to_the_new_close`.
 
 ### Inline, not queued — and where the token is at rest
 
@@ -125,7 +148,9 @@ address. Both hosts refuse to start with it outside the Development environment.
   "I forwarded my link"); a part-finished response is unaffected, because resume is keyed on the
   person, never on the token;
 - a failed send **puts the previous token back** and answers `502 personal_link_not_sent`;
-- a deactivated account answers `409 personal_link_recipient_inactive`;
+- a deactivated account answers `409 personal_link_recipient_inactive`, and a person no longer
+  in the survey's audience `409 personal_link_not_in_audience` — both before the token is
+  rotated, so the link they hold is kept;
 - a revoked invitation is revived (the route's documented contract before #606), and a
   completed one is refused as before.
 
@@ -150,8 +175,19 @@ On `/survey-invitations/{token}` the web sends the token in the `X-Survey-Invita
 on `GET /surveys/{id}/respond` and `POST /surveys/{id}/responses` (a header, never the query
 string, which every access log keeps). On a `personal_link` survey the API resolves the
 invitee — token of THIS survey, not revoked, not expired, person active in the survey's
-company — and answers **exactly as for a signed-in respondent** (it takes precedence over a
+company **and still in its audience** (`SurveyQueries.Audience`, the rule the signed-in path
+applies) — and answers **exactly as for a signed-in respondent** (it takes precedence over a
 bearer the browser may also carry). On any other survey the header is ignored.
+
+**Taking someone out of the audience stops their link.** «Editar audiencia» rewrites the targets
+and touches no invitation; the audience check is what makes it mean, on this mode, what its
+dialog says: the person can no longer answer, nor finish an answer they started, and is refused
+a fresh link. Putting them back opens the same link again
+(`Taking_a_person_out_of_the_audience_stops_their_mailed_link_until_they_are_put_back`). Until
+the 2026-11-18 review the targets were NOT re-checked on this path, and a person removed from
+the audience went on answering as themselves, counted in results and participation. The landing
+card (`GET /survey-invitations/{token}`) still renders for them, as it does for a deactivated
+account; «Comenzar» is refused.
 
 | | personal link, anonymous survey | personal link, identified survey |
 |---|---|---|
