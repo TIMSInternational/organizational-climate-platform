@@ -94,10 +94,15 @@ export function invitationCoverage(input: {
   /** The audience resolved from the directory, or null when this viewer cannot read it. */
   audience: number | null
   perSurvey: boolean
+  /**
+   * `personal_link`: covered means the person's own link was MAILED -- every live invitation
+   * past `pending`. A row minted whose mail failed stays `pending` and is still owed a link.
+   */
+  personalLink?: boolean
 }): { covered: number; uncovered: number; revoked: number } {
   const { summary } = input
   const live = summary.total - summary.revoked
-  const covered = input.perSurvey ? (summary.withCode ?? 0) : live
+  const covered = input.personalLink ? Math.max(0, live - summary.pending) : input.perSurvey ? (summary.withCode ?? 0) : live
   const whole = input.audience ?? live
   return { covered, uncovered: Math.max(0, whole - covered), revoked: summary.revoked }
 }
@@ -189,9 +194,12 @@ export function launchChecklist(input: {
   publicLink: string | null
   summary: SurveyInvitationSummary | null
   perSurvey: boolean
+  personalLink?: boolean
 }): LaunchStep[] {
   const coverage =
-    input.summary === null ? null : invitationCoverage({ summary: input.summary, audience: input.audience, perSurvey: input.perSurvey })
+    input.summary === null
+      ? null
+      : invitationCoverage({ summary: input.summary, audience: input.audience, perSurvey: input.perSurvey, personalLink: input.personalLink })
   const invitationsDone = coverage !== null && coverage.covered > 0 && coverage.uncovered === 0
   /** A way in that actually works today. */
   const doorOpen = input.publicLink !== null || invitationsDone

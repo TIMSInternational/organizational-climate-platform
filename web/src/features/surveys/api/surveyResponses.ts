@@ -304,13 +304,49 @@ export function respondSendsCredentials(pathname: string): boolean {
 }
 
 /**
- * `authHeaders()` everywhere but on the open share link, where it is deliberately nothing.
+ * The personal link's own route (`/survey-invitations/:token` in `router.tsx`,
+ * `SurveyAccessTokens.InvitationLinkPrefix` on the C# side).
+ */
+const INVITATION_LINK_PREFIX = '/survey-invitations/'
+
+/** The header the API reads a personal link's token from (`SurveyResponseEndpoints.PersonalLinkHeader`). */
+export const PERSONAL_LINK_HEADER = 'X-Survey-Invitation'
+
+/**
+ * The token of the personal link `pathname` is, or null on every other route.
+ *
+ * **Why the respond requests carry it (ruled 2026-11-18, `personal_link`).** On a survey in that
+ * mode the link IS the key: the API answers the two respond routes AS THE PERSON the link was
+ * mailed to -- their department and demographics read from their account and never asked, the
+ * survey's anonymity unchanged, their own resume on any device -- instead of as a visitor with
+ * no account. On any other survey the API ignores the header and nothing changes.
+ *
+ * In a header, never in the query string: a query string is written into every access log
+ * between the phone and the API, and this value opens the survey as its holder. Decided by the
+ * route for the reason `respondSendsCredentials` gives -- the questions, the autosave and the
+ * final post are made from two places, and a flag one of them forgot would answer that call as
+ * nobody.
+ */
+export function personalLinkTokenOf(pathname: string): string | null {
+  if (!pathname.startsWith(INVITATION_LINK_PREFIX)) return null
+  const token = decodeURIComponent(pathname.slice(INVITATION_LINK_PREFIX.length).split('/')[0] ?? '')
+  return token === '' ? null : token
+}
+
+/**
+ * `authHeaders()` everywhere but on the open share link, where it is deliberately nothing --
+ * plus the personal link's token on its own route.
  *
  * @see respondSendsCredentials
+ * @see personalLinkTokenOf
  */
 function respondHeaders(): Record<string, string> {
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname
-  return respondSendsCredentials(pathname) ? authHeaders() : {}
+  const personalLink = personalLinkTokenOf(pathname)
+  return {
+    ...(respondSendsCredentials(pathname) ? authHeaders() : {}),
+    ...(personalLink === null ? {} : { [PERSONAL_LINK_HEADER]: personalLink }),
+  }
 }
 
 async function fail(response: Response): Promise<never> {

@@ -5,7 +5,7 @@ import type {
   LocalizedInput,
 } from './api/surveyCreate'
 import type { InstantiateSurveyTemplateInput } from './api/surveyTemplates'
-import type { CredentialMode } from '../org-structure/api/companySettings'
+import type { SurveyCredentialMode } from '../org-structure/api/companySettings'
 import type { QuestionLibraryItemDetail } from '../questions/api/questionLibrary'
 import { DEFAULT_SURVEY_QUESTION_TYPE, needsOptions, needsScaleLabels } from './surveyVocabulary'
 import { browserTimeZone, instantOfWallClock, isKnownTimeZone } from './next/authoring/zonedWindow'
@@ -228,7 +228,7 @@ export interface SurveyWizardValues {
    * (`POST /survey-templates/{id}/use` takes no settings). Optional so a draft saved before the
    * field existed restores as "inherit".
    */
-  credentialMode?: '' | CredentialMode
+  credentialMode?: '' | SurveyCredentialMode
   /**
    * The builder's settings step (G16). All four optional, so a draft saved before the step
    * existed restores as the server's own defaults -- which is also what `emptyWizardValues`

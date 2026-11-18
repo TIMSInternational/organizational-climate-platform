@@ -8,15 +8,19 @@ import {
   getSurvey,
   setSurveyCollectParticipantIdentity,
   setSurveySelfDeclaredDemographics,
+  setSurveyCredentialMode,
   setSurveyOneSessionOnly,
+  type SurveyCredentialMode,
   type SurveyDetail,
 } from '../../api/surveys'
 import {
   createSurveyInvitations,
   getSurveyDistribution,
   isPerSurvey,
+  isPersonalLink,
   listSurveyInvitations,
   regenerateSurveyLink,
+  resendSurveyInvitation,
   revokeSurveyInvitation,
   revokeSurveyLink,
   updateSurveyDistribution,
@@ -70,7 +74,8 @@ export interface SendProgress {
  */
 export type SendOutcome =
   | {
-      kind: 'per_survey'
+      /** `per_survey` mails keys; `personal_link` mails each person their own link. Same loop, same numbers. */
+      kind: 'per_survey' | 'personal_link'
       issued: number
       /** Null when no call answered at all: then nobody knows how many still need a key. */
       remaining: number | null
@@ -88,6 +93,13 @@ export interface DistributionActions {
   regenerateLink: () => void
   revokeLink: () => void
   revokeInvitation: (invitationId: string) => void
+  /** `personal_link` only: mail ONE person a fresh link; their previous one stops working. */
+  resendInvitation: (invitationId: string, email: string) => void
+  /**
+   * Moves the survey to or from `personal_link`. The API accepts it only while nothing has been
+   * issued under the current mode, and answers 400 `credential_mode_in_use` otherwise.
+   */
+  setCredentialMode: (next: SurveyCredentialMode) => void
   /** Turns the public link's self-declared demographic questions on or off. */
   setSelfDeclaredDemographics: (next: boolean) => void
   /** Turns "ask who is answering" on the public link on or off. */
@@ -104,9 +116,11 @@ export interface DistributionActions {
  * directory may be asked for at all; then the distribution (null on 404) and the invitation list
  * in the reader's language, whose `anonymity.guarantee` is the sentence the server writes.
  *
- * Three of the old page's writes are deliberately NOT here, because none of them can do what it
- * says: the per-invitation resend (the server answers 410 since the invitation email was deleted),
- * the reminder (it answers zeros by design), and the invitation's own text (no email reads it).
+ * Of the old page's writes, the reminder is deliberately NOT here: it answers zeros by design, and
+ * the 2026-11-18 ruling kept it that way ("reminders still never"). The per-invitation resend and
+ * the invitation's own text came back with that ruling, for `personal_link` surveys only -- the
+ * one mode whose email reads the text and whose resend answers (410 in the other two). The text is
+ * edited in `InvitationEmailDialog`, which loads and saves on its own.
  */
 export function useDistributionModel(surveyId: string) {
   const { t, locale } = useTranslation()
@@ -194,11 +208,14 @@ export function useDistributionModel(surveyId: string) {
   const send = async (selection: SurveyAudienceSelection) => {
     if (state.status !== 'ready') return
     const perSurvey = isPerSurvey(state.model.invitations)
+    const personalLink = isPersonalLink(state.model.invitations)
+    // Both mail one message per person, 100 per call, and answer `remaining` -- one loop.
+    const batched = perSurvey || personalLink
     setBusy(true)
     setActionError(null)
     setNotice(null)
     setOutcome(null)
-    setProgress(perSurvey ? { done: 0, total: null } : null)
+    setProgress(batched ? { done: 0, total: null } : null)
     let issued = 0
     let remaining: number | null = null
     let total: number | null = null
@@ -211,15 +228,16 @@ export function useDistributionModel(surveyId: string) {
         const result: SurveyInvitationBatchResult = await createSurveyInvitations(baseUrl, surveyId, selection)
         created += result.created
         skipped += result.skippedUserIds.length
-        if (!perSurvey) break
-        issued += result.credentialsIssued
+        if (!batched) break
+        const mailed = perSurvey ? result.credentialsIssued : (result.linksSent ?? 0)
+        issued += mailed
         remaining = result.remaining ?? 0
-        // Everyone who held no key when this started: this call's keys plus everyone still
-        // without one -- which counts the ones whose mail just failed, as it should.
-        if (total === null) total = result.credentialsIssued + remaining
-        for (const email of result.credentialsNotSentEmails ?? []) failed.add(email)
+        // Everyone who held no key (or no link) when this started: this call's plus everyone
+        // still without one -- which counts the ones whose mail just failed, as it should.
+        if (total === null) total = mailed + remaining
+        for (const email of (perSurvey ? result.credentialsNotSentEmails : result.linksNotSentEmails) ?? []) failed.add(email)
         setProgress({ done: issued, total })
-        if (remaining === 0 || result.credentialsIssued === 0) break
+        if (remaining === 0 || mailed === 0) break
       }
     } catch {
       // The server's message is English and about one call; the page says what it means for
@@ -227,13 +245,13 @@ export function useDistributionModel(surveyId: string) {
       stopped = true
     }
     setOutcome(
-      perSurvey
-        ? { kind: 'per_survey', issued, remaining, failedEmails: [...failed].sort(), stopped }
+      batched
+        ? { kind: personalLink ? 'personal_link' : 'per_survey', issued, remaining, failedEmails: [...failed].sort(), stopped }
         : stopped
           ? null
           : { kind: 'shared', created, skipped },
     )
-    if (!perSurvey && stopped) setActionError(t('surveys.next.distribution.send.sharedFailed'))
+    if (!batched && stopped) setActionError(t('surveys.next.distribution.send.sharedFailed'))
     setProgress(null)
     try {
       const [distribution, invitations] = await Promise.all([
@@ -291,6 +309,26 @@ export function useDistributionModel(surveyId: string) {
         return null
       }),
     revokeInvitation: (invitationId) => perInvitation(invitationId, (id) => revokeSurveyInvitation(baseUrl, surveyId, id)),
+    /**
+     * `POST /surveys/{id}/invitations/{invitationId}/resend`. Answers again only on a
+     * `personal_link` survey (410 in the other two modes, as since 2026-10-19): a new token,
+     * mailed; the old link stops working. A failed send keeps the old one and says so (502).
+     */
+    resendInvitation: (invitationId, email) => {
+      setBusyInvitationId(invitationId)
+      void run(async () => {
+        await resendSurveyInvitation(baseUrl, surveyId, invitationId)
+        return t('surveys.next.distribution.link.resent', { email })
+      }).finally(() => setBusyInvitationId(null))
+    },
+    setCredentialMode: (next) =>
+      void run(
+        async () => {
+          await setSurveyCredentialMode(baseUrl, surveyId, next)
+          return t(next === 'personal_link' ? 'surveys.next.distribution.link.modeOn' : 'surveys.next.distribution.link.modeOff')
+        },
+        { refreshSurvey: true },
+      ),
     /**
      * `PUT /surveys/{id}` with only `settings.selfDeclaredDemographics`. Legal while the
      * survey is draft, scheduled or active -- the same set `canDistribute` gates the

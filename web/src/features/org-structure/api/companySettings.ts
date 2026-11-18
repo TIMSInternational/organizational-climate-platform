@@ -13,6 +13,20 @@ export type CredentialMode = 'shared' | 'per_survey'
 
 export const CREDENTIAL_MODES: readonly CredentialMode[] = ['shared', 'per_survey']
 
+/**
+ * A SURVEY's mode: the company's two, plus `personal_link` (ruled 2026-11-18) -- no username and
+ * no password; «Enviar invitaciones» mails each person their own link, and the link is the key.
+ * A survey-only mode: the API refuses it as a company's default (`CredentialModes.ForCompany`).
+ */
+export type SurveyCredentialMode = CredentialMode | 'personal_link'
+
+export const SURVEY_CREDENTIAL_MODES: readonly SurveyCredentialMode[] = ['shared', 'per_survey', 'personal_link']
+
+/** Whether a value read from storage or the wire is one of the survey modes. */
+export function isSurveyCredentialMode(value: unknown): value is SurveyCredentialMode {
+  return value === 'shared' || value === 'per_survey' || value === 'personal_link'
+}
+
 /** The company's mode, or `shared` — the API's default — when a payload carries none. */
 export function credentialModeOf(settings: { credentialMode?: string } | null | undefined): CredentialMode {
   return settings?.credentialMode === 'per_survey' ? 'per_survey' : 'shared'

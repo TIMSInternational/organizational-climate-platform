@@ -68,6 +68,11 @@ export function describeKnownRefusal(error: unknown, t: TranslateFn): string | n
 const CODE_KEYS: Readonly<Record<string, string>> = {
   survey_ended_audience_frozen: 'errors.api.codes.survey_ended_audience_frozen',
   credential_mode_frozen: 'errors.api.codes.credential_mode_frozen',
+  // The personal-link mode (2026-11-18): a mode change after something was issued, and the
+  // one-person resend's two refusals.
+  credential_mode_in_use: 'errors.api.codes.credential_mode_in_use',
+  personal_link_not_sent: 'errors.api.codes.personal_link_not_sent',
+  personal_link_recipient_inactive: 'errors.api.codes.personal_link_recipient_inactive',
   not_mass_invite: 'errors.api.codes.not_mass_invite',
   inactive: 'errors.api.codes.inactive',
   batch_too_large: 'errors.api.codes.batch_too_large',

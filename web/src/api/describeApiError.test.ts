@@ -85,6 +85,8 @@ describe('describeApiError', () => {
       'errors.api.codes.survey_ended_audience_frozen', 'errors.api.codes.credential_mode_frozen',
       'errors.api.codes.not_mass_invite', 'errors.api.codes.inactive', 'errors.api.codes.batch_too_large',
       'errors.api.codes.per_survey_person',
+      'errors.api.codes.credential_mode_in_use', 'errors.api.codes.personal_link_not_sent',
+      'errors.api.codes.personal_link_recipient_inactive',
     ]
     for (const locale of LOCALES) {
       const lt = createTranslator(CATALOGUES[locale])

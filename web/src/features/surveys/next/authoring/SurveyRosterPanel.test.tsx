@@ -259,6 +259,24 @@ describe('SurveyRosterPanel', () => {
     ).toHaveProperty('disabled', true)
   })
 
+  /**
+   * `personal_link` (ruled 2026-11-18): the survey was put in that mode so that nobody is mailed a
+   * username and a password, and the bulk resend here mails exactly that for an imported account.
+   * So on such a survey no row can be chosen for it, even one whose account HAS a usuario.
+   */
+  it('offers no account resend on a personal_link survey, even for an account with a usuario', async () => {
+    const payload = view({ credentialMode: 'personal_link' })
+    vi.stubGlobal('fetch', fetchWith(payload).mock)
+    renderPanel(payload)
+    await screen.findByText('Marta Villalobos')
+
+    expect(within(rowOf('marta')).getByText('esph-marta')).toBeTruthy()
+    expect(
+      within(rowOf('marta')).getByRole('checkbox', { name: T.selectRow.replace('{name}', 'Marta Villalobos') }),
+    ).toHaveProperty('disabled', true)
+    expect(screen.getByRole('checkbox', { name: T.selectAll })).toHaveProperty('disabled', true)
+  })
+
   it('opens a row to the demographics the import uploaded', async () => {
     const payload = view()
     vi.stubGlobal('fetch', fetchWith(payload).mock)

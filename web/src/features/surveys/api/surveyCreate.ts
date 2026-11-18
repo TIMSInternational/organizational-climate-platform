@@ -1,6 +1,6 @@
 import { authFetch } from '../../../api/authFetch'
 import type { SurveyDetail } from './surveys'
-import type { CredentialMode } from '../../org-structure/api/companySettings'
+import type { SurveyCredentialMode } from '../../org-structure/api/companySettings'
 
 /**
  * The write half of `/surveys` — `POST /surveys` (`SurveyEndpoints.CreateAsync`).
@@ -95,11 +95,13 @@ export interface CreateSurveySettingsInput {
   invitationCustomSubject?: LocalizedInput | null
   invitationCustomMessage?: LocalizedInput | null
   /**
-   * `shared` | `per_survey` — this survey's own credential mode, overriding the company's.
-   * Omitted inherits the company's. Either way the server resolves it here and FREEZES it on
-   * the row: `PUT /surveys/{id}` refuses to change it (400 `credential_mode_frozen`).
+   * `shared` | `per_survey` | `personal_link` — this survey's own credential mode, overriding
+   * the company's. Omitted inherits the company's. Either way the server resolves it here and
+   * FREEZES it on the row: `PUT /surveys/{id}` refuses to change it (400
+   * `credential_mode_frozen`), except a move to or from `personal_link` while nothing has been
+   * issued under the current mode.
    */
-  credentialMode?: CredentialMode
+  credentialMode?: SurveyCredentialMode
 }
 
 export interface CreateSurveyInput {

@@ -29,7 +29,7 @@ import {
 import { ANONYMITY_FLOOR } from '../../../../components/charts'
 import { QuestionLibraryBrowser } from '../../../../components/questions'
 import { useViewerCapabilities } from '../../../../auth/viewerCapabilities'
-import { CREDENTIAL_MODES, type CredentialMode } from '../../../org-structure/api/companySettings'
+import { SURVEY_CREDENTIAL_MODES, isSurveyCredentialMode, type CredentialMode } from '../../../org-structure/api/companySettings'
 import { credentialModeLabel } from '../../../org-structure/next/settings/credentialModeLabel'
 import { useCompanyNameFor, useCompanyScope } from '../../../../company-context'
 import { useTranslation, type TranslateFn } from '../../../../i18n'
@@ -986,12 +986,13 @@ function StepForm({
             label={t('surveys.credentialModeLabel')}
             description={[inheritLabel(t, m.companyCredentialMode, true), t('surveys.credentialModeHelp')].filter(Boolean).join(' ')}
             value={values.credentialMode || INHERIT_MODE}
-            onChange={(next) => patch({ credentialMode: next === 'shared' || next === 'per_survey' ? next : '' })}
+            onChange={(next) => patch({ credentialMode: isSurveyCredentialMode(next) ? next : '' })}
             options={[
               // Short on purpose: the trigger does not wrap, and at phone width a label naming
               // the company's mode as well overran the panel. The mode is said in the helper.
               { value: INHERIT_MODE, label: t('surveys.credentialModeInheritUnknown') },
-              ...CREDENTIAL_MODES.map((mode) => ({ value: mode, label: credentialModeLabel(t, mode) })),
+              // The SURVEY's modes: `personal_link` is a survey's only, never a company's.
+              ...SURVEY_CREDENTIAL_MODES.map((mode) => ({ value: mode, label: credentialModeLabel(t, mode) })),
             ]}
           />
         )}

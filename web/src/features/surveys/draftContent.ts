@@ -1,6 +1,7 @@
 import type { LocalizedInput } from './api/surveyCreate'
 import type { AudienceChoice, ContentLanguage, SurveyQuestionValues, SurveyWizardValues } from './wizardValues'
 import { AUDIENCE_CHOICES, CONTENT_LANGUAGES, emptyWizardValues } from './wizardValues'
+import { isSurveyCredentialMode } from '../org-structure/api/companySettings'
 
 /**
  * The survey wizard's state as it is written to and read back from
@@ -110,7 +111,7 @@ export interface SurveyDraftContent {
   allowPartialResponses: boolean
   showProgress: boolean
   /** `''` inherits the company's mode. Optional: a draft saved before it existed has none. */
-  credentialMode?: '' | 'shared' | 'per_survey'
+  credentialMode?: '' | 'shared' | 'per_survey' | 'personal_link'
   /**
    * The builder's settings step (G16). Additive, without a version bump: a draft saved before
    * them has none and restores with the server's own defaults (`emptyWizardValues`).
@@ -300,8 +301,7 @@ export function draftValuesFrom(
     allowPartialResponses: bool(content, 'allowPartialResponses', defaults.allowPartialResponses),
     showProgress: bool(content, 'showProgress', defaults.showProgress),
     // Anything but a known mode restores as "inherit the company's", the safe default.
-    credentialMode:
-      content.credentialMode === 'shared' || content.credentialMode === 'per_survey' ? content.credentialMode : '',
+    credentialMode: isSurveyCredentialMode(content.credentialMode) ? content.credentialMode : '',
     randomizeQuestions: bool(content, 'randomizeQuestions', defaults.randomizeQuestions ?? false),
     autoSave: bool(content, 'autoSave', defaults.autoSave ?? true),
     timeLimitMinutes: str(content, 'timeLimitMinutes'),
