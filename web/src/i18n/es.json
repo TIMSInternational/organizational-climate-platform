@@ -6530,7 +6530,7 @@
     "receiptSub": "de {total} preguntas",
     "protectedChip": "Protegido",
     "anonymousTitle": "Esta encuesta es anónima",
-    "anonymousBody": "Sus respuestas se guardan sin su nombre, cuenta, dirección IP ni navegador. Los resultados de un departamento, o de un solo dato demográfico, pueden mostrarse aunque haya respondido una sola persona. En un grupo pequeño, quien sepa quién participó podría deducir sus respuestas.",
+    "anonymousBody": "Sus respuestas se guardan sin su nombre, cuenta, dirección IP ni navegador. Los resultados de un departamento, o de un solo dato demográfico, pueden mostrarse aunque haya respondido una sola persona.",
     "identifiedTitle": "Esta encuesta es anónima",
     "identifiedBody": "Su empresa nunca verá su nombre junto a sus respuestas. Los datos los recibe y analiza un equipo externo e independiente, TIMS International, que entrega a su empresa únicamente resultados agrupados.",
     "contentLanguageTitle": "No todo está disponible en su idioma",

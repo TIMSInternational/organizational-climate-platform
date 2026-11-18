@@ -6530,7 +6530,7 @@
     "receiptSub": "of {total} questions",
     "protectedChip": "Protected",
     "anonymousTitle": "This survey is anonymous",
-    "anonymousBody": "Your answers are saved without your name, account, IP address or browser. Results for a department, or for a single demographic detail, may be shown even if only one person answered. In a small group, someone who knows who took part may infer their answers.",
+    "anonymousBody": "Your answers are saved without your name, account, IP address or browser. Results for a department, or for a single demographic detail, may be shown even if only one person answered.",
     "identifiedTitle": "This survey is anonymous",
     "identifiedBody": "Your employer will never see your name beside your answers. The data is received and analysed by an independent external team, TIMS International, which gives your employer grouped results only.",
     "contentLanguageTitle": "Not everything is available in your language",
