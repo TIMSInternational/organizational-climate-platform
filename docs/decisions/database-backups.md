@@ -153,6 +153,11 @@ Never executed against production. The rehearsal below is the data path, run loc
    then `aws s3 cp` the chosen key. Earlier versions of an object: `aws s3api list-object-versions`.
 4. **Rehearse it first**: `scripts/db-restore-rehearsal.sh <file>.dump climate_restore_check`.
    Read the counts and the last migration. `dropdb` it afterwards — it is personal data.
+   [AMENDED 2026-11-18. `--container --delete-dump` restores into a throwaway Docker container
+   that is removed on exit, deletes the downloaded file the same way, counts every table, and
+   compares the restored history with `Migrations/` at `MIGRATIONS_REF` (set it to the commit
+   `/version` reports). The full drill is in `docs/runbooks/backup-restore-verification.md`,
+   "Restore drill in a throwaway container".]
 5. **Restore** into the target over the session pooler (port 5432, never 6543):
    `pg_restore --clean --if-exists --no-owner --no-privileges --single-transaction -d "<libpq URI>" <file>.dump`
    (PostgreSQL 17 client). Into a new Supabase project instead, omit `--clean --if-exists`;
@@ -266,6 +271,9 @@ the dump reported; the last migration is #545's, the code production was running
 - [x] A production-dump restore rehearsal (above).
 - [ ] Check the alarm went `OK` after the first successful run, and confirm it reaches the
   critical topic's subscriber.
+- [ ] [ADDED 2026-11-18] The first container restore drill of the newest dump — procedure in
+  `docs/runbooks/backup-restore-verification.md`, not yet run. (The alarm item above: `OK` since
+  2026-10-13T02:36Z per this file's header; `describe-alarms` on 2026-11-18 also reads `OK`.)
 
 The durability guarantee now: **one nightly dump, verified and restorable, kept 35 days; up to
 a day of data can be lost.**

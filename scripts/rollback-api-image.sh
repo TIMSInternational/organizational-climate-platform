@@ -40,7 +40,11 @@
 #                     derived as <prefix>-<sha>; see --tag-prefix.
 #   --tag-prefix      prod | staging. Defaults from --stack.
 #   --bootstrap-stack defaults from --stack.
-#   --region          defaults to us-east-1.
+#   --region          defaults to us-east-2, where production has run since the
+#                     2026-10-12 move out of account 747814092517 / us-east-1.
+#   --account         the 12-digit AWS account the credentials must be in. Defaults
+#                     to 795965600143 for climate-project-api-prod; no default for
+#                     staging, which is not provisioned. Checked before any other call.
 #   --execute         actually perform the stack update. Omit for a dry run.
 #   --base-url        service base URL for the post-rollback /version assertion.
 #                     Defaults to the stack's own ServiceUrl output.
@@ -49,13 +53,24 @@
 
 set -euo pipefail
 
-REGION="us-east-1"
+# us-east-2, not the CLI's configured default: on the workstation this was last checked
+# from (2026-11-18, `aws configure list` -> region us-east-1) the CLI default still names
+# the region production left on 2026-10-12, where no climate stack exists any more.
+REGION="us-east-2"
 STACK=""
 BOOTSTRAP_STACK=""
 TAG_PREFIX=""
 TARGET_SHA=""
 BASE_URL=""
+ACCOUNT=""
 EXECUTE=0
+
+# The account production has lived in since 2026-10-12 (stack climate-project-api-prod,
+# us-east-2; measured 2026-11-18 with `aws cloudformation describe-stacks --region us-east-2`).
+# A break-glass run from a laptop uses whatever profile is active, and a profile still
+# pointed at the pre-move account 747814092517 must be refused by name -- not allowed to
+# go looking for a same-named stack there.
+PROD_ACCOUNT="795965600143"
 
 # The two stacks this script is allowed to name. A rollback is typed under pressure,
 # and a typo that resolves to some other stack in the account is a worse outcome than
@@ -72,8 +87,9 @@ while [ $# -gt 0 ]; do
     --target-sha) TARGET_SHA="${2:-}"; shift 2 ;;
     --base-url) BASE_URL="${2:-}"; shift 2 ;;
     --region) REGION="${2:-}"; shift 2 ;;
+    --account) ACCOUNT="${2:-}"; shift 2 ;;
     --execute) EXECUTE=1; shift ;;
-    -h|--help) sed -n '1,50p' "$0"; exit 0 ;;
+    -h|--help) sed -n '1,52p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -105,14 +121,32 @@ if [ -z "$BOOTSTRAP_STACK" ]; then
     climate-project-api-staging) BOOTSTRAP_STACK="climate-project-api-staging-bootstrap" ;;
   esac
 fi
+if [ -z "$ACCOUNT" ] && [ "$STACK" = "climate-project-api-prod" ]; then
+  ACCOUNT="$PROD_ACCOUNT"
+fi
+if [ -n "$ACCOUNT" ]; then
+  printf '%s' "$ACCOUNT" | grep -qE '^[0-9]{12}$' || die "--account must be a 12-digit AWS account id, not '$ACCOUNT'"
+fi
 
 TEMPLATE_FILE="$(cd "$(dirname "$0")/.." && pwd)/infra/aws/climate-project-api-prod-service.yml"
 [ -f "$TEMPLATE_FILE" ] || die "template not found at $TEMPLATE_FILE (run this from a checkout)"
+
+# ---------------------------------------------------------------------------------
+# 0. Prove the credentials are in the account the stack lives in, before anything else.
+# ---------------------------------------------------------------------------------
+# sts:GetCallerIdentity needs no permission, so this costs nothing and cannot be denied.
+if [ -n "$ACCOUNT" ]; then
+  CALLER_ACCOUNT="$(aws sts get-caller-identity --region "$REGION" --query Account --output text 2>/dev/null || true)"
+  [ "$CALLER_ACCOUNT" = "$ACCOUNT" ] || die "the active AWS credentials are in account '${CALLER_ACCOUNT:-<none>}', not $ACCOUNT.
+$STACK lives in $ACCOUNT ($REGION) since the 2026-10-12 move. Select a profile in that
+account (AWS_PROFILE=...) or, if the stack has genuinely moved again, pass --account."
+fi
 
 echo "=== rollback-api-image ==="
 echo "stack:            $STACK"
 echo "bootstrap stack:  $BOOTSTRAP_STACK"
 echo "region:           $REGION"
+echo "account:          ${ACCOUNT:-<not checked>}"
 echo "target sha:       $TARGET_SHA"
 echo "template:         $TEMPLATE_FILE"
 echo "mode:             $([ "$EXECUTE" -eq 1 ] && echo EXECUTE || echo 'DRY RUN (pass --execute to apply)')"
@@ -126,6 +160,11 @@ echo
 # environment -- not forever. An expired tag is the one failure this script must
 # catch before it starts a stack update, because a CloudFormation update to a
 # nonexistent image leaves App Runner attempting a pull it cannot satisfy.
+#
+# The policy's OTHER rule expires untagged images after 7 days. Since 2026-10-20 every
+# deploy pushes an OCI image index whose two child manifests are untagged; measured
+# 2026-11-18, the children pushed with prod-5018ff32 on 2026-10-20 are still in the
+# repository 29 days later, so that rule does not reach the children of a tagged index.
 ECR_REPOSITORY_URI="$(aws cloudformation describe-stacks \
   --region "$REGION" --stack-name "$BOOTSTRAP_STACK" \
   --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue | [0]" \

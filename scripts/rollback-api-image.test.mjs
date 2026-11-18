@@ -23,7 +23,10 @@ const SCRIPT = join(REPO, 'scripts/rollback-api-image.sh');
 
 const SHA = 'bd7b0f91c9f2c5e58e510f05c7d6324d4acd0393';
 const OLD_SHA = '649fd077dab17f22d1bfd1bb1544aeda25fd1e70';
-const ECR = '747814092517.dkr.ecr.us-east-1.amazonaws.com/climate-project-api';
+// Production's real coordinates since the 2026-10-12 move (account 795965600143, us-east-2),
+// read 2026-11-18 from the climate-project-api-bootstrap stack's EcrRepositoryUri output.
+const ECR = '795965600143.dkr.ecr.us-east-2.amazonaws.com/climate-project-api';
+const PROD_ACCOUNT = '795965600143';
 
 // The live stack's parameters, in the shape `describe-stacks --query 'Stacks[0].Parameters'`
 // returns. Two of them are load-bearing for the re-pass assertion: a dropped parameter silently
@@ -31,7 +34,7 @@ const ECR = '747814092517.dkr.ecr.us-east-1.amazonaws.com/climate-project-api';
 const PARAMS = JSON.stringify([
   { ParameterKey: 'ServiceName', ParameterValue: 'climate-project-api-prod' },
   { ParameterKey: 'CorsAllowedOrigin', ParameterValue: 'https://climate.timsint.com' },
-  { ParameterKey: 'DatabaseConnectionStringSecretArn', ParameterValue: 'arn:aws:secretsmanager:us-east-1:747814092517:secret:db-jgthiv' },
+  { ParameterKey: 'DatabaseConnectionStringSecretArn', ParameterValue: 'arn:aws:secretsmanager:us-east-2:795965600143:secret:db-example' },
   { ParameterKey: 'HealthCheckPath', ParameterValue: '/ready' },
   { ParameterKey: 'ImageIdentifier', ParameterValue: `${ECR}:prod-${OLD_SHA}` },
 ]);
@@ -40,6 +43,7 @@ const STUB_AWS = `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$STUB_LOG"
 args="$*"
 case "$args" in
+  *"sts get-caller-identity"*)          printf '%s\\n' "\${STUB_ACCOUNT:-${PROD_ACCOUNT}}" ;;
   *"describe-stacks"*EcrRepositoryUri*) printf '%s\\n' "\${STUB_ECR_URI:-${ECR}}" ;;
   *"describe-stacks"*ServiceUrl*)       printf 'api.example-runner.amazonaws.com\\n' ;;
   *"describe-stacks"*Parameters*)       printf '%s\\n' "$STUB_PARAMS" ;;
@@ -90,7 +94,7 @@ function run(args, env = {}) {
 const BASE = [
   '--stack', 'climate-project-api-prod',
   '--bootstrap-stack', 'climate-project-api-bootstrap',
-  '--region', 'us-east-1',
+  '--region', 'us-east-2',
   '--target-sha', SHA,
 ];
 
@@ -161,4 +165,32 @@ test('a rollback that is actually serving the target reports it', () => {
   // It must not imply it did the parts it deliberately does not do.
   assert.match(r.stdout, /the schema check/);
   assert.match(r.stdout, /the web layer \(Vercel\)/);
+});
+
+test('with no --region it targets us-east-2, where production has run since 2026-10-12', () => {
+  // The CLI's own default region on the workstation this was written on is still us-east-1, the
+  // region production left. Every call must name us-east-2 without being told to.
+  const r = run(['--stack', 'climate-project-api-prod', '--target-sha', SHA]);
+  assert.equal(r.status, 0, r.stderr);
+  const awsCalls = r.calls.split('\n').filter((l) => l && !l.startsWith('curl '));
+  assert.ok(awsCalls.length > 0, 'no aws calls were made');
+  for (const call of awsCalls) {
+    assert.match(call, /--region us-east-2(\s|$)/, `a call left the production region: ${call}`);
+  }
+});
+
+test('credentials in any other account are refused before the stack or ECR is read', () => {
+  // A laptop profile still pointed at the pre-move account 747814092517 must not go looking for
+  // a same-named stack there.
+  const r = run([...BASE, '--execute'], { STUB_ACCOUNT: '747814092517' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /active AWS credentials are in account '747814092517', not 795965600143/);
+  assert.doesNotMatch(r.calls, /describe-stacks|ecr describe-images|cloudformation deploy/,
+    'nothing past the account check may run');
+});
+
+test('--account overrides the production default for a deliberate move', () => {
+  const r = run([...BASE, '--account', '111122223333'], { STUB_ACCOUNT: '111122223333' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /account:\s+111122223333/);
 });
