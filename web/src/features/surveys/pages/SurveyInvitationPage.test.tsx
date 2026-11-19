@@ -175,6 +175,19 @@ describe('SurveyInvitationPage', () => {
    * nothing is drawn under «Empezar a responder». happy-dom has no layout: classes are pinned
    * here, the page itself was rendered with `npm run shot`.
    */
+  /** PROCOMER, 2026-11-19: the landing card keeps the welcome text's paragraphs. */
+  it('keeps the paragraphs of the welcome text on the landing card', async () => {
+    serve({
+      resolve: () =>
+        new Response(JSON.stringify(invitation({ surveyDescription: '¡Tu opinión cuenta!\n\nTe invitamos a participar.' })), { status: 200 }),
+    })
+    renderPage()
+
+    expect(await screen.findByText('¡Tu opinión cuenta!')).toBeTruthy()
+    const caption = document.querySelector('[data-slot="respond-caption-description"]') as HTMLElement
+    expect([...caption.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['¡Tu opinión cuenta!', 'Te invitamos a participar.'])
+  })
+
   it('justifies the welcome text across the column and draws nothing under the button', async () => {
     serve()
     renderPage()

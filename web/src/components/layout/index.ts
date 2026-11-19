@@ -51,6 +51,7 @@ export {
   RespondShell,
   RespondCaption,
   RespondReading,
+  AuthoredParagraphs,
   // The mark-plus-wordmark lockup. Lives in RespondShell because that is what
   // needed it first — the respond pages open on nothing but the product's name,
   // and for most employees they are the only screen they ever see — but sign-in

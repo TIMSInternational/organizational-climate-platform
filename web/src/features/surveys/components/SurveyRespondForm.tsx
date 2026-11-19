@@ -39,6 +39,7 @@ import {
 } from '../respondAnswers'
 import { formatDayMonth, respondDuration } from '../respondEstimate'
 import { respondFailureKey, respondFailureKind } from '../respondFailure'
+import { AuthoredParagraphs } from '../../../components/layout'
 import { AnonymityNotice } from './AnonymityNotice'
 import { PrivacyNoticeLink } from './PrivacyNoticeLink'
 import RespondDemographicField from './RespondDemographicField'
@@ -1349,8 +1350,9 @@ export default function SurveyRespondForm({
       {index === 0 && view.description ? (
         // Justified, as the question below it (PROCOMER, 2026-11-19). `hyphens-auto` keeps
         // a justified line from opening wide gaps on a phone; it hyphenates in the reader's
-        // language because `TranslationProvider` sets `<html lang>` to the locale.
-        <p data-slot="survey-intro" className="m-0 text-justify hyphens-auto text-respond text-fg-secondary">{view.description}</p>
+        // language because `TranslationProvider` sets `<html lang>` to the locale. The
+        // author's paragraphs are kept (`AuthoredParagraphs`).
+        <AuthoredParagraphs slot="survey-intro" text={view.description} className="text-justify hyphens-auto text-respond text-fg-secondary" />
       ) : null}
 
       {remainingMs !== null && remainingMs > 0 ? (

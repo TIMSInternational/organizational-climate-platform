@@ -273,6 +273,32 @@ export function BrandLockup({
 }
 
 /**
+ * An author's own text, with the paragraphs they wrote: a blank line starts a new paragraph,
+ * a single line break stays a line break.
+ *
+ * PROCOMER's welcome text is three paragraphs («¡Tu opinión cuenta!», «Te invitamos…», «Tu
+ * participación…») and a plain `<p>` collapsed them into one block (2026-11-19). Each paragraph
+ * is its own `<p>`, so a justified paragraph ends on a ragged last line as it should, rather
+ * than every line of a `white-space: pre-line` block being stretched across. `className` goes
+ * on each paragraph and on the wrapper, so alignment and colour read the same either way.
+ */
+export function AuthoredParagraphs({ text, className, slot }: { text: string; className?: string; slot?: string }) {
+  const paragraphs = text
+    .split(/\r?\n\s*\r?\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph !== '')
+  return (
+    <div data-slot={slot} className={`flex flex-col gap-3 ${className ?? ''}`}>
+      {paragraphs.map((paragraph, index) => (
+        <p key={index} className={`m-0 whitespace-pre-line ${className ?? ''}`}>
+          {paragraph}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+/**
  * The block over the questions: what this is, what it is called, what it is for.
  *
  * The eyebrow names the kind of thing (a survey, a live session) because the
@@ -321,9 +347,11 @@ export function RespondCaption({
           a client's whole welcome paragraph is the description. `hyphens-auto` follows
           `<html lang>`, which `TranslationProvider` sets to the locale. */}
       {description ? (
-        <p data-slot="respond-caption-description" className="m-0 text-justify hyphens-auto text-base text-fg-secondary">
-          {description}
-        </p>
+        <AuthoredParagraphs
+          slot="respond-caption-description"
+          text={description}
+          className="text-justify hyphens-auto text-base text-fg-secondary"
+        />
       ) : null}
     </header>
   )
