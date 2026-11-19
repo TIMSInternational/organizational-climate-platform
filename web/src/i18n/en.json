@@ -6706,7 +6706,7 @@
     },
     "demographics": {
       "eyebrow": "About you",
-      "intro": "These details let the organisation compare groups. Results for a department, or for a single demographic detail, may be shown even if only one person answered.",
+      "intro": "These details let the organisation compare groups.",
       "choose": "Choose an option",
       "missing": "Choose an option to continue.",
       "start": "Start the survey"

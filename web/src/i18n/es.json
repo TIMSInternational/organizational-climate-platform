@@ -6706,7 +6706,7 @@
     },
     "demographics": {
       "eyebrow": "Sobre usted",
-      "intro": "Estos datos permiten comparar grupos. Los resultados de un departamento, o de un solo dato demográfico, pueden mostrarse aunque haya respondido una sola persona.",
+      "intro": "Estos datos permiten comparar grupos.",
       "choose": "Elija una opción",
       "missing": "Elija una opción para continuar.",
       "start": "Empezar la encuesta"

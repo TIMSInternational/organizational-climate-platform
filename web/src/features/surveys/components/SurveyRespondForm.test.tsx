@@ -1755,6 +1755,8 @@ describe('SurveyRespondForm — the promise made on a start page', () => {
 
     expect(notices()).toHaveLength(0)
     expect(screen.getByText(copy.es('surveyRespond.demographics.intro'))).toBeTruthy()
+    // PROCOMER, 2026-11-19 («eso no va»): no sentence about a department shown from one respondent.
+    expect(screen.queryByText(/una sola persona/)).toBeNull()
   })
 
   it('draws none after an invitation card that said the same thing', async () => {
