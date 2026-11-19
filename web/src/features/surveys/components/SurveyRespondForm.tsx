@@ -1345,7 +1345,10 @@ export default function SurveyRespondForm({
           alineado a la izquierda)"*. The column IS the measure; a second one inside it only
           made the page look ragged. */}
       {index === 0 && view.description ? (
-        <p className="m-0 text-respond text-fg-secondary">{view.description}</p>
+        // Justified, as the question below it (PROCOMER, 2026-11-19). `hyphens-auto` keeps
+        // a justified line from opening wide gaps on a phone; it hyphenates in the reader's
+        // language because `TranslationProvider` sets `<html lang>` to the locale.
+        <p data-slot="survey-intro" className="m-0 text-justify hyphens-auto text-respond text-fg-secondary">{view.description}</p>
       ) : null}
 
       {remainingMs !== null && remainingMs > 0 ? (
@@ -1488,10 +1491,13 @@ export default function SurveyRespondForm({
 
       {/* The foot, as the canvas prints it: when the survey closes, and how long it
           takes — or, for a survey that sets a limit, how long is left of it. At the
-          bottom of the column on a short page, under the form on a long one. */}
+          bottom of the column on a short page, under the form on a long one.
+
+          Two full sentences, the duration under the close (PROCOMER, 2026-11-19): «Cierra
+          el 30 de noviembre» beside «unos 38 minutos en total» read as fragments. */}
       <footer
         data-slot="respond-footer"
-        className="mt-auto flex flex-wrap justify-between gap-2 text-respond-sm text-fg-secondary"
+        className="mt-auto flex flex-col gap-1 text-respond-sm text-fg-secondary"
       >
         <span>{t('next.closesOn', { date: formatDayMonth(view.endDate, locale) })}</span>
         {remainingMs !== null && remainingMs > 0 ? (

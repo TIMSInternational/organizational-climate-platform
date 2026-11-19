@@ -150,9 +150,9 @@ describe('MySurveysNextPage', () => {
     serves({ surveys: [item({ questionCount: 6 })] })
     renderPage()
 
-    // Six questions is four minutes at `respondEstimate`'s ratio — the same figure Home
+    // Six questions is three minutes at `respondEstimate`'s ratio — the same figure Home
     // prints for the same survey, from the same module.
-    const meta = await screen.findByText(/^6 preguntas · unos 4 minutos · cierra el .+$/)
+    const meta = await screen.findByText(/^6 preguntas · unos 3 minutos · cierra el .+$/)
     expect(meta).toBeTruthy()
   })
 
@@ -598,7 +598,7 @@ describe('MySurveysNextPage — the close on the respondent’s own clock (R2)',
     renderPage()
 
     expect(
-      await screen.findByText(es('employee.surveyMeta', { questions: 6, minutes: 4, date: '10 sept' })),
+      await screen.findByText(es('employee.surveyMeta', { questions: 6, minutes: 3, date: '10 sept' })),
     ).toBeTruthy()
     expect(screen.queryByText(/cierra el 11 sept/)).toBeNull()
     expect(chipIn(rowAround('Encuesta de Clima Q4 (abierta)')).textContent).toBe(es('employee.taskClosesToday'))

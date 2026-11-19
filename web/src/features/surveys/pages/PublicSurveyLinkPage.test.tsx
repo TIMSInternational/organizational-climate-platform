@@ -161,6 +161,31 @@ describe('PublicSurveyLinkPage', () => {
   })
 
   /**
+   * PROCOMER, 2026-11-19: «"Empezar a responder" y ya. Abajo no debe aparecer nada», and the
+   * promise says it is anonymous and what is not kept — no sentence about a department shown
+   * from one respondent.
+   */
+  it('says the survey is anonymous in the client’s words and draws nothing under the button', async () => {
+    serve({})
+    renderPage()
+
+    const begin = await screen.findByRole('button', { name: /Empezar a responder/ })
+    expect(
+      screen.getByText(
+        'Esta encuesta es anónima. No le solicitamos su nombre, y no se guardan su cuenta, su dirección IP ni su navegador.',
+      ),
+    ).toBeTruthy()
+    expect(screen.queryByText(/una sola persona/)).toBeNull()
+    expect(screen.queryByText('Después, una pregunta por pantalla.')).toBeNull()
+    expect(screen.queryByText('Llegó con un enlace compartido')).toBeNull()
+    expect(screen.queryByText('no necesita cuenta')).toBeNull()
+    // The button is the last thing the entry card draws.
+    let next = begin.nextElementSibling
+    while (next !== null && next.textContent?.trim() === '') next = next.nextElementSibling
+    expect(next).toBeNull()
+  })
+
+  /**
    * Whose survey the respondent is looking at.
    *
    * EAGLE's QR respondents met the OCC lockup alone on 2026-10-19 -- on a survey their own

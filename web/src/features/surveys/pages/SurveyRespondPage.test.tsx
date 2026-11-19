@@ -250,7 +250,7 @@ describe('SurveyRespondPage anonymity messaging', () => {
     renderPage()
 
     expect(await screen.findByText('Esta encuesta es anónima')).toBeTruthy()
-    expect(screen.getByText(/sin tu nombre|sin su nombre/)).toBeTruthy()
+    expect(screen.getByText(/No le solicitamos su nombre, y no se guardan su cuenta, su dirección IP ni su navegador/)).toBeTruthy()
   })
 
   /**
@@ -1867,7 +1867,7 @@ describe('SurveyRespondPage as an instrument', () => {
     // The whole promise travelled, not just its title: the chip that carries the
     // state in a word, and the sentence that says what is not recorded.
     expect(within(promise!).getByText('Anónima')).toBeTruthy()
-    expect(within(promise!).getByText(/sin su nombre/)).toBeTruthy()
+    expect(within(promise!).getByText(/No le solicitamos su nombre/)).toBeTruthy()
 
     const form = document.querySelector('form')
     expect(form).toBeTruthy()
@@ -2032,9 +2032,9 @@ describe('SurveyRespondPage as an instrument', () => {
     await screen.findByRole('radio', { name: 'Muy de acuerdo' })
     let foot = document.querySelector('[data-slot="respond-footer"]') as HTMLElement
     expect([...foot.children].map((node) => node.textContent)).toEqual([
-      'Cierra el 31 de diciembre',
-      // Three questions, two thirds of a minute each — computed, never typed.
-      'unos 2 minutos en total',
+      'Esta encuesta cierra el 31 de diciembre.',
+      // Three questions, half a minute each (1.5 → 2) — computed, never typed.
+      'La duración aproximada es de 2 minutos.',
     ])
     first.unmount()
 
@@ -2043,7 +2043,7 @@ describe('SurveyRespondPage as an instrument', () => {
     await screen.findByRole('radio', { name: 'Muy de acuerdo' })
     foot = document.querySelector('[data-slot="respond-footer"]') as HTMLElement
     expect([...foot.children].map((node) => node.textContent)).toEqual([
-      'Cierra el 31 de diciembre',
+      'Esta encuesta cierra el 31 de diciembre.',
       'Queda 10:00',
     ])
   })

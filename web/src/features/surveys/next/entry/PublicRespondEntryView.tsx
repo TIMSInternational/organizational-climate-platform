@@ -20,8 +20,7 @@ export interface PublicRespondEntryViewProps {
  *
  * The eyebrow, the survey's own name, and one line for how long this will take. Then
  * the two readings the artboard draws — when it closes, how many questions — then the
- * promise about what is and is not stored, then the one action, then the sentence that
- * tells the respondent what the next screen looks like.
+ * promise about what is and is not stored, then the one action, and nothing after it.
  *
  * ## Why there is a card in front of the questions at all
  *
@@ -100,22 +99,10 @@ export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondE
         <CanvasArrowRightIcon className="size-icon" />
       </Button>
 
-      <p className="m-0 text-center text-sm text-fg-secondary">{t('next.entryAfter')}</p>
-
-      {/* The artboard's floor line, pushed to the bottom of the column. It names the
-          two things that are true of this visitor and of no other respondent in the
-          product: they arrived on a link somebody shared, and they need no account.
-          `mt-auto` works because `RespondSurface` is the flex column `RespondShell`'s
-          `<main>` gives a `flex-1` to.
-
-          `text-fg-secondary`, not the canvas's `#8a82a5`: `respondContrast.test.ts`
-          measures `text-fg-tertiary` — the token that ink maps to — as failing AA on
-          this page and bans it from the feature by name. Same call `AnonymityNotice`
-          made about the canvas's green. */}
-      <p className="m-0 mt-auto flex flex-wrap items-center justify-between gap-inline text-2xs text-fg-secondary">
-        <span>{t('next.entryArrivedByLink')}</span>
-        <span>{t('next.entryNoAccount')}</span>
-      </p>
+      {/* Nothing under the button (PROCOMER, 2026-11-19: «"Empezar a responder" y ya. Abajo
+          no debe aparecer nada»). «Después, una pregunta por pantalla» and the floor line
+          («Llegó con un enlace compartido · no necesita cuenta») were drawn here; their
+          catalogue keys stay (additive catalogues), nothing renders them. */}
     </>
   )
 }

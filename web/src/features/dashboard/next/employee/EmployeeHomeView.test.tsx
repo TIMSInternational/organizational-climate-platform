@@ -189,9 +189,9 @@ describe('EmployeeHomeView', () => {
       [es('employee.taskClosesInDays', { days: 29 }), es('employee.next.closesOnDate', { date: '9 de octubre' })].join(' · '),
     )
     expect(lead).toBeTruthy()
-    // Six questions, about four minutes — computed from the count, never typed.
+    // Six questions, about three minutes (half a minute each) — computed, never typed.
     expect(screen.getByText('6')).toBeTruthy()
-    expect(screen.getByText(es('employee.taskMinutes', { minutes: 4 }))).toBeTruthy()
+    expect(screen.getByText(es('employee.taskMinutes', { minutes: 3 }))).toBeTruthy()
     expect(screen.getByText('9 oct')).toBeTruthy()
   })
 
@@ -235,7 +235,7 @@ describe('EmployeeHomeView', () => {
     })
     expect([...lead.querySelectorAll('dd')].map((value) => value.textContent)).toEqual([
       '6',
-      es('employee.taskMinutes', { minutes: 4 }).replace(' min', '\u00a0min'),
+      es('employee.taskMinutes', { minutes: 3 }).replace(' min', '\u00a0min'),
       '9\u00a0oct',
     ])
     const list = lead.querySelector('dl') as HTMLElement
@@ -329,7 +329,7 @@ describe('EmployeeHomeView', () => {
       return node
     })
     expect(within(row).getByText('Encuesta de Clima Q4 (abierta) (Copia)')).toBeTruthy()
-    expect(within(row).getByText(es('employee.surveyMeta', { questions: 6, minutes: 4, date: '9 oct' }))).toBeTruthy()
+    expect(within(row).getByText(es('employee.surveyMeta', { questions: 6, minutes: 3, date: '9 oct' }))).toBeTruthy()
     expect(respondHrefs()).toEqual([
       '/surveys/4c9c8c8c-03e1-4033-8224-8c80b242c558/respond',
       '/surveys/801a81a4-3551-4f08-96f4-d465e05b1605/respond',

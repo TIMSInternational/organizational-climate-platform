@@ -270,12 +270,11 @@ describe('outcomeLook', () => {
 
 describe('entryPace', () => {
   /**
-   * The canvas's own numbers: Grupo Meridiano's six-question Q4 is "unos 4 minutos"
-   * (RespondSurveyPhone and EmployeeDashboard, 10 Sep), which is `estimatedMinutes`'s
-   * two-thirds of a minute a question.
+   * `estimatedMinutes`'s half a minute a question (PROCOMER, 2026-11-19; it was the
+   * canvas's two thirds, which quoted 57 questions as 38 minutes). Six questions: 3.
    */
   it('quotes the one estimate this product has, not a second one', () => {
-    expect(entryPace(6)).toEqual({ key: 'next.entryPace', params: { count: 6, minutes: 4 } })
+    expect(entryPace(6)).toEqual({ key: 'next.entryPace', params: { count: 6, minutes: 3 } })
   })
 
   /**
@@ -330,9 +329,6 @@ describe('every key these rules can return', () => {
       'alreadyCompletedBody',
       ...[1, 2, 6].map((count) => entryPace(count).key),
       'next.entryStart',
-      'next.entryAfter',
-      'next.entryArrivedByLink',
-      'next.entryNoAccount',
     ]
 
     // Guard the guard: an empty list would pass vacuously.
