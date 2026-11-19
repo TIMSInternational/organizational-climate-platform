@@ -5426,9 +5426,13 @@
         "closingLabel": "Closing message",
         "closingHelp": "Shown after the answers are sent, instead of the default thank-you. Up to {max} characters.",
         "open": "Texts for respondents",
-        "openHelp": "This survey's anonymity box text and closing message.",
+        "openHelp": "The anonymity box text, the approximate duration and the closing message for this survey.",
         "loadFailed": "This survey's texts could not be loaded. Close and try again.",
-        "saved": "Texts saved. Anyone who opens the survey from now on will see them."
+        "saved": "Texts saved. Anyone who opens the survey from now on will see them.",
+        "durationLabel": "Approximate duration (minutes)",
+        "durationHelp": "Respondents read it on the start page and under every question: “It takes about N minutes.” Empty: calculated from the number of questions (currently {minutes} minutes).",
+        "durationHelpBrief": "Respondents read it on the start page and under every question. Empty: calculated from the number of questions (currently “under a minute”).",
+        "durationInvalid": "Enter a whole number from {min} to {max} minutes, or leave it empty to have it calculated."
       },
       "history": {
         "open": "History",
@@ -6724,6 +6728,7 @@
       "entryPace": "{count} questions. About {minutes} minutes.",
       "entryPaceOne": "One question. Less than a minute.",
       "entryPaceBrief": "{count} questions. Less than a minute.",
+      "entryPaceOneQuestion": "One question. About {minutes} minutes.",
       "entrySignInTitle": "This survey records who answers",
       "entrySignInBody": "To answer it, sign in with your account.",
       "entryLinkUnavailableBody": "It may have closed. If you think you should be able to answer it, let whoever shared the link with you know."

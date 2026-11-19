@@ -286,6 +286,15 @@ describe('entryPace', () => {
     expect(entryPace(1).key).toBe('next.entryPaceOne')
   })
 
+  /** PROCOMER, 2026-11-19: the survey's stated minutes, not the estimate. */
+  it('quotes the minutes the survey states', () => {
+    expect(entryPace(57, 25)).toEqual({ key: 'next.entryPace', params: { count: 57, minutes: 25 } })
+    expect(entryPace(57, null)).toEqual({ key: 'next.entryPace', params: { count: 57, minutes: 30 } })
+    // One question its author says takes minutes: "Una pregunta", and the stated figure.
+    expect(entryPace(1, 5)).toEqual({ key: 'next.entryPaceOneQuestion', params: { count: 1, minutes: 5 } })
+    expect(entryPace(2, 5).key).toBe('next.entryPace')
+  })
+
   it('says under a minute rather than "about 1 minute"', () => {
     // estimatedMinutes(2) === 1, which isUnderAMinute reads as under a minute.
     expect(entryPace(2).key).toBe('next.entryPaceBrief')
@@ -328,6 +337,7 @@ describe('every key these rules can return', () => {
       'alreadyCompletedTitle',
       'alreadyCompletedBody',
       ...[1, 2, 6].map((count) => entryPace(count).key),
+      entryPace(1, 5).key,
       'next.entryStart',
     ]
 

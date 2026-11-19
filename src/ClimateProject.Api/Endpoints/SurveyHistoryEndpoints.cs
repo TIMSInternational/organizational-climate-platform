@@ -260,7 +260,8 @@ public static class SurveyHistoryEndpoints
                 locale, language, "settings.respondentIntro", fallbackFields)),
             SurveyRespondentText.OrDefault(SurveyContent.Resolve(
                 content.Settings.ClosingMessageEn, content.Settings.ClosingMessageEs,
-                locale, language, "settings.closingMessage", fallbackFields)));
+                locale, language, "settings.closingMessage", fallbackFields)),
+            content.Settings.EstimatedMinutes);
 
         authors.TryGetValue(version.CreatedBy, out var author);
         var isCurrent = version.VersionNumber == survey.Version;

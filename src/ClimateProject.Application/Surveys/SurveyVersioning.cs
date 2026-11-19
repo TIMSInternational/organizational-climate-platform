@@ -107,7 +107,9 @@ public sealed record SurveyVersionSettingsSnapshot(
     string? RespondentIntroEn = null,
     string? RespondentIntroEs = null,
     string? ClosingMessageEn = null,
-    string? ClosingMessageEs = null);
+    string? ClosingMessageEs = null,
+    /// <summary>Added 2026-11-19; null in older snapshots, which is "calculated", what they had.</summary>
+    int? EstimatedMinutes = null);
 
 /// <summary>
 /// A whole survey's content at one instant: the two column pairs SurveyVersion carries
@@ -248,7 +250,8 @@ public static class SurveyVersioning
             survey.Settings.RespondentIntroEn,
             survey.Settings.RespondentIntroEs,
             survey.Settings.ClosingMessageEn,
-            survey.Settings.ClosingMessageEs);
+            survey.Settings.ClosingMessageEs,
+            survey.Settings.EstimatedMinutes);
 
         return new SurveyVersionContent(
             survey.TitleEn, survey.TitleEs, survey.DescriptionEn, survey.DescriptionEs,
@@ -365,6 +368,7 @@ public static class SurveyVersioning
         ("settings.oneSessionOnly", s => s.OneSessionOnly),
         ("settings.respondentIntro", s => Pair(s.RespondentIntroEn, s.RespondentIntroEs)),
         ("settings.closingMessage", s => Pair(s.ClosingMessageEn, s.ClosingMessageEs)),
+        ("settings.estimatedMinutes", s => s.EstimatedMinutes),
     ];
 
     /// <summary>

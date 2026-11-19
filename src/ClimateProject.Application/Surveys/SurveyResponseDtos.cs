@@ -179,6 +179,11 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 /// stands in for the client's legal notice (ruled 2026-11-15).
 /// </param>
 /// <param name="PrivacyNoticeEn">The same notice in English, or null.</param>
+/// <param name="EstimatedMinutes">
+/// The duration the survey states (<c>SurveySettings.EstimatedMinutes</c>), or null when the
+/// screen calculates it from the question count. Shown as «La duración aproximada es de N
+/// minutos»; never a limit -- that is <see cref="TimeLimitMinutes"/>.
+/// </param>
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -202,7 +207,8 @@ public sealed record SurveyRespondView(
     string? RespondentIntro = null,
     string? ClosingMessage = null,
     string? PrivacyNoticeEs = null,
-    string? PrivacyNoticeEn = null);
+    string? PrivacyNoticeEn = null,
+    int? EstimatedMinutes = null);
 
 /// <param name="AlreadySubmitted">
 /// True when this call found a response that was already complete and therefore changed

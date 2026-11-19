@@ -211,6 +211,8 @@ export interface MySurveyListItem {
   questionCount: number
   anonymous: boolean
   timeLimitMinutes: number | null
+  /** The duration the survey states, or null/absent to calculate it from `questionCount`. */
+  estimatedMinutes?: number | null
 }
 
 /** Server-side filters accepted by `GET /surveys`. */

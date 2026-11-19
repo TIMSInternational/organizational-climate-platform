@@ -122,6 +122,15 @@ describe('groupMySurveys', () => {
     expect(closed).toEqual([])
   })
 
+  /** PROCOMER, 2026-11-19: the survey's stated minutes, the figure the survey itself prints. */
+  it('quotes the minutes the survey states, never "under a minute" for them', () => {
+    const [stated] = groupMySurveys([item({ questionCount: 57, estimatedMinutes: 25 })], NOW).open
+    expect(stated.minutes).toBe(25)
+    const [short] = groupMySurveys([item({ questionCount: 2, estimatedMinutes: 10 })], NOW).open
+    expect(short.minutes).toBe(10)
+    expect(short.underAMinute).toBe(false)
+  })
+
   it('computes the reading, never takes it from the payload', () => {
     // Six questions is three minutes at `respondEstimate`'s half a minute each —
     // the figure Home and the respond page both print for the same survey.

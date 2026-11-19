@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { estimatedMinutes, formatDayMonth, isUnderAMinute } from './respondEstimate'
+import { estimatedMinutes, formatDayMonth, isUnderAMinute, respondDuration } from './respondEstimate'
 
 /** Audit 2026-10-22, R2: "Cierra el …" on the respondent's own clock. */
 describe('formatDayMonth', () => {
@@ -53,5 +53,25 @@ describe('estimatedMinutes', () => {
     expect(estimatedMinutes(1)).toBe(1)
     expect(isUnderAMinute(2)).toBe(true)
     expect(isUnderAMinute(3)).toBe(false)
+  })
+})
+
+/** The survey's stated minutes win; without them, the estimate. One function for every screen. */
+describe('respondDuration', () => {
+  it('prints the minutes the survey states, whatever its question count', () => {
+    expect(respondDuration(57, 25)).toEqual({ minutes: 25, underAMinute: false })
+    expect(respondDuration(2, 10)).toEqual({ minutes: 10, underAMinute: false })
+  })
+
+  it('calculates it when the survey states none', () => {
+    expect(respondDuration(57)).toEqual({ minutes: 30, underAMinute: false })
+    expect(respondDuration(57, null)).toEqual({ minutes: 30, underAMinute: false })
+    expect(respondDuration(2, null)).toEqual({ minutes: 1, underAMinute: true })
+  })
+
+  it('reads a value the API never stores as unstated rather than printing it', () => {
+    expect(respondDuration(57, 0)).toEqual({ minutes: 30, underAMinute: false })
+    expect(respondDuration(57, 1)).toEqual({ minutes: 30, underAMinute: false })
+    expect(respondDuration(57, 2.5)).toEqual({ minutes: 30, underAMinute: false })
   })
 })

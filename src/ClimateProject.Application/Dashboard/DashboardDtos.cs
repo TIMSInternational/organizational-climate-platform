@@ -271,7 +271,12 @@ public sealed record DashboardPendingSurvey(
     DateTimeOffset StartDate,
     DateTimeOffset EndDate,
     int QuestionCount,
-    bool Anonymous);
+    bool Anonymous,
+    /// <summary>
+    /// The duration the survey states (<c>SurveySettings.EstimatedMinutes</c>), or null to
+    /// calculate it from <c>QuestionCount</c> -- the card and the survey it opens say one figure.
+    /// </summary>
+    int? EstimatedMinutes = null);
 
 /// <summary>
 /// The landing experience for a plain employee -- the "evaluated user" dashboard, and the

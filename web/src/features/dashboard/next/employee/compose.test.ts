@@ -145,6 +145,17 @@ describe('composeEmployeeHome', () => {
     expect(model.pendingCount).toBe(2)
   })
 
+  /** PROCOMER, 2026-11-19: a survey that states its duration is quoted at it, on Home too. */
+  it('quotes the minutes the survey states rather than the estimate', () => {
+    const model = composeEmployeeHome({
+      dashboard: dashboard({ pendingSurveys: [survey({ questionCount: 57, estimatedMinutes: 25 })] }),
+      lastOutcome: null,
+      leadAllowsSaveForLater: null,
+      asOf: CANVAS_EVENING,
+    })
+    expect(model.lead?.minutes).toBe(25)
+  })
+
   it('computes the minutes from the question count — six questions, about three minutes', () => {
     const model = composeEmployeeHome({
       dashboard: dashboard(),

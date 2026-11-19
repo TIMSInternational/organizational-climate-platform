@@ -1,5 +1,5 @@
 import type { CompanyScope } from '../../../../company-context'
-import { estimatedMinutes, isUnderAMinute } from '../../respondEstimate'
+import { respondDuration } from '../../respondEstimate'
 import { instantCalendarDay } from '../../../../lib/calendarDay'
 import type { MySurveyListItem } from '../../api/surveys'
 
@@ -17,7 +17,7 @@ export interface MySurveyRow {
   /** The survey's own title, already resolved for the locale; `null` when it has none. */
   name: string | null
   questionCount: number
-  /** `estimatedMinutes(questionCount)` — computed, never typed. */
+  /** `respondDuration`: the survey's stated minutes, or the estimate from its questions. */
   minutes: number
   /** Whether the estimate is best said as "under a minute" rather than as a number. */
   underAMinute: boolean
@@ -83,8 +83,8 @@ function toRow(survey: MySurveyListItem, now: number): MySurveyRow {
     // `respondEstimate`, the module Home and the respond page both read, rather than a
     // second ratio here: two spellings of "6 preguntas · unos 4 minutos" for one survey is
     // how the two screens drift apart.
-    minutes: estimatedMinutes(survey.questionCount),
-    underAMinute: isUnderAMinute(survey.questionCount),
+    minutes: respondDuration(survey.questionCount, survey.estimatedMinutes).minutes,
+    underAMinute: respondDuration(survey.questionCount, survey.estimatedMinutes).underAMinute,
     closesAt: survey.endDate,
     daysLeft: daysUntilClose(survey.endDate, now),
   }

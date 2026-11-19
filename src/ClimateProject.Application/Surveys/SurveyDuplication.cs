@@ -253,5 +253,8 @@ public static class SurveyDuplication
         RespondentIntroEs = s.RespondentIntroEs,
         ClosingMessageEn = s.ClosingMessageEn,
         ClosingMessageEs = s.ClosingMessageEs,
+        // The stated duration travels too: «Duplicar → Solo las preguntas» keeps the questions
+        // it was stated for.
+        EstimatedMinutes = s.EstimatedMinutes,
     };
 }

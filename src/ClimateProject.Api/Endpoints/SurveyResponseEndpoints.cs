@@ -488,7 +488,8 @@ public static class SurveyResponseEndpoints
                 survey.Settings.ClosingMessageEn, survey.Settings.ClosingMessageEs,
                 locale, survey.Language, "settings.closingMessage", fallbackFields)),
             BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEs),
-            BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEn)));
+            BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEn),
+            survey.Settings.EstimatedMinutes));
     }
 
     // ------------------------------------------------------------------

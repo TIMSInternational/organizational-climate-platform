@@ -37,7 +37,7 @@ import {
   type AnswerMap,
   type AnswerState,
 } from '../respondAnswers'
-import { estimatedMinutes, formatDayMonth, isUnderAMinute } from '../respondEstimate'
+import { formatDayMonth, respondDuration } from '../respondEstimate'
 import { respondFailureKey, respondFailureKind } from '../respondFailure'
 import { AnonymityNotice } from './AnonymityNotice'
 import { PrivacyNoticeLink } from './PrivacyNoticeLink'
@@ -1260,6 +1260,8 @@ export default function SurveyRespondForm({
   }
 
   const total = questions.length
+  // The survey's stated minutes, or the estimate from its questions (`respondDuration`).
+  const duration = respondDuration(total, view.estimatedMinutes)
   const index = Math.min(page, Math.max(total - 1, 0))
   const current = questions[index]
   const position = total === 0 ? 0 : index + 1
@@ -1506,9 +1508,7 @@ export default function SurveyRespondForm({
           </span>
         ) : (
           <span>
-            {isUnderAMinute(total)
-              ? t('next.underAMinute')
-              : t('next.aboutMinutes', { minutes: estimatedMinutes(total) })}
+            {duration.underAMinute ? t('next.underAMinute') : t('next.aboutMinutes', { minutes: duration.minutes })}
           </span>
         )}
       </footer>

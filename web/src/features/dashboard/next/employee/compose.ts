@@ -3,7 +3,7 @@ import type {
   EmployeeDashboard,
   EmployeeLastOutcome,
 } from '../../api/dashboard'
-import { estimatedMinutes } from '../../../surveys/respondEstimate'
+import { respondDuration } from '../../../surveys/respondEstimate'
 import { instantCalendarDay } from '../../../../lib/calendarDay'
 import type { EmployeeHomeModel, HomeOutcome, HomeSurvey } from './model'
 
@@ -64,7 +64,8 @@ function toSurvey(survey: DashboardPendingSurvey, asOf: string): HomeSurvey {
     id: survey.id,
     name: survey.title,
     questionCount: survey.questionCount,
-    minutes: estimatedMinutes(survey.questionCount),
+    // The survey's stated minutes, or the estimate — the figure the survey itself prints.
+    minutes: respondDuration(survey.questionCount, survey.estimatedMinutes).minutes,
     closesAt: survey.endDate,
     daysLeft: daysUntilOnReadersClock(survey.endDate, asOf),
     // A literal `true`, never a truthiness test: a field gone missing — an older server,

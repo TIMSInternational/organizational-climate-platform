@@ -1043,6 +1043,16 @@ describe('SurveyRespondForm layout', () => {
    * and the foot is two sentences, the duration under the close. happy-dom has no layout,
    * so this pins the classes; the rendered page is checked with `npm run shot`.
    */
+  /** PROCOMER, 2026-11-19: the foot quotes the minutes the survey states, not the estimate. */
+  it('prints the duration the survey states at the foot', async () => {
+    respondWith(view({ estimatedMinutes: 25 }))
+    const { container } = renderForm()
+
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
+    expect(within(foot).getByText('La duración aproximada es de 25 minutos.')).toBeTruthy()
+  })
+
   it('justifies the intro and the question, and stacks the foot as two sentences', async () => {
     respondWith(view({ description: 'Su opinión cuenta.' }))
     const { container } = renderForm()
