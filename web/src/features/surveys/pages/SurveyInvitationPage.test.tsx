@@ -170,6 +170,26 @@ describe('SurveyInvitationPage', () => {
   })
 
   /**
+   * PROCOMER, 2026-11-19: the welcome text is justified like the questions, across the full
+   * column — on this route it is the landing card's description, so it is set there too. And
+   * nothing is drawn under «Empezar a responder». happy-dom has no layout: classes are pinned
+   * here, the page itself was rendered with `npm run shot`.
+   */
+  it('justifies the welcome text across the column and draws nothing under the button', async () => {
+    serve()
+    renderPage()
+
+    const description = await screen.findByText('Tu opinión es confidencial')
+    expect(description.className).toContain('text-justify')
+    expect(description.className).not.toContain('max-w-prose')
+
+    const begin = screen.getByRole('button', { name: /Empezar a responder/ })
+    let next = begin.nextElementSibling
+    while (next !== null && next.textContent?.trim() === '') next = next.nextElementSibling
+    expect(next).toBeNull()
+  })
+
+  /**
    * The whole value of the ladder to an administrator is telling "they saw it" apart
    * from "they began". Recording both on page load would make the funnel a straight line
    * by construction — and it is the easiest possible thing to do by accident.

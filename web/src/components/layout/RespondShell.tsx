@@ -314,7 +314,17 @@ export function RespondCaption({
       <h1 className="mb-0 min-w-0 break-words font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
         {title}
       </h1>
-      {description ? <p className="max-w-prose text-base text-fg-secondary">{description}</p> : null}
+      {/* Justified across the full column, as the respond form sets the same paragraph over
+          question 1 (PROCOMER, 2026-11-19: «al igual que el texto de arriba»). No `max-w-prose`:
+          a measure narrower than the cards below read as broken text to ESPH on 2026-10-18
+          («no viene distribuido»), and it did again here on `/survey-invitations/:token`, where
+          a client's whole welcome paragraph is the description. `hyphens-auto` follows
+          `<html lang>`, which `TranslationProvider` sets to the locale. */}
+      {description ? (
+        <p data-slot="respond-caption-description" className="m-0 text-justify hyphens-auto text-base text-fg-secondary">
+          {description}
+        </p>
+      ) : null}
     </header>
   )
 }
