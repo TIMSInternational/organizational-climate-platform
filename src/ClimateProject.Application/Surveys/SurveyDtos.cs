@@ -139,7 +139,11 @@ public sealed record SurveyDetail(
     // survey unmetered. Deliberately separate from Type -- Type is cadence (periodic, pulse,
     // exit), a licensed service is a product line, and an Encuesta Periodica can be either
     // instrument.
-    string? ServiceType = null);
+    string? ServiceType = null,
+    // True while nobody has chosen who answers this survey (a questions-only duplicate): it is
+    // aimed at NOBODY, not at the whole company, though DepartmentIds and UserIds are both empty.
+    // A screen must read this before it reads the two lists as "Toda la empresa".
+    bool AudienceNotChosen = false);
 
 /// <summary>
 /// A survey the caller is expected to answer, as served to a non-admin. Deliberately
@@ -304,10 +308,17 @@ public sealed record UpdateSurveyStatusRequest(string Status);
 /// </summary>
 public sealed record ReopenSurveyRequest(DateTimeOffset? EndDate, string? Reason);
 
+/// <param name="IncludeAudience">
+/// True -- the default, and what every caller before 2026-11-18 gets by omitting it -- copies
+/// the source's department and named-people targets. False copies the questions and settings
+/// only: the copy has no targets AND carries <c>Survey.AudienceNotChosen</c>, so it is aimed
+/// at nobody, never at everyone, until «Editar audiencia» saves an audience.
+/// </param>
 public sealed record DuplicateSurveyRequest(
     LocalizedInput? Title = null,
     DateTimeOffset? StartDate = null,
-    DateTimeOffset? EndDate = null);
+    DateTimeOffset? EndDate = null,
+    bool IncludeAudience = true);
 
 public sealed record BulkSurveyActionRequest(string Action, List<Guid> SurveyIds);
 

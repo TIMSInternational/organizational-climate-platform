@@ -1765,6 +1765,7 @@
       "server": "El servidor no pudo completar la solicitud. Intente de nuevo en unos minutos.",
       "rejected": "La solicitud fue rechazada. Revise los datos e intente de nuevo.",
       "codes": {
+        "survey_audience_not_chosen": "La audiencia de esta encuesta todavía no se ha elegido. Elíjala con «Editar audiencia» antes de enviarla, programarla o activarla.",
         "survey_ended_audience_frozen": "Esta encuesta ya terminó: su audiencia ya no se puede cambiar. Duplíquela para aplicarla de nuevo.",
         "credential_mode_frozen": "La forma de acceso de los participantes se fija al crear la encuesta y no se puede cambiar. Cree una encuesta nueva para usar otra modalidad.",
         "not_mass_invite": "Esta persona ingresa con su correo; no tiene datos de acceso generados que reenviar.",
@@ -4224,6 +4225,17 @@
       "suppressedGroups": "Grupos protegidos en todas las encuestas mostradas, porque respondieron menos de {threshold} personas: {count}."
     },
     "next": {
+      "duplicate": {
+        "title": "Duplicar la encuesta",
+        "intro": "La copia es un borrador nuevo con las mismas preguntas. Elija a quién va dirigida.",
+        "choiceLabel": "Qué copiar",
+        "withAudience": "Copiar con la misma audiencia",
+        "withAudienceHelp": "La copia va a los mismos departamentos y personas que esta encuesta.",
+        "questionsOnly": "Solo las preguntas — la audiencia queda por elegir",
+        "questionsOnlyHelp": "La copia no va a nadie hasta que elija su audiencia con «Editar audiencia». Mientras tanto no se puede enviar, programar ni activar.",
+        "keeps": "En los dos casos se copian los textos, el correo de invitación, el modo de acceso, el orden aleatorio y «Mantener al final». Solo cambian las personas.",
+        "confirm": "Duplicar"
+      },
       "statusWorkbook": {
         "loading": "Cargando las encuestas de la empresa…",
         "loadFailed": "No se pudieron cargar las encuestas. Inténtelo de nuevo.",
@@ -4617,6 +4629,8 @@
         "optional": "(opcional)"
       },
       "detail": {
+        "audienceNotChosen": "Audiencia sin elegir",
+        "audienceNotChosenCard": "Esta copia se hizo solo con las preguntas y todavía no va a nadie. Elija su audiencia con «Editar audiencia» antes de enviarla o activarla.",
         "eyebrow": "{type} · {count} preguntas",
         "duplicate": "Duplicar",
         "results": "Resultados",
@@ -4759,6 +4773,9 @@
           "refusedGone": "No se guardó: esta encuesta ya no existe."
         },
         "audienceEdit": {
+          "notChosen": "Audiencia sin elegir",
+          "notChosenNote": "Esta copia se hizo solo con las preguntas: todavía no tiene audiencia y no va a nadie. Elija departamentos o personas. Si no elige ninguno, irá a toda la empresa, y eso hay que confirmarlo abajo.",
+          "confirmEveryone": "Sí, la audiencia es toda la empresa ({count} personas).",
           "action": "Editar audiencia",
           "endedReason": "La encuesta terminó: su audiencia quedó fija. Para aplicarla a otras personas, duplíquela.",
           "title": "Audiencia de la encuesta",
@@ -4800,6 +4817,9 @@
         }
       },
       "distribution": {
+        "audienceNotChosenTitle": "Audiencia sin elegir",
+        "audienceNotChosen": "Esta copia se hizo solo con las preguntas y todavía no va a nadie. Elija su audiencia con «Editar audiencia» en el detalle de la encuesta antes de enviarla o activarla.",
+        "missingAudienceNotChosen": "Falta elegir la audiencia",
         "title": "Distribución",
         "description": "Quién puede responder, por dónde le llega la encuesta y qué falta para que llegue a todos.",
         "openSurvey": "Abrir la encuesta",
@@ -5326,6 +5346,37 @@
         "revokeRefusedNotPerSurvey": "Esta encuesta usa cuentas compartidas, así que no hay un código por encuesta que retirar.",
         "revokeRefusedNotFound": "No se encontró a esa persona en la empresa.",
         "revokeRefusedNoCode": "Esa persona no tiene código para esta encuesta: no hay nada que retirar.",
+        "colLink": "Enlace personal",
+        "noLink": "Sin enlace",
+        "linkSent": "Enlace enviado {date}",
+        "linkRevoked": "Enlace retirado",
+        "linkNotOpened": "Aún no ha abierto el enlace",
+        "linkOpened": "Ya abrió el enlace",
+        "sendLink": "Enviar enlace",
+        "sendLinkFor": "Enviar su enlace a {name}",
+        "sendLinkTitle": "¿Enviarle su enlace a {name}?",
+        "sendLinkBody": "Se enviará a {email} un enlace personal que abre solo «{survey}», sin usuario ni contraseña. Nadie más recibe un correo. Envíelo solo si el cliente pidió por escrito que esta persona reciba la encuesta.",
+        "sendLinkSent": "Se envió su enlace a {name} ({email}).",
+        "sendLinkNotSent": "El correo a {name} ({email}) no salió: sigue sin enlace. Revise la dirección en su ficha y vuelva a intentarlo.",
+        "sendLinkAlreadyHad": "{name} ya tenía su enlace para esta encuesta: no se envió nada. Para mandarle uno nuevo, use «Reenviar enlace».",
+        "sendLinkNotOpen": "La encuesta no está abierta: no se pueden enviar enlaces. Ábrala o alargue su cierre primero.",
+        "sendLinkNotInAudience": "{name} no está en la audiencia de esta encuesta, así que el enlace no le abriría nada. Agréguelo primero con «Editar audiencia».",
+        "sendLinkError": "No se pudo enviar el enlace. Intente de nuevo.",
+        "resendLink": "Reenviar enlace",
+        "resendLinkFor": "Reenviar el enlace a {name}",
+        "resendLinkTitle": "¿Reenviarle el enlace a {name}?",
+        "resendLinkBody": "Se enviará a {email} un enlace NUEVO para «{survey}». El enlace anterior deja de funcionar en cuanto salga el correo. Si ya había empezado la encuesta, sus respuestas guardadas se conservan.",
+        "resendLinkSent": "Se envió un enlace nuevo a {name} ({email}). El anterior ya no funciona.",
+        "resendLinkNotSent": "El correo a {name} ({email}) no salió, así que se conservó su enlace anterior, que sigue funcionando.",
+        "resendLinkInactive": "La cuenta de {name} está desactivada: un enlace no le abriría nada. Reactívela primero.",
+        "revokeLink": "Retirar el enlace",
+        "revokeLinkFor": "Retirar el enlace de {name}",
+        "revokeLinkTitle": "¿Retirar el enlace de {name}?",
+        "revokeLinkBody": "El enlace de {name} deja de abrir «{survey}». Su cuenta y sus demás encuestas no se tocan, y el correo que ya se envió no se puede devolver. Para devolverle el acceso, use «Reenviar enlace».",
+        "revokeLinkDone": "Se retiró el enlace de {name}. Esta encuesta ya no se le abre con él.",
+        "revokeLinkError": "No se pudo retirar el enlace. Intente de nuevo.",
+        "revokeLinkWhyNoLink": "No tiene enlace para esta encuesta: no hay nada que retirar.",
+        "revokeLinkWhyAnswered": "Ya contestó esta encuesta. Retirarle el enlace no retira la respuesta.",
         "revokeRefusedHasResponses": "Esa persona ya contestó esta encuesta. Retirarle el código no retira la respuesta: primero hay que decidir qué pasa con la respuesta."
       },
       "participation": {
@@ -5478,6 +5529,7 @@
         "diffAfterShort": "Después",
         "absent": "No existía",
         "field": {
+          "audienceNotChosen": "Audiencia elegida",
           "title": "Título",
           "description": "Descripción",
           "type": "Tipo de encuesta",
@@ -5544,6 +5596,7 @@
           "employee": "Colaborador"
         },
         "action": {
+          "createdAudienceNotChosen": "Creó la encuesta como copia solo con las preguntas: la audiencia quedó por elegir",
           "created": "Creó la encuesta",
           "updated": "Editó la encuesta ({count} campos)",
           "updatedOne": "Editó la encuesta ({count} campo)",

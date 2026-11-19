@@ -35,10 +35,10 @@ import {
   type SurveyParticipantStatus,
   type SurveyRosterRow,
 } from '../../api/surveys'
-import { createSurveyInvitations } from '../../api/surveyDistribution'
+import { createSurveyInvitations, resendSurveyInvitation, revokeSurveyInvitation } from '../../api/surveyDistribution'
 import { ApiError } from '../../../../api/authFetch'
 import type { ParticipationState } from './useSurveyParticipation'
-import { chaseActionFor } from './chaseAction'
+import { chaseActionFor, linkActionFor, type PersonalLinkState } from './chaseAction'
 import { formatParticipationDay } from './participationDay'
 import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
@@ -91,6 +91,61 @@ type RevokeState =
 /** What sending ONE person their first code did. */
 type SendCodeOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'error'
 type SendCodeState = { phase: 'idle' } | { phase: 'done'; name: string; email: string; outcome: SendCodeOutcome }
+
+/**
+ * `personal_link` (ruled 2026-11-18): what ONE per-row link action did. The three actions are
+ * three routes -- the first link through the invite route naming that person alone, a new one
+ * through the invitation's resend, a withdrawal through its revoke -- and `done` is a withdrawal
+ * that went through.
+ */
+type LinkActionKind = 'send' | 'resend' | 'revoke'
+type LinkOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'not_in_audience' | 'inactive' | 'done' | 'error'
+type LinkActionState =
+  | { phase: 'idle' }
+  | { phase: 'done'; action: LinkActionKind; name: string; email: string; outcome: LinkOutcome }
+
+/** Each action's own sentences, so a resend never reads as a first send. Anything unlisted is the action's error. */
+const LINK_OUTCOME_KEY: Record<LinkActionKind, Partial<Record<LinkOutcome, string>> & { error: string }> = {
+  send: {
+    sent: 'sendLinkSent',
+    not_sent: 'sendLinkNotSent',
+    already_had: 'sendLinkAlreadyHad',
+    not_open: 'sendLinkNotOpen',
+    not_in_audience: 'sendLinkNotInAudience',
+    inactive: 'resendLinkInactive',
+    error: 'sendLinkError',
+  },
+  resend: {
+    sent: 'resendLinkSent',
+    not_sent: 'resendLinkNotSent',
+    not_open: 'sendLinkNotOpen',
+    not_in_audience: 'sendLinkNotInAudience',
+    inactive: 'resendLinkInactive',
+    error: 'sendLinkError',
+  },
+  revoke: { done: 'revokeLinkDone', error: 'revokeLinkError' },
+}
+
+/** The confirmation each link action asks for, by key. */
+const LINK_DIALOG_KEY: Record<LinkActionKind, { titleKey: string; bodyKey: string; confirmKey: string }> = {
+  send: { titleKey: 'sendLinkTitle', bodyKey: 'sendLinkBody', confirmKey: 'sendLink' },
+  resend: { titleKey: 'resendLinkTitle', bodyKey: 'resendLinkBody', confirmKey: 'resendLink' },
+  revoke: { titleKey: 'revokeLinkTitle', bodyKey: 'revokeLinkBody', confirmKey: 'revokeLink' },
+}
+
+/**
+ * A refused link send or resend, from the API's code. The resend's closed-survey refusal carries
+ * no code (`ResendInvitationAsync`), so any other 409 reads as a survey that is not open -- the
+ * one 409 a row the roster offers a resend on can meet.
+ */
+function linkRefusal(error: unknown): LinkOutcome {
+  if (!(error instanceof ApiError)) return 'error'
+  if (error.code === 'survey_not_distributable' || error.code === 'survey_window_closed') return 'not_open'
+  if (error.code === 'personal_link_not_in_audience') return 'not_in_audience'
+  if (error.code === 'personal_link_recipient_inactive') return 'inactive'
+  if (error.code === 'personal_link_not_sent') return 'not_sent'
+  return error.status === 409 && error.code === undefined ? 'not_open' : 'error'
+}
 
 /** The local calendar day, as the roster's day fields are written (`YYYY-MM-DD`). */
 function today(): string {
@@ -220,6 +275,11 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   const [exclusionTarget, setExclusionTarget] = useState<{ row: SurveyRosterRow; exclude: boolean } | null>(null)
   const [excludedHere, setExcludedHere] = useState<Readonly<Record<string, boolean>>>({})
   const [exclusionNote, setExclusionNote] = useState<string | null>(null)
+  // `personal_link`: a link sent, resent or withdrawn from THIS page, for `issuedHere`'s reason --
+  // the payload is the Participación panel's, so a write here moves the row without a refetch.
+  const [linkHere, setLinkHere] = useState<Readonly<Record<string, PersonalLinkState>>>({})
+  const [linkTarget, setLinkTarget] = useState<{ row: SurveyRosterRow; action: LinkActionKind } | null>(null)
+  const [linkResult, setLinkResult] = useState<LinkActionState>({ phase: 'idle' })
 
   /**
    * Only a super admin may receive a password to hand over: the server refuses anybody else
@@ -523,6 +583,70 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
     setRevokeTarget(null)
   }
 
+  /** This person's link as the row shows it: an action on this page outranks the payload. */
+  function linkOf(row: SurveyRosterRow): PersonalLinkState {
+    return linkHere[row.userId] ?? { invitationId: row.invitationId ?? null, status: row.linkStatus ?? null, sentOn: row.linkSentOn ?? null }
+  }
+
+  function linkDone(row: SurveyRosterRow, action: LinkActionKind, outcome: LinkOutcome, next: PersonalLinkState | null) {
+    if (next !== null) setLinkHere((current) => ({ ...current, [row.userId]: next }))
+    setLinkResult({ phase: 'done', action, name: row.name, email: row.email, outcome })
+    setLinkTarget(null)
+  }
+
+  /**
+   * One person's FIRST personal link: `POST /surveys/{id}/invitations` naming only them, the
+   * route `sendCodeFor` uses, read for what it counts in THIS mode. `credentialsIssued` counts
+   * per-survey keys and is always 0 here, so reading it said «ya tenía» about a link that went.
+   */
+  async function sendLinkFor(row: SurveyRosterRow) {
+    const current = linkOf(row)
+    try {
+      const result = await createSurveyInvitations(baseUrl, state.status === 'ready' ? state.view.surveyId : '', {
+        userIds: [row.userId],
+      })
+      const outcome: LinkOutcome =
+        (result.linksSent ?? 0) > 0 ? 'sent' : (result.linksNotSent ?? 0) > 0 ? 'not_sent' : 'already_had'
+      linkDone(
+        row,
+        'send',
+        outcome,
+        outcome === 'sent'
+          ? { invitationId: current.invitationId ?? result.invitationIds[0] ?? null, status: 'sent', sentOn: today() }
+          : null,
+      )
+    } catch (error) {
+      linkDone(row, 'send', linkRefusal(error), null)
+    }
+  }
+
+  /**
+   * A NEW link for one person: the invitation's own resend, which rotates the token -- the link
+   * they hold stops working -- and is the only route that mails somebody a second time.
+   */
+  async function resendLinkFor(row: SurveyRosterRow) {
+    const current = linkOf(row)
+    if (current.invitationId === null) return
+    try {
+      const detail = await resendSurveyInvitation(baseUrl, state.status === 'ready' ? state.view.surveyId : '', current.invitationId)
+      linkDone(row, 'resend', 'sent', { invitationId: detail.id, status: detail.status, sentOn: today() })
+    } catch (error) {
+      linkDone(row, 'resend', linkRefusal(error), null)
+    }
+  }
+
+  /** Withdraws one person's link: the invitation's revoke. Their account and other surveys are untouched. */
+  async function revokeLinkFor(row: SurveyRosterRow) {
+    const current = linkOf(row)
+    if (current.invitationId === null) return
+    try {
+      await revokeSurveyInvitation(baseUrl, state.status === 'ready' ? state.view.surveyId : '', current.invitationId)
+      linkDone(row, 'revoke', 'done', { ...current, status: 'revoked' })
+    } catch {
+      linkDone(row, 'revoke', 'error', null)
+    }
+  }
+
   // Counts come off the roster rather than the payload's own counters, so a chip can never
   // disagree with the rows under it.
   const filters: { value: Filter; key: string; count: number }[] =
@@ -708,6 +832,22 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
               </p>
             ) : null}
 
+            {linkResult.phase === 'done' ? (
+              <p
+                role="status"
+                className={
+                  linkResult.outcome === 'sent' || linkResult.outcome === 'done'
+                    ? 'm-0 text-sm font-medium'
+                    : 'm-0 text-sm font-medium text-accent-red-ink'
+                }
+              >
+                {copy(LINK_OUTCOME_KEY[linkResult.action][linkResult.outcome] ?? LINK_OUTCOME_KEY[linkResult.action].error, {
+                  name: linkResult.name,
+                  email: linkResult.email,
+                })}
+              </p>
+            ) : null}
+
             {reissue.phase === 'done' ? (
               <p
                 role="status"
@@ -775,7 +915,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                 <Table className="text-sm">
                   <TableHeader>
                     <TableRow>
-                      {perSurvey ? null : (
+                      {perSurvey || personalLink ? null : (
                         <TableHead scope="col">
                           <Checkbox
                             checked={allShownChosen}
@@ -787,10 +927,13 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                       )}
                       <TableHead scope="col">{copy('colPerson')}</TableHead>
                       <TableHead scope="col">{copy('colRole')}</TableHead>
-                      <TableHead scope="col">{copy('colUsuario')}</TableHead>
+                      {/* A personal-link survey hands out no username: the column would hold an
+                          account's sign-in name that this survey never uses, so it is not drawn. */}
+                      {personalLink ? null : <TableHead scope="col">{copy('colUsuario')}</TableHead>}
                       {perSurvey ? (
                         <TableHead scope="col">{copy('colCode')}</TableHead>
                       ) : null}
+                      {personalLink ? <TableHead scope="col">{copy('colLink')}</TableHead> : null}
                       {showState ? (
                         <>
                           <TableHead scope="col">{copy('colStatus')}</TableHead>
@@ -809,6 +952,11 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         tracked={showState}
                         perSurvey={perSurvey}
                         accountResend={!personalLink}
+                        personalLink={personalLink}
+                        link={linkOf(row)}
+                        onSendLink={() => setLinkTarget({ row, action: 'send' })}
+                        onResendLink={() => setLinkTarget({ row, action: 'resend' })}
+                        onRevokeLink={() => setLinkTarget({ row, action: 'revoke' })}
                         issuedHere={issuedHere[row.userId] ?? null}
                         remindedHere={remindedHere[row.userId] ?? null}
                         revokedHere={revokedHere.has(row.userId)}
@@ -889,6 +1037,29 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
         confirmText={copy('sendCode')}
         cancelText={t('common.cancel')}
         onConfirm={() => (sendCodeTarget === null ? undefined : sendCodeFor(sendCodeTarget))}
+      />
+
+      {/* `personal_link`: names the one person and the survey before anything leaves, and -- for a
+          resend -- that the link they hold stops working. */}
+      <ConfirmationDialog
+        open={linkTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setLinkTarget(null)
+        }}
+        title={copy(LINK_DIALOG_KEY[linkTarget?.action ?? 'send'].titleKey, { name: linkTarget?.row.name ?? '' })}
+        description={copy(LINK_DIALOG_KEY[linkTarget?.action ?? 'send'].bodyKey, {
+          name: linkTarget?.row.name ?? '',
+          email: linkTarget?.row.email ?? '',
+          survey: surveyTitle,
+        })}
+        confirmText={copy(LINK_DIALOG_KEY[linkTarget?.action ?? 'send'].confirmKey)}
+        cancelText={t('common.cancel')}
+        onConfirm={() => {
+          if (linkTarget === null) return undefined
+          if (linkTarget.action === 'send') return sendLinkFor(linkTarget.row)
+          if (linkTarget.action === 'resend') return resendLinkFor(linkTarget.row)
+          return revokeLinkFor(linkTarget.row)
+        }}
       />
 
       <ConfirmationDialog
@@ -978,6 +1149,11 @@ function RosterRows({
   tracked,
   perSurvey,
   accountResend = true,
+  personalLink = false,
+  link = { invitationId: null, status: null, sentOn: null },
+  onSendLink,
+  onResendLink,
+  onRevokeLink,
   issuedHere,
   remindedHere,
   revokedHere,
@@ -1002,6 +1178,16 @@ function RosterRows({
   perSurvey: boolean
   /** False on a `personal_link` survey: nobody there may be mailed an account's username and password. */
   accountResend?: boolean
+  /** A `personal_link` survey: the row's key is the person's link, and it speaks and acts on that. */
+  personalLink?: boolean
+  /** This person's link, an action on this page outranking the payload. Read only in `personal_link`. */
+  link?: PersonalLinkState
+  /** Their first link: the invite route, naming them alone. */
+  onSendLink?: () => void
+  /** A new link: the invitation's resend, which stops the old one. */
+  onResendLink?: () => void
+  /** Withdraws their link: the invitation's revoke. */
+  onRevokeLink?: () => void
   /** The day a reissue from this page mailed this person's key, overriding the loaded one. */
   issuedHere: string | null
   /** A reminder sent from this page, overriding the loaded history for the same reason. */
@@ -1056,13 +1242,22 @@ function RosterRows({
   // this page is newer than any failure the payload knows about, and a withdrawn one has no mail.
   const deliveryProblem = revokedHere || issuedHere !== null ? null : row.deliveryProblem ?? null
   const deliveryProblemOn = row.deliveryProblemOn ?? null
-  // Five either way: per-survey trades the checkbox for the Código column.
-  const columns = 5 + (tracked ? 2 : 0)
+  // Five either way: per-survey trades the checkbox for the Código column. A personal-link survey
+  // draws neither the checkbox nor the Usuario column, and adds its Enlace column: four.
+  const columns = (personalLink ? 4 : 5) + (tracked ? 2 : 0)
+  // `personal_link`: which link action fits this person, and whether there is a link to withdraw --
+  // one that went, is not already withdrawn, and whose holder has not answered (withdrawing the
+  // link would not withdraw the response).
+  const linkAction = personalLink ? linkActionFor(row, link) : 'none'
+  const linkRevoked = link.status === 'revoked'
+  const linkWentOut = link.invitationId !== null && link.sentOn !== null && !linkRevoked
+  const linkOpened = link.status === 'opened' || link.status === 'started' || link.status === 'completed'
+  const linkRevocable = linkWentOut && !hasAnswered && link.status !== 'completed'
 
   return (
     <>
       <TableRow data-user-id={row.userId}>
-        {perSurvey ? null : (
+        {perSurvey || personalLink ? null : (
           <TableCell className="px-3 py-2">
             <Checkbox
               checked={selected}
@@ -1081,6 +1276,7 @@ function RosterRows({
           </span>
         </TableCell>
         <TableCell className="px-3 py-2 text-fg-secondary">{roleLabel}</TableCell>
+        {personalLink ? null : (
         <TableCell className="px-3 py-2">
           {perSurvey ? (
             // A per-survey person signs in with THIS survey's key, never their email: the
@@ -1096,6 +1292,7 @@ function RosterRows({
             <span className="font-mono text-xs text-fg-secondary">{row.username}</span>
           )}
         </TableCell>
+        )}
         {perSurvey ? (
           <TableCell className="px-3 py-2">
             <span className="flex min-w-48 flex-col items-start gap-1">
@@ -1212,6 +1409,68 @@ function RosterRows({
                   {issuedOn === null ? copy('revokeWhyNoCode') : copy('revokeWhyAnswered')}
                 </span>
               ) : null}
+            </span>
+          </TableCell>
+        ) : null}
+        {personalLink ? (
+          <TableCell className="px-3 py-2">
+            <span className="flex min-w-48 flex-col items-start gap-1">
+              <span className="text-xs">
+                {linkRevoked
+                  ? copy('linkRevoked')
+                  : link.sentOn === null
+                    ? copy('noLink')
+                    : copy('linkSent', { date: formatParticipationDay(link.sentOn, locale) })}
+              </span>
+              {/* Whether they opened it is the finding an operator chases on, as "has not signed in"
+                  is on a per-survey key -- and the furthest an anonymous survey records. */}
+              {linkWentOut ? (
+                <span className="text-xs text-fg-secondary">{copy(linkOpened ? 'linkOpened' : 'linkNotOpened')}</span>
+              ) : null}
+              {linkAction === 'send' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={copy('sendLinkFor', { name: row.name })}
+                  onClick={onSendLink}
+                >
+                  {copy('sendLink')}
+                </Button>
+              ) : linkAction === 'resend' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={copy('resendLinkFor', { name: row.name })}
+                  onClick={onResendLink}
+                >
+                  {copy('resendLink')}
+                </Button>
+              ) : null}
+              {/* A withdrawn link says so on its first line; a second button saying it again
+                  would be noise. Otherwise offered, and disabled with the reason when there is
+                  nothing to withdraw or the person has answered. */}
+              {linkRevoked ? null : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!linkRevocable}
+                    aria-label={copy('revokeLinkFor', { name: row.name })}
+                    aria-describedby={linkRevocable ? undefined : `revoke-link-why-${row.userId}`}
+                    onClick={onRevokeLink}
+                  >
+                    {copy('revokeLink')}
+                  </Button>
+                  {linkRevocable ? null : (
+                    <span id={`revoke-link-why-${row.userId}`} className="text-xs text-fg-secondary">
+                      {linkWentOut ? copy('revokeLinkWhyAnswered') : copy('revokeLinkWhyNoLink')}
+                    </span>
+                  )}
+                </>
+              )}
             </span>
           </TableCell>
         ) : null}

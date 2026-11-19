@@ -14,7 +14,7 @@ using NpgsqlTypes;
 namespace ClimateProject.Infrastructure.Migrations
 {
     [DbContext(typeof(ClimateProjectDbContext))]
-    [Migration("20261119200111_SurveyEstimatedMinutes")]
+    [Migration("20261119202047_SurveyEstimatedMinutes")]
     partial class SurveyEstimatedMinutes
     {
         /// <inheritdoc />
@@ -3548,6 +3548,12 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("AudienceNotChosen")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("audience_not_chosen");
 
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid")

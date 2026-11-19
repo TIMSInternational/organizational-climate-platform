@@ -287,6 +287,22 @@ public class SurveyVersioningTests
         Assert.Empty(SurveyVersioning.Diff(Capture(before), Capture(after)));
     }
 
+    /// <summary>
+    /// The snapshot already records the audience (its departments and declared count), so it
+    /// records whether one was chosen at all, and choosing one is a change the diff reports --
+    /// the audit entry «Editar audiencia» writes when it clears the marker.
+    /// </summary>
+    [Fact]
+    public void Choosing_the_audience_of_a_questions_only_copy_is_reported_as_a_change()
+    {
+        var unchosen = Survey();
+        unchosen.AudienceNotChosen = true;
+
+        Assert.True(Capture(unchosen).Settings.AudienceNotChosen);
+        Assert.Equal(["audienceNotChosen"], SurveyVersioning.Diff(Capture(unchosen), Capture()));
+        Assert.Empty(SurveyVersioning.Diff(Capture(), Capture()));
+    }
+
     [Fact]
     public void Marking_a_question_keep_at_end_is_reported_as_a_change_to_that_question()
     {

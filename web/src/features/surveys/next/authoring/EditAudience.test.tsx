@@ -237,6 +237,60 @@ describe('Editar audiencia on the survey detail page (G14 follow-up)', () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith({ departmentIds: ['tic'], userIds: ['a'] }))
   })
 
+  /**
+   * A questions-only copy (2026-11-18): the page says «Audiencia sin elegir», never «Toda la
+   * empresa»; the dialog says the audience is not chosen yet; and saving NO selection -- the whole
+   * company -- waits for an explicit confirmation, so choosing everyone is always deliberate.
+   */
+  describe('a copy whose audience is not chosen', () => {
+    const unchosen = () =>
+      survey({
+        status: 'draft', isContentEditable: true, responseCount: 0, allowedStatusTransitions: ['scheduled', 'active'],
+        departmentIds: [], userIds: [], audienceNotChosen: true,
+      })
+    const D = es.surveys.next.detail
+
+    it('reads «Audiencia sin elegir» on the page, never the whole company', () => {
+      renderView(unchosen())
+      expect(screen.getByTestId('tile-audience').textContent).toContain(D.audienceNotChosen)
+      expect(screen.getByTestId('tile-audience').textContent).not.toContain(D.audienceCompany)
+      expect(within(screen.getByTestId('detail-departments')).getByTestId('audience-not-chosen').textContent).toContain(D.audienceNotChosen)
+      expect(within(screen.getByTestId('detail-departments')).queryByText(D.wholeCompany)).toBeNull()
+    })
+
+    it('says so in the dialog, and saves the whole company only once that is confirmed', async () => {
+      const user = userEvent.setup()
+      const save = renderView(unchosen())
+      const dialog = await openDialog(user)
+
+      expect(within(dialog).getByTestId('audience-not-chosen-note').textContent).toBe(K.notChosenNote)
+      expect(within(dialog).getByTestId('audience-before').textContent).toBe(K.notChosen)
+      expect(within(dialog).getByTestId('audience-after').textContent).toBe(K.wholeCompany.replace('{count}', '3'))
+      expect(within(dialog).getByTestId('audience-widens')).toBeTruthy()
+      const saveButton = within(dialog).getByRole('button', { name: K.save }) as HTMLButtonElement
+      expect(saveButton.disabled).toBe(true)
+
+      await user.click(within(dialog).getByRole('checkbox', { name: K.confirmEveryone.replace('{count}', '3') }))
+      expect(saveButton.disabled).toBe(false)
+      await user.click(saveButton)
+
+      await waitFor(() => expect(save).toHaveBeenCalledWith({ departmentIds: [], userIds: [] }))
+    })
+
+    it('saves a chosen person without asking about the whole company', async () => {
+      const user = userEvent.setup()
+      const save = renderView(unchosen())
+      const dialog = await openDialog(user)
+
+      await user.click(within(dialog).getByRole('checkbox', { name: 'Bruno Solís' }))
+      expect(within(dialog).queryByRole('checkbox', { name: K.confirmEveryone.replace('{count}', '3') })).toBeNull()
+      expect(within(dialog).getByTestId('audience-after').textContent).toBe('1 persona')
+      await user.click(within(dialog).getByRole('button', { name: K.save }))
+
+      await waitFor(() => expect(save).toHaveBeenCalledWith({ departmentIds: [], userIds: ['b'] }))
+    })
+  })
+
   it('a refusal is said in Spanish and the dialog stays open', async () => {
     const user = userEvent.setup()
     renderView(survey({ status: 'draft', isContentEditable: true, responseCount: 0 }), vi.fn(async () => {

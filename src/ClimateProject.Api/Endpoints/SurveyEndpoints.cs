@@ -857,6 +857,15 @@ public static class SurveyEndpoints
             }
         }
 
+        // Saving ANY audience -- departments, people, or both lists empty, which is «Toda la
+        // empresa» -- is the decision a questions-only duplicate was waiting for, so it clears the
+        // marker. A request that does not touch the targets leaves it set. The change lands in the
+        // content diff below (`audienceNotChosen`), so it is audited like every other audience edit.
+        if (request.DepartmentIds is not null || request.UserIds is not null)
+        {
+            survey.AudienceNotChosen = false;
+        }
+
         if (request.Questions is not null)
         {
             var prepared = new List<PreparedQuestion>();
@@ -989,7 +998,7 @@ public static class SurveyEndpoints
             && !request.TargetAudienceCount.HasValue)
         {
             var resolved = await SurveyQueries
-                .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+                .Audience(db.Users.AsNoTracking(), db.Surveys.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
                 .CountAsync(cancellationToken);
             if (survey.TargetAudienceCount != resolved)
             {
@@ -1229,6 +1238,15 @@ public static class SurveyEndpoints
             return null;
         }
 
+        // A survey whose audience was never chosen cannot open, now or on a schedule: activating
+        // it would ask nobody, and choosing "everyone" is «Editar audiencia»'s decision, never a
+        // side effect of publishing (Survey.AudienceNotChosen).
+        if (survey.AudienceNotChosen
+            && (target == SurveyStatuses.Scheduled || target == SurveyStatuses.Active))
+        {
+            return AudienceNotChosen();
+        }
+
         // The freeze, restated on the lifecycle path. SurveyStatuses already makes 'draft'
         // unreachable from anything that accepts responses, so this can only fire on a row
         // whose status and responses disagree with the transition map -- a legacy import, a
@@ -1436,7 +1454,7 @@ public static class SurveyEndpoints
             actor.UserId,
             duplicatedAt,
             Guid.NewGuid,
-            new SurveyDuplicateOptions(titleEn, titleEs, startDate, endDate));
+            new SurveyDuplicateOptions(titleEn, titleEs, startDate, endDate, request?.IncludeAudience ?? true));
 
         db.Surveys.Add(copy.Survey);
         db.SurveyDepartmentTargets.AddRange(copy.DepartmentTargets);
@@ -1453,8 +1471,11 @@ public static class SurveyEndpoints
         SurveyAuditTrail.Record(
             db, survey.Id, SurveyAuditActions.Duplicated, SurveyAuditEntityTypes.Survey, actor, duplicatedAt,
             entityId: copy.Survey.Id.ToString());
+        // A copy whose audience was left unchosen says so in its first entry, so its history shows
+        // the marker being set here and cleared by the «Editar audiencia» that chooses one.
         SurveyAuditTrail.Record(
             db, copy.Survey.Id, SurveyAuditActions.Created, SurveyAuditEntityTypes.Survey, actor, duplicatedAt,
+            copy.Survey.AudienceNotChosen ? new SurveyAuditChangeSet(Fields: ["audienceNotChosen"]) : null,
             entityId: survey.Id.ToString());
 
         await db.SaveChangesAsync(cancellationToken);
@@ -2172,14 +2193,34 @@ public static class SurveyEndpoints
             userIds,
             questionDtos,
             settings,
-            SurveyStatuses.AllowedTransitionsFrom(survey.Status),
+            // The screen drives its status buttons from this list and nothing else, so a survey
+            // whose audience was never chosen is not offered the two moves the status change
+            // refuses for it (scheduled, active) -- «Editar audiencia» first.
+            survey.AudienceNotChosen
+                ? [.. SurveyStatuses.AllowedTransitionsFrom(survey.Status)
+                    .Where(status => status != SurveyStatuses.Scheduled && status != SurveyStatuses.Active)]
+                : SurveyStatuses.AllowedTransitionsFrom(survey.Status),
             SurveyStatuses.AllowsContentEdit(survey.Status),
             survey.CreatedAt,
             survey.UpdatedAt,
-            survey.ServiceType);
+            survey.ServiceType,
+            survey.AudienceNotChosen);
     }
 
     private static IResult NotFound() => Results.Json(new { message = "Survey not found" }, statusCode: 404);
+
+    /// <summary>
+    /// The one refusal every route that mails or admits people gives while
+    /// <c>Survey.AudienceNotChosen</c> is set, and the status change to scheduled or active.
+    /// </summary>
+    internal static IResult AudienceNotChosen() => Results.Json(
+        new
+        {
+            message = "This survey's audience has not been chosen yet (it was duplicated with its questions only). "
+                      + "Choose who answers it with «Editar audiencia» before sending it, scheduling it or activating it.",
+            code = AdminRefusals.SurveyAudienceNotChosen,
+        },
+        statusCode: 409);
 
     private static IResult InvalidSurveyType(string? type) =>
         Results.Json(

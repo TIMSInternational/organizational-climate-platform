@@ -178,10 +178,12 @@ export function DistributionView({
   const sendCopy = personalLink ? 'link' : 'send'
   // The survey's own targets, BOTH kinds. Passing the departments alone is what made a
   // survey aimed at 240 people by name read as "the whole company · 642 personas".
-  const surveyTargets = { departmentIds: survey.departmentIds, userIds: survey.userIds }
+  // A questions-only copy is aimed at NOBODY until «Editar audiencia» chooses (`audienceNotChosen`).
+  const notChosen = survey.audienceNotChosen === true
+  const surveyTargets = { departmentIds: survey.departmentIds, userIds: survey.userIds, audienceNotChosen: notChosen }
   // The audience the server would resolve for the survey as targeted — `SurveyQueries.Audience`,
   // mirrored by `estimateAudience`. Unknown (null), never 0, for a viewer who cannot read users.
-  const resolved = scoped
+  const resolved = scoped && !notChosen
     ? estimateAudience('allTargeted', users, { departmentIds: [], userIds: [] }, surveyTargets).length
     : null
   const recipients = estimateAudience(
@@ -198,7 +200,14 @@ export function DistributionView({
   // progress line beneath them ("0 con código" over "Enviando códigos: 200 de 617").
   const sentSoFar = progress?.done ?? 0
   const coverage = { ...read, covered: read.covered + sentSoFar, uncovered: Math.max(0, read.uncovered - sentSoFar) }
-  const steps = launchChecklist({ audience: resolved, publicLink: distribution?.publicLink ?? null, summary, perSurvey, personalLink })
+  const steps = launchChecklist({
+    audience: resolved,
+    publicLink: distribution?.publicLink ?? null,
+    summary,
+    perSurvey,
+    personalLink,
+    audienceNotChosen: notChosen,
+  })
   const ready = readySteps(steps)
   const firstMissing = steps.find((step) => step.state === 'missing')
   const firstUnknown = steps.find((step) => step.state === 'unknown')
@@ -223,7 +232,8 @@ export function DistributionView({
   const audience = surveyAudience({
     invited: resolved !== null && summary.total < resolved ? null : summary.total,
     resolved,
-    stated: survey.targetAudienceCount,
+    // A declared count is about people somebody chose; an unchosen audience has none.
+    stated: notChosen ? null : survey.targetAudienceCount,
   })
   const rate = responseRate(survey.responseCount, audience?.count ?? null)
   // A survey handed out by link has no roster, so its reach is UNKNOWN rather than zero.
@@ -327,7 +337,9 @@ export function DistributionView({
               {firstMissing
                 ? firstMissing.id === 'invitations'
                   ? copy(perSurvey ? 'send.missingCodes' : personalLink ? 'link.missing' : 'send.missingShared')
-                  : copy(`missing.${firstMissing.id}`)
+                  : firstMissing.id === 'audience' && notChosen
+                    ? copy('missingAudienceNotChosen')
+                    : copy(`missing.${firstMissing.id}`)
                 : firstUnknown ? copy(`unknown.${firstUnknown.id}`) : copy('allReady')}
             </span>
           }
@@ -497,7 +509,9 @@ export function DistributionView({
           testId="step-audience"
           state={stateOf('audience')}
           title={
-            stateOf('audience') === 'done'
+            notChosen
+              ? copy('audienceNotChosenTitle')
+              : stateOf('audience') === 'done'
               ? copy('audienceTitle')
               : stateOf('audience') === 'unknown'
                 ? copy('audienceUnknownTitle')
@@ -518,7 +532,9 @@ export function DistributionView({
           }
         >
           <p className="m-0 text-sm text-fg-secondary">
-            {stateOf('audience') === 'idle'
+            {notChosen
+              ? copy('audienceNotChosen')
+              : stateOf('audience') === 'idle'
               ? copy('audienceByLink')
               : resolved === null
               ? summary.total > 0

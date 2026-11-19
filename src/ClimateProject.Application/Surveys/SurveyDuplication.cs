@@ -20,11 +20,16 @@ public sealed record SurveyStructure(
 }
 
 /// <summary>Caller-supplied overrides for the copy. Anything null keeps the original's value.</summary>
+/// <param name="IncludeAudience">
+/// False: the copy carries no targets and is marked <see cref="Survey.AudienceNotChosen"/> --
+/// aimed at nobody until an audience is chosen. Never "no targets" alone, which is everyone.
+/// </param>
 public sealed record SurveyDuplicateOptions(
     string? TitleEn = null,
     string? TitleEs = null,
     DateTimeOffset? StartDate = null,
-    DateTimeOffset? EndDate = null);
+    DateTimeOffset? EndDate = null,
+    bool IncludeAudience = true);
 
 /// <summary>
 /// The deep copy, as a pure function over entities.
@@ -96,7 +101,14 @@ public static class SurveyDuplication
             Status = SurveyStatuses.Draft,
             ResponseCount = 0,
             Version = 1,
-            TargetAudienceCount = original.TargetAudienceCount,
+            // The declared denominator is about the source's people; a copy without them has
+            // none to declare yet.
+            TargetAudienceCount = opts.IncludeAudience ? original.TargetAudienceCount : null,
+
+            // Set when the people are left behind -- and KEPT when the source itself had none
+            // chosen: "the same audience" as an unchosen one is still unchosen, and copying its
+            // empty target set without the marker would aim the copy at the whole company.
+            AudienceNotChosen = !opts.IncludeAudience || original.AudienceNotChosen,
 
             Settings = CopySettings(original.Settings),
             CreatedAt = now,
@@ -191,17 +203,24 @@ public static class SurveyDuplication
             })
             .ToList();
 
-        var departmentTargets = source.DepartmentTargets
-            .Select(t => new SurveyDepartmentTarget { SurveyId = newSurveyId, DepartmentId = t.DepartmentId })
-            .ToList();
+        // «Solo las preguntas»: no targets of either kind, and the marker above is what makes that
+        // read as nobody. Both lists, always together -- leaving one behind would aim the copy at
+        // that half of the source's audience.
+        var departmentTargets = !opts.IncludeAudience
+            ? []
+            : source.DepartmentTargets
+                .Select(t => new SurveyDepartmentTarget { SurveyId = newSurveyId, DepartmentId = t.DepartmentId })
+                .ToList();
 
         // The people the source was aimed at by name. Copying the departments alone turned a
         // survey sent to 240 named people into one aimed at the whole company: an empty
         // target set means "everyone" (`SurveyQueries.Audience`), so the copy did not lose its
         // audience, it silently widened it (audit G14, Teletrabajo).
-        var userTargets = source.UserTargets
-            .Select(t => new SurveyUserTarget { SurveyId = newSurveyId, UserId = t.UserId })
-            .ToList();
+        var userTargets = !opts.IncludeAudience
+            ? []
+            : source.UserTargets
+                .Select(t => new SurveyUserTarget { SurveyId = newSurveyId, UserId = t.UserId })
+                .ToList();
 
         // Responses, invitations, distributions, drafts, versions and audit logs are
         // absent by construction rather than by filter: they are not inputs to this

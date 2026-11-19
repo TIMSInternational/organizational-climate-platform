@@ -147,6 +147,17 @@ describe('launchChecklist', () => {
     expect(readySteps(all)).toBe(3)
   })
 
+  /**
+   * «Audiencia confirmada» is never met for a questions-only copy, whatever else is open: an open
+   * link or a directory of people does not make "nobody chose who answers" a ready audience.
+   */
+  it('never confirms the audience of a survey whose audience was not chosen', () => {
+    const steps = launchChecklist({ audience: 41, publicLink: '/s/abc', summary: summary(), perSurvey: false, audienceNotChosen: true })
+    expect(steps.find((step) => step.id === 'audience')?.state).toBe('missing')
+    expect(readySteps(steps)).toBe(2)
+    expect(launchChecklist({ audience: 41, publicLink: '/s/abc', summary: summary(), perSurvey: false })[0].state).toBe('done')
+  })
+
   it('still blocks when NEITHER door is open, because then nobody can answer', () => {
     const steps = launchChecklist({ audience: 0, publicLink: null, summary: summary(), perSurvey: false })
     expect(steps.find((step) => step.id === 'link')?.state).toBe('missing')

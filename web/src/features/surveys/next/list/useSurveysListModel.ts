@@ -30,8 +30,19 @@ export interface SurveysListModelState {
   statusFilter: string
   setStatusFilter: (status: string) => void
   reload: () => void
-  /** Duplicates a survey into a fresh draft and opens it (`POST /surveys/{id}/duplicate`). */
+  /**
+   * «Duplicar» on a row: asks which copy to make first (`DuplicateSurveyDialog`) -- nothing is
+   * sent until `confirmDuplicate`.
+   */
   duplicate: (id: string) => void
+  /** The survey whose «Duplicar» is asking, or null. */
+  duplicateTarget: string | null
+  cancelDuplicate: () => void
+  /**
+   * Duplicates the asked-about survey into a fresh draft and opens it
+   * (`POST /surveys/{id}/duplicate`); `includeAudience` false is «Solo las preguntas».
+   */
+  confirmDuplicate: (includeAudience: boolean) => void
   /** The survey being duplicated, while the request is in flight. */
   duplicating: string | null
   /** The server's message when a duplicate was refused. */
@@ -121,16 +132,25 @@ export function useSurveysListModel(): SurveysListModelState {
     [draft],
   )
 
-  const duplicate = useCallback(
-    (id: string) => {
-      setActionError(null)
+  const [duplicateTarget, setDuplicateTarget] = useState<string | null>(null)
+
+  const duplicate = useCallback((id: string) => {
+    setActionError(null)
+    setDuplicateTarget(id)
+  }, [])
+
+  const confirmDuplicate = useCallback(
+    (includeAudience: boolean) => {
+      const id = duplicateTarget
+      setDuplicateTarget(null)
+      if (id === null) return
       setDuplicating(id)
-      duplicateSurvey(baseUrl, id, locale)
+      duplicateSurvey(baseUrl, id, locale, { includeAudience })
         .then((copy) => navigate(`/surveys/${copy.id}`))
         .catch((err: unknown) => setActionError(describeApiError(err, t)))
         .finally(() => setDuplicating(null))
     },
-    [baseUrl, locale, navigate, t],
+    [baseUrl, duplicateTarget, locale, navigate, t],
   )
 
   return {
@@ -149,6 +169,9 @@ export function useSurveysListModel(): SurveysListModelState {
       void reload()
     },
     duplicate,
+    duplicateTarget,
+    cancelDuplicate: () => setDuplicateTarget(null),
+    confirmDuplicate,
     duplicating,
     actionError,
   }

@@ -124,12 +124,13 @@ export function useSurveyDetailModel(id: string | undefined) {
     [baseUrl, id, locale, state, t],
   )
 
-  const duplicate = useCallback(async () => {
+  /** `includeAudience` false is «Solo las preguntas»: the copy's audience is left unchosen. */
+  const duplicate = useCallback(async (includeAudience = true) => {
     if (!id) return
     setActionError(null)
     setPending('duplicate')
     try {
-      const copy = await duplicateSurvey(baseUrl, id, locale)
+      const copy = await duplicateSurvey(baseUrl, id, locale, { includeAudience })
       navigate(`/surveys/${copy.id}`)
     } catch (error) {
       setActionError(describeApiError(error, t))

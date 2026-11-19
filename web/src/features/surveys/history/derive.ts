@@ -64,7 +64,7 @@ type TopLevel = (typeof TOP_LEVEL)[number]
  * `userIds` to its `updated` entry when the survey's named people change
  * (`SurveyEndpoints.cs`), and a version snapshot stores no user targets. Labelled, never valued.
  */
-const AUDIT_ONLY = ['userIds'] as const
+const AUDIT_ONLY = ['userIds', 'audienceNotChosen'] as const
 type AuditOnly = (typeof AUDIT_ONLY)[number]
 
 export type ParsedPath =
@@ -288,7 +288,11 @@ export function entryHeadline(t: TranslateFn, entry: SurveyAuditEntry): string {
   const changes = entry.changes
   switch (entry.action) {
     case 'created':
-      return t(`${K}.action.created`)
+      // A questions-only copy says so where its history starts; «Editar audiencia» later records
+      // the choice as `audienceNotChosen` on an `updated` entry.
+      return changes?.fields?.includes('audienceNotChosen') === true
+        ? t(`${K}.action.createdAudienceNotChosen`)
+        : t(`${K}.action.created`)
     case 'updated': {
       const count = changes?.fields?.length ?? 0
       return count === 0 ? t(`${K}.action.updatedNoFields`) : t(count === 1 ? `${K}.action.updatedOne` : `${K}.action.updated`, { count })

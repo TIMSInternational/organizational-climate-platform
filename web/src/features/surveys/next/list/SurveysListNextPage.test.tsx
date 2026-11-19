@@ -410,8 +410,27 @@ describe('SurveysListNextPage', () => {
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
     await openMenu('q3')
     await userEvent.click(screen.getByRole('menuitem', { name: en.surveys.duplicate }))
+    // «Duplicar» asks which copy first; nothing is sent until the choice is confirmed.
+    const dialog = await screen.findByTestId('duplicate-survey-dialog')
+    expect(vi.mocked(duplicateSurvey)).not.toHaveBeenCalled()
+    await userEvent.click(within(dialog).getByRole('button', { name: en.surveys.next.duplicate.confirm }))
     expect(await screen.findByTestId('detail')).toBeTruthy()
     expect(vi.mocked(duplicateSurvey).mock.calls[0]?.[1]).toBe('q3')
+    // The default is today's copy, with the same audience.
+    expect(vi.mocked(duplicateSurvey).mock.calls[0]?.[3]).toEqual({ includeAudience: true })
+  })
+
+  it('makes a questions-only copy when that is the choice, leaving its audience unchosen', async () => {
+    vi.mocked(duplicateSurvey).mockResolvedValue({ id: 'fresh' } as SurveyDetail)
+    renderAs({ role: 'company_admin', companyId: 'c1' })
+    await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
+    await openMenu('q3')
+    await userEvent.click(screen.getByRole('menuitem', { name: en.surveys.duplicate }))
+    const dialog = await screen.findByTestId('duplicate-survey-dialog')
+    await userEvent.click(within(dialog).getByRole('radio', { name: new RegExp(en.surveys.next.duplicate.questionsOnly) }))
+    await userEvent.click(within(dialog).getByRole('button', { name: en.surveys.next.duplicate.confirm }))
+    expect(await screen.findByTestId('detail')).toBeTruthy()
+    expect(vi.mocked(duplicateSurvey).mock.calls[0]?.[3]).toEqual({ includeAudience: false })
   })
 
   it('says why a duplicate failed, in the reader’s language, and keeps the list', async () => {
@@ -420,6 +439,9 @@ describe('SurveysListNextPage', () => {
     await screen.findByRole('heading', { name: new RegExp(copy.openHeading) })
     await openMenu('q1')
     await userEvent.click(screen.getByRole('menuitem', { name: en.surveys.duplicate }))
+    await userEvent.click(
+      within(await screen.findByTestId('duplicate-survey-dialog')).getByRole('button', { name: en.surveys.next.duplicate.confirm }),
+    )
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toContain(en.errors.api.notFound)
     expect(alert.textContent).not.toContain('Survey not found')

@@ -183,6 +183,29 @@ const detail = (s: SurveyDetail, role = 'company_admin', extra: Partial<Paramete
   )
 
 describe('Detalle de encuesta (SurveyDetail artboard)', () => {
+  /** «Duplicar» asks which copy first (2026-11-18), and only the confirmed choice is passed on. */
+  it('asks which copy «Duplicar» makes before making it', async () => {
+    const onDuplicate = vi.fn()
+    renderAs(
+      'company_admin',
+      <SurveyDetailView
+        model={{ survey: survey(), departments, distribution: null, invitations: invitationList(), users: null }}
+        pending={null}
+        actionError={null}
+        onTransition={() => undefined}
+        onDuplicate={onDuplicate}
+        now={new Date(2026, 8, 10)}
+      />,
+    )
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Duplicar' }))
+    const dialog = await screen.findByTestId('duplicate-survey-dialog')
+    expect(onDuplicate).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('radio', { name: new RegExp(es.surveys.next.duplicate.questionsOnly) }))
+    await user.click(within(dialog).getByRole('button', { name: es.surveys.next.duplicate.confirm }))
+    expect(onDuplicate).toHaveBeenCalledWith(false)
+  })
+
   it('offers a company administrator the header actions and the one transition the server allows', () => {
     detail(survey())
     expect(screen.getByRole('button', { name: 'Duplicar' })).toBeTruthy()
@@ -511,6 +534,24 @@ describe('Distribución (Distribution artboard)', () => {
       survey: survey({ departmentIds: [], userIds: [] }),
     })
     expect(screen.getByTestId('step-audience').textContent).toContain('Toda la empresa · 6 personas.')
+  })
+
+  /**
+   * A questions-only copy (2026-11-18): both lists empty, and NOBODY -- «Audiencia sin elegir»,
+   * the checklist step not met, no reach -- where an untargeted survey reads the whole company.
+   */
+  it('reads a copy whose audience was not chosen as unchosen, never as the whole company', () => {
+    distribution(invitationList(), 'company_admin', true, {
+      survey: survey({ status: 'draft', departmentIds: [], userIds: [], audienceNotChosen: true }),
+    })
+    const step = screen.getByTestId('step-audience')
+    expect(step.getAttribute('data-state')).toBe('missing')
+    expect(step.textContent).toContain(es.surveys.next.distribution.audienceNotChosenTitle)
+    expect(step.textContent).toContain(es.surveys.next.distribution.audienceNotChosen)
+    expect(step.textContent).not.toContain('Toda la empresa')
+    expect(step.textContent).not.toContain(es.surveys.next.distribution.audienceTitle)
+    expect(reading('tile-reach')).toBe('—')
+    expect(screen.getByTestId('tile-ready').textContent).toContain(es.surveys.next.distribution.missingAudienceNotChosen)
   })
 
   it('names both halves when a survey targets departments AND people', () => {

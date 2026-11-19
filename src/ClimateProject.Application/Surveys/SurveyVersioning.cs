@@ -108,6 +108,12 @@ public sealed record SurveyVersionSettingsSnapshot(
     string? RespondentIntroEs = null,
     string? ClosingMessageEn = null,
     string? ClosingMessageEs = null,
+    /// <summary>
+    /// Added 2026-11-18 (<c>Survey.AudienceNotChosen</c>): the audience beside
+    /// <see cref="DepartmentIds"/> was never chosen, so it is nobody rather than everyone. Every
+    /// snapshot before that date deserialises it as false, which is what those surveys were.
+    /// </summary>
+    bool AudienceNotChosen = false,
     /// <summary>Added 2026-11-19; null in older snapshots, which is "calculated", what they had.</summary>
     int? EstimatedMinutes = null);
 
@@ -251,6 +257,7 @@ public static class SurveyVersioning
             survey.Settings.RespondentIntroEs,
             survey.Settings.ClosingMessageEn,
             survey.Settings.ClosingMessageEs,
+            survey.AudienceNotChosen,
             survey.Settings.EstimatedMinutes);
 
         return new SurveyVersionContent(
@@ -348,6 +355,7 @@ public static class SurveyVersioning
         ("startDate", s => s.StartDate),
         ("endDate", s => s.EndDate),
         ("targetAudienceCount", s => s.TargetAudienceCount),
+        ("audienceNotChosen", s => s.AudienceNotChosen),
         ("settings.anonymous", s => s.Anonymous),
         ("settings.allowPartialResponses", s => s.AllowPartialResponses),
         ("settings.randomizeQuestions", s => s.RandomizeQuestions),

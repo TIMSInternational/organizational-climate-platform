@@ -19,6 +19,8 @@ const DIFF_PATHS = [
   'settings.notificationReminderFrequencyDays', 'settings.invitationCustomMessage', 'settings.invitationCustomSubject',
   'settings.invitationIncludeCredentials', 'settings.invitationSendImmediately', 'settings.invitationBrandingEnabled',
   'settings.oneSessionOnly', 'settings.respondentIntro', 'settings.closingMessage', 'departmentIds',
+  // 2026-11-18: «Editar audiencia» choosing the audience of a questions-only copy.
+  'audienceNotChosen',
   ...['added', 'removed', 'type', 'text', 'scaleMin', 'scaleMax', 'scaleLabelMin', 'scaleLabelMax', 'required',
     'commentRequired', 'commentPrompt', 'category', 'options', 'keepAtEnd'].map((part) => `questions[2].${part}`),
 ]
@@ -72,6 +74,21 @@ describe('history labels', () => {
     const base = { id: 'e', surveyId: 's', entityType: 'survey', entityId: null, userId: 'u', userName: 'Ana', userEmail: 'a@acme.test', userRole: 'company_admin', timestamp: '2026-10-23T18:40:00Z', ipAddress: null }
     expect(entryHeadline(tEs, { ...base, action: 'updated', changes: { fields: ['userIds'] } })).toBe('Editó la encuesta (1 campo)')
     expect(fieldLabel(tEs, 'userIds')).not.toBe('Otro campo')
+  })
+
+  /**
+   * A questions-only copy's history shows the marker set where it starts, and cleared by the
+   * «Editar audiencia» that chooses its audience.
+   */
+  it('says a copy started with its audience unchosen, and names the edit that chose it', () => {
+    const base = { id: 'e', surveyId: 's', entityType: 'survey', entityId: 'src', userId: 'u', userName: 'Ana', userEmail: 'a@acme.test', userRole: 'super_admin', timestamp: '2026-11-18T18:40:00Z', ipAddress: null }
+    expect(entryHeadline(tEs, { ...base, action: 'created', changes: { fields: ['audienceNotChosen'] } })).toBe(
+      es.surveys.next.history.action.createdAudienceNotChosen,
+    )
+    expect(entryHeadline(tEs, { ...base, action: 'created', changes: null })).toBe(es.surveys.next.history.action.created)
+    expect(parsePath('audienceNotChosen').kind).toBe('auditOnly')
+    expect(fieldLabel(tEs, 'audienceNotChosen')).toBe(es.surveys.next.history.field.audienceNotChosen)
+    expect(fieldLabel(tEn, 'audienceNotChosen')).toBe(en.surveys.next.history.field.audienceNotChosen)
   })
 
   it('counts questions from 1 by their place in the version, whatever the stored order starts at', () => {
