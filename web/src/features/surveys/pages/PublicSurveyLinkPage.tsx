@@ -6,6 +6,10 @@ import SurveyRespondForm, { RespondSurface } from '../components/SurveyRespondFo
 import { EntryOutcomeCard } from '../next/entry/EntryOutcomeCard'
 import { PublicRespondEntryView } from '../next/entry/PublicRespondEntryView'
 import { usePublicEntryModel } from '../next/entry/usePublicEntryModel'
+import type { EntryPromise } from '../respondPromise'
+
+/** The entry card draws `AnonymityNotice` from the same respond view the form reads. */
+const ENTRY_PROMISE: EntryPromise = 'respondView'
 
 /**
  * `/s/:token` — the open share link, as the person who was handed it experiences it.
@@ -65,7 +69,10 @@ export default function PublicSurveyLinkPage() {
         // anonymous visitors, and the server deliberately does not say which — and it
         // drops the "back to Home" link from the confirmation, which for this visitor
         // is a round trip through `RequireAuth` to a sign-in form they did not ask for.
-        <SurveyRespondForm surveyId={state.surveyId} publicEntry />
+        //
+        // `entryPromise`: «Anónima» was shown on the entry card, so the form opens on the
+        // survey itself (PROCOMER, 2026-11-18).
+        <SurveyRespondForm surveyId={state.surveyId} publicEntry entryPromise={ENTRY_PROMISE} />
       ) : (
         <RespondSurface>
           {state.status === 'waiting' && <ResolvingNotice />}

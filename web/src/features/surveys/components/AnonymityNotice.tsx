@@ -57,6 +57,10 @@ import { useTranslation } from '../../../i18n'
  * about. It has to be *this* promise, character for character, in all three: two blocks
  * that both claim to describe how a response is stored and disagree by a clause is
  * worse than one of them not existing.
+ *
+ * Where a start page stands in front of the form (`/s/:token`, `/survey-invitations/:token`)
+ * the promise is made on that page only, and the form draws no second block (PROCOMER,
+ * 2026-11-18) — see `respondPromise.ts` for when the form must draw it anyway.
  */
 export function AnonymityNotice({
   anonymous,

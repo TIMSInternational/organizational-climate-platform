@@ -188,9 +188,10 @@ export default function SurveyInvitationPage() {
     void recordSurveyInvitationStep(baseUrl, token, 'completed').catch(ignoreTrackingFailure)
   }
 
-  // No anonymity chip on the shell: the landing card's `AnonymityNotice`, then the form's,
-  // make the promise once, under the strip — the canvas's RespondSurveyPhone draws no chip
-  // in it. See `RespondShell`.
+  // No anonymity chip on the shell: the landing card's `AnonymityNotice` makes the promise
+  // once, under the strip — the canvas's RespondSurveyPhone draws no chip in it. See
+  // `RespondShell`. The form repeats it only when its own would say something the card
+  // could not (`respondPromise.ts`).
   return (
     <RespondShell skipLabel={t('skipToSurvey')} contentId="survey">
       {state.status === 'answering' ? (
@@ -199,10 +200,15 @@ export default function SurveyInvitationPage() {
         // an email has no session, so a 401 here means the survey is closed or not open
         // to anonymous respondents rather than "your token went stale", and there is no
         // Home for the confirmation to send them to.
+        //
+        // `entryPromise`: what the landing card's `AnonymityNotice` said, so the form does
+        // not say it again (PROCOMER, 2026-11-18) -- unless the form's would differ, which
+        // `promiseMadeAtEntry` decides.
         <SurveyRespondForm
           surveyId={state.detail.surveyId}
           publicEntry
           onSubmitted={reportCompleted}
+          entryPromise={{ invitation: state.detail.anonymity.anonymous }}
         />
       ) : (
         <RespondSurface>

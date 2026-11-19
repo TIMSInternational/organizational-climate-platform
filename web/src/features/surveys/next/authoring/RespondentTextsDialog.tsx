@@ -131,7 +131,8 @@ export function RespondentTextsDialog({
                     <TextareaField
                       label={t('surveys.next.respondentTexts.closingLabel')}
                       description={t('surveys.next.respondentTexts.closingHelp', { max: RESPONDENT_CLOSING_MAX })}
-                      placeholder={`${fallback('surveyRespond.thankYouTitle')}. ${fallback('surveyRespond.thankYouBody')}`}
+                      // The default thanks is its title alone since 2026-11-18 (`Submitted`).
+                      placeholder={fallback('surveyRespond.thankYouTitle')}
                       value={state.draft[locale].closing.text}
                       rows={3}
                       maxLength={RESPONDENT_CLOSING_MAX}

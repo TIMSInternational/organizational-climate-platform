@@ -65,7 +65,9 @@ describe('RespondentTextsDialog', () => {
     expect(intro.value).toBe('Texto de Eagle')
     expect(closing.value).toBe('')
     // A Spanish-only survey: one column, and the placeholders are the Spanish defaults.
-    expect(closing.placeholder).toBe(`${es.surveyRespond.thankYouTitle}. ${es.surveyRespond.thankYouBody}`)
+    // The default thanks is its title alone (PROCOMER, 2026-11-18): the line under it is gone.
+    expect(closing.placeholder).toBe(es.surveyRespond.thankYouTitle)
+    expect(closing.placeholder).not.toContain(es.surveyRespond.thankYouBody)
     expect(intro.placeholder).toBe(es.surveyRespond.anonymousBody)
   })
 

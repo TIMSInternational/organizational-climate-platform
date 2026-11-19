@@ -433,8 +433,26 @@ describe('PublicSurveyLinkPage', () => {
 
     await begin()
 
+    expect(await screen.findByRole('button', { name: 'Enviar mis respuestas' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Bien' })).toBeTruthy()
+  })
+
+  /**
+   * «Anónima» on the start page only (PROCOMER, 2026-11-18). The entry card made the promise;
+   * the form opens on the survey itself, with no second block over the first question.
+   */
+  it('makes the anonymity promise on the entry card and does not repeat it over the first question', async () => {
+    serve({})
+    const { container } = renderPage()
+
     expect(await screen.findByText('Esta encuesta es anónima')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Enviar mis respuestas' })).toBeTruthy()
+    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(1)
+
+    await begin()
+    await screen.findByRole('radio', { name: 'Bien' })
+
+    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(0)
+    expect(screen.queryByText('Esta encuesta es anónima')).toBeNull()
   })
 
   it('renders none of the authenticated shell, even with a token in storage', async () => {

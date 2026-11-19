@@ -57,6 +57,7 @@ import {
 import { respondDimensions } from '../respondDimensions'
 import { dimensionLabel } from '../dimensionLabel'
 import { hasAnswered, markAnswered } from '../respondReceipt'
+import { promiseMadeAtEntry, type EntryPromise } from '../respondPromise'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import { useRespondLock } from '../useRespondLock'
 import {
@@ -107,6 +108,14 @@ export interface SurveyRespondFormProps {
    * callback's meaning ("a response was just accepted") true rather than nearly true.
    */
   onSubmitted?: () => void
+  /**
+   * The anonymity block the start page in front of this form already drew (`/s/:token`,
+   * `/survey-invitations/:token`). When it is the promise this form would make, the form
+   * draws none -- on the demographic, identity and question screens alike: «Anónima» is shown
+   * on the start page only (PROCOMER, 2026-11-18). Absent on the routes with no start page,
+   * where the form remains the first place the promise is made. See `respondPromise.ts`.
+   */
+  entryPromise?: EntryPromise
 }
 
 type LoadState =
@@ -188,7 +197,8 @@ function markSaving(previous: RespondSaveState): RespondSaveState {
  * ## The shape the canvas draws (RespondSurveyPhone, 10 Sep)
  *
  * One column, one question at a time — the triage's "one question at a time on small
- * screens". The anonymity promise is the first block, once; then the survey's name
+ * screens". The anonymity promise is the first block, once (or not at all, when a start
+ * page in front of the form already made it — `entryPromise`); then the survey's name
  * with "2 de 6" over a 6px bar; the question card with its `2/6` chip and dimension;
  * Anterior and Siguiente right under it (the submit on the last page); "Guardar y
  * terminar después" and the save state under those; and the close date and the time
@@ -201,6 +211,7 @@ export default function SurveyRespondForm({
   surveyId,
   publicEntry = false,
   onSubmitted,
+  entryPromise,
 }: SurveyRespondFormProps) {
   const { t, locale, adoptContentLocale } = useTranslation('surveyRespond')
   const { t: tRoot } = useTranslation()
@@ -241,11 +252,6 @@ export default function SurveyRespondForm({
   const [busy, setBusy] = useState<'idle' | 'saving' | 'submitting'>('idle')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [result, setResult] = useState<SurveySubmissionResult | null>(null)
-  // The wall-clock moment the server accepted the response, kept because nothing in
-  // `SurveySubmissionResult` carries one and the confirmation says "submitted at
-  // 09:14". Recorded here rather than read off the clock while rendering, so the
-  // time does not creep forward every time the confirmation re-renders.
-  const [submittedAt, setSubmittedAt] = useState<number | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [now, setNow] = useState(() => Date.now())
   // Whether anything the respondent has typed is anywhere but this screen (#369).
@@ -687,7 +693,6 @@ export default function SurveyRespondForm({
         // `respondReceipt.ts` for why the flag is browser-local and why it is not, and
         // must not be described as, a one-response-per-person guarantee.
         markAnswered(view.id)
-        setSubmittedAt(Date.now())
         setResult(submission)
         // After the state updates, never before: whatever the caller does with this
         // must not be able to stand between the respondent and their confirmation.
@@ -971,7 +976,6 @@ export default function SurveyRespondForm({
         <Submitted
           result={result}
           endDate={view?.endDate ?? null}
-          submittedAt={submittedAt}
           locale={locale}
           publicEntry={publicEntry}
           closingMessage={view?.closingMessage?.trim() ? view.closingMessage : null}
@@ -1024,6 +1028,9 @@ export default function SurveyRespondForm({
   }
 
   if (!view) return null
+
+  // The start page in front of this form already made the promise: draw no second block.
+  const promiseAtEntry = promiseMadeAtEntry(entryPromise, view)
 
   /*
    * The demographic prelude: a respondent with NO account answering the company's own
@@ -1084,8 +1091,12 @@ export default function SurveyRespondForm({
             their sex; the promise about what happens to those is the consent, and it has
             to be legible at the moment it is given rather than one tap behind a
             disclosure. The question screens collapse it from question 2 on for vertical
-            room, which is a different situation: by then the promise has been read. */}
-        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
+            room, which is a different situation: by then the promise has been read.
+            None at all when the start page in front of this screen made it
+            (`promiseAtEntry`): it was read there, one tap ago. */}
+        {promiseAtEntry ? null : (
+          <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
+        )}
         {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
         <PrivacyNoticeLink view={view} />
 
@@ -1182,8 +1193,11 @@ export default function SurveyRespondForm({
     return (
       <RespondSurface>
         {/* Open, for the demographic screen's reason: this is the moment a name is given,
-            and the promise about what happens to it is the consent. */}
-        <AnonymityNotice anonymous={view.anonymous} recordsParticipation intro={view.respondentIntro} />
+            and the promise about what happens to it is the consent -- unless the start
+            page already made it (`promiseAtEntry`). */}
+        {promiseAtEntry ? null : (
+          <AnonymityNotice anonymous={view.anonymous} recordsParticipation intro={view.respondentIntro} />
+        )}
         {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
         <PrivacyNoticeLink view={view} />
 
@@ -1273,8 +1287,14 @@ export default function SurveyRespondForm({
 
           From the second question on it stays at that head collapsed, not shortened —
           the same characters, one tap away, costing ~40px instead of ~148px of an
-          844px fold. `AnonymityNotice` carries the measurement and the reasoning. */}
-      <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} intro={view.respondentIntro} />
+          844px fold. `AnonymityNotice` carries the measurement and the reasoning.
+
+          Not here at all when a start page in front of the form made it
+          (`promiseAtEntry`, PROCOMER 2026-11-18): «Anónima» is shown there only, and
+          the first question page opens on the survey's own welcome text. */}
+      {promiseAtEntry ? null : (
+        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} intro={view.respondentIntro} />
+      )}
       {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
       <PrivacyNoticeLink view={view} />
 
@@ -1849,8 +1869,15 @@ const WHAT_HAPPENS_HEADING_ID = 'respond-what-happens-now'
  * just handed over forty answers, they will never be shown a copy of them, and the
  * page they are looking at is the last one most of them will ever see. So it answers
  * the three questions that are actually outstanding — what happens to the answers,
- * when the survey closes, when results come back — and then says plainly why there
- * is no copy.
+ * when the survey closes, when results come back.
+ *
+ * ## Headings only (PROCOMER, 2026-11-18)
+ *
+ * The page keeps its bold lines and nothing under them: the thanks, the receipt tile, «Qué
+ * pasa ahora» and the three row titles. The line under the thanks («Ya puede cerrar esta
+ * página»), the submitted-at sentence beside the tile, the sentence under each row title and
+ * the closing no-copy note were removed for every respondent, anonymous or identified. Their
+ * catalogue keys stay (additive catalogues); nothing renders them.
  *
  * ## Everything here is already in hand
  *
@@ -1870,7 +1897,6 @@ const WHAT_HAPPENS_HEADING_ID = 'respond-what-happens-now'
 function Submitted({
   result,
   endDate,
-  submittedAt,
   locale,
   publicEntry,
   closingMessage,
@@ -1878,8 +1904,6 @@ function Submitted({
   result: SurveySubmissionResult
   /** `SurveyRespondView.endDate`, or null if the view never loaded. */
   endDate: string | null
-  /** When the server accepted it, or null on the already-submitted path. */
-  submittedAt: number | null
   locale: string
   publicEntry: boolean
   /** `SurveyRespondView.closingMessage`: the survey's own thanks, or null for the default. */
@@ -1887,11 +1911,6 @@ function Submitted({
 }) {
   const { t } = useTranslation('surveyRespond')
 
-  // `alreadySubmitted` means the server matched an existing complete response for
-  // this session, so nothing was written just now — "submitted at 09:14" would be a
-  // statement about a moment that did not happen. The receipt below is still the
-  // server's own count of what is stored, which is true in both cases.
-  const justSubmitted = !result.alreadySubmitted && submittedAt !== null
   const closesOn = endDate === null ? null : formatDate(endDate, locale, 'long')
 
   return (
@@ -1901,7 +1920,8 @@ function Submitted({
           alert; green is a result area now and nothing else. `role="status"` stays, so
           the thanks is still announced the moment the form is replaced by it.
           A survey's own closing message (Eagle's corrections, 2026-10-20, set per survey
-          in "Textos para quien responde") is the whole of the thanks — no second line. */}
+          in "Textos para quien responde") is the whole of the thanks. The default thanks
+          is its title alone: the line under it went on 2026-11-18. */}
       <div
         role="status"
         data-slot="respond-thanks"
@@ -1925,21 +1945,18 @@ function Submitted({
             {closingMessage}
           </p>
         ) : (
-          <>
-            <p className="m-0 max-w-[24ch] font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
-              {t('thankYouTitle')}
-            </p>
-            <p className="m-0 text-base text-fg-secondary">{t('thankYouBody')}</p>
-          </>
+          <p className="m-0 max-w-[24ch] font-display text-3xl font-semibold leading-tight tracking-display text-fg-primary">
+            {t('thankYouTitle')}
+          </p>
         )}
       </div>
 
-      {/* The receipt row, as the canvas draws it: the tile, and beside it when and how.
-          A respondent who has just handed over forty answers with no copy of them gets
-          one reading back — how many of the questions were recorded, the server's own
-          count rather than the form's, what was stored rather than what was typed. The
-          count is the tile's, so the sentence beside it says only the rest. */}
-      <div data-slot="respond-receipt" className="flex items-center gap-3.5">
+      {/* The receipt: one tile. A respondent who has just handed over forty answers with
+          no copy of them gets one reading back — how many of the questions were recorded,
+          the server's own count rather than the form's, what was stored rather than what
+          was typed. The canvas drew a when-and-how sentence beside it; that went on
+          2026-11-18, and the tile is centred under the thanks it now belongs to. */}
+      <div data-slot="respond-receipt" className="flex justify-center">
         <div className="flex shrink-0 flex-col gap-0.5 rounded-xl border border-line-panel bg-surface-card px-3.5 py-2.5">
           <span className="text-2xs font-semibold uppercase tracking-eyebrow text-fg-secondary">
             {t('receiptReading')}
@@ -1951,17 +1968,6 @@ function Submitted({
             </span>
           </span>
         </div>
-        {justSubmitted && (
-          // "Se guardaron sin nada que lo identifique" is a sentence about how THIS
-          // response was stored, so it is said only when the server says the response is
-          // anonymous (`SurveySubmissionResult.isAnonymous`). On a survey that records who
-          // answered, the time is the whole of what is true.
-          <p className="m-0 min-w-0 flex-1 text-base text-fg-secondary">
-            {result.isAnonymous
-              ? t('next.submittedAtAnonymous', { time: formatTime(submittedAt, locale) })
-              : t('next.submittedAt', { time: formatTime(submittedAt, locale) })}
-          </p>
-        )}
       </div>
 
       {result.suppressedDemographics.length > 0 && (
@@ -2012,20 +2018,15 @@ function Submitted({
           {t('whatHappensNowTitle')}
         </h2>
         <ul className="m-0 flex list-none flex-col p-0">
-          {/* Two different true sentences, chosen the same way the submitted-at line
-              above chooses. An anonymous response really is pooled on arrival. An
-              identified one is read per person by the external processor before
-              anything is grouped, so "se agrupan de inmediato" is exactly the promise
-              the response export breaks -- it was rendered here unconditionally until
-              that export shipped. */}
+          {/* Two different true claims, chosen on the server's own flag
+              (`SurveySubmissionResult.isAnonymous`). An anonymous response really is
+              pooled on arrival. An identified one is read per person by the external
+              processor before anything is grouped, so "se agrupan de inmediato" is
+              exactly the promise the response export breaks -- it was rendered here
+              unconditionally until that export shipped. */}
           <WhatHappensRow
             icon={<Lock aria-hidden="true" className="size-icon" />}
             title={result.isAnonymous ? t('happensPooledTitle') : t('happensAttributedTitle')}
-            body={
-              result.isAnonymous
-                ? t('happensPooledBody')
-                : t('happensAttributedBody')
-            }
           />
           {/* Dropped rather than guessed at when the payload never loaded — a date
               is the one part of this the page cannot approximate. */}
@@ -2033,13 +2034,11 @@ function Submitted({
             <WhatHappensRow
               icon={<Clock aria-hidden="true" className="size-icon" />}
               title={t('happensClosesTitle', { date: closesOn })}
-              body={t('happensClosesBody')}
             />
           )}
           <WhatHappensRow
             icon={<FileText aria-hidden="true" className="size-icon" />}
             title={t('happensResultsTitle')}
-            body={t('happensResultsBody')}
           />
         </ul>
       </section>
@@ -2058,44 +2057,35 @@ function Submitted({
           </Link>
         </Button>
       )}
-
-      {/* "sin vincularlo a sus respuestas" is true only of an anonymous response.
-          On an identified one the completion IS the same row as the answers. */}
-      <p className="m-0 text-sm text-fg-secondary">
-        {result.isAnonymous ? t('noCopyNote') : t('noCopyNoteIdentified')}
-      </p>
     </div>
   )
 }
 
 /**
- * One row of the what-happens-now list: an icon that is decoration, a claim, and the
- * sentence that makes the claim checkable.
+ * One row of the what-happens-now list: an icon that is decoration, and a claim. The
+ * sentence under each claim went on 2026-11-18 (see `Submitted`).
  *
  * The icon is `text-fg-secondary` rather than the accent. Three accent glyphs down a
  * confirmation reads as three statuses, and none of these is a status — they are the
  * same fact told in three parts.
+ *
+ * `items-center`: with one line of title per row the glyph sits on the title's centre line;
+ * a title that wraps on a narrow phone keeps the glyph centred against the pair.
  */
 function WhatHappensRow({
   icon,
   title,
-  body,
 }: {
   icon: React.ReactNode
   /** Already-translated. */
   title: string
-  /** Already-translated. */
-  body: string
 }) {
   return (
-    <li className="flex items-start gap-2.5 border-b border-line-light py-3 last:border-b-0">
-      <span aria-hidden="true" className="shrink-0 pt-px text-fg-secondary">
+    <li className="flex items-center gap-2.5 border-b border-line-light py-3 last:border-b-0">
+      <span aria-hidden="true" className="flex shrink-0 text-fg-secondary">
         {icon}
       </span>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-base font-semibold text-fg-primary">{title}</span>
-        <span className="text-sm text-fg-secondary">{body}</span>
-      </span>
+      <span className="min-w-0 text-base font-semibold text-fg-primary">{title}</span>
     </li>
   )
 }
@@ -2127,8 +2117,7 @@ function formatDate(value: string, locale: string, dateStyle: 'medium' | 'long' 
 }
 
 /**
- * A wall-clock time, e.g. "09:14" — when a response was accepted, and when progress
- * was last successfully saved.
+ * A wall-clock time, e.g. "09:14" — when progress was last successfully saved.
  */
 function formatTime(value: number, locale: string): string {
   return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(value)
