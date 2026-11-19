@@ -49,6 +49,7 @@ import {
 } from './model'
 import { byCount } from '../../../../i18n/plural'
 import { describeApiError } from '../../../../api/describeApiError'
+import { DuplicateSurveyDialog } from '../DuplicateSurveyDialog'
 
 /**
  * Editar preguntas, redesigned — both states of one route (canvas boards
@@ -106,6 +107,8 @@ export default function SurveyQuestionsEditorPage() {
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  // «Duplicar y editar» asks which copy first (`DuplicateSurveyDialog`).
+  const [duplicateAsking, setDuplicateAsking] = useState(false)
   // «Usar estas respuestas en todas…»: which question it was pressed on and how many questions
   // show those words afterwards, said beside the button rather than left to be counted.
   const [applied, setApplied] = useState<{ id: string; count: number } | null>(null)
@@ -184,12 +187,13 @@ export default function SurveyQuestionsEditorPage() {
     }
   }
 
-  async function duplicateAndEdit() {
+  /** After «Duplicar» asked which copy: `includeAudience` false is «Solo las preguntas». */
+  async function duplicateAndEdit(includeAudience: boolean) {
     if (!id) return
     setBusy(true)
     setActionError(null)
     try {
-      const created = await duplicateSurvey(baseUrl, id, locale)
+      const created = await duplicateSurvey(baseUrl, id, locale, { includeAudience })
       void navigate(`/surveys/${created.id}/questions`)
     } catch (error) {
       setActionError(describeApiError(error, t, 'common.error'))
@@ -243,7 +247,7 @@ export default function SurveyQuestionsEditorPage() {
         primaryAction={
           locked ? (
             caps.canAdministerSurvey(detail) ? (
-              <Button type="button" variant="primary" disabled={busy} onClick={() => void duplicateAndEdit()}>
+              <Button type="button" variant="primary" disabled={busy} onClick={() => setDuplicateAsking(true)}>
                 <Copy aria-hidden="true" />
                 {copy('duplicateAndEdit')}
               </Button>
@@ -803,6 +807,16 @@ export default function SurveyQuestionsEditorPage() {
           {copy('saveWritesOnly')}
         </p>
       )}
+
+      <DuplicateSurveyDialog
+        open={duplicateAsking}
+        onOpenChange={setDuplicateAsking}
+        busy={busy}
+        onDuplicate={(includeAudience) => {
+          setDuplicateAsking(false)
+          void duplicateAndEdit(includeAudience)
+        }}
+      />
     </div>
   )
 }

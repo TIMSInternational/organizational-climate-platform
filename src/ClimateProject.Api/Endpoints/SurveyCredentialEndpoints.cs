@@ -420,6 +420,13 @@ public static class SurveyCredentialEndpoints
 
         await AttributeToSurveyCompanyAsync(audit, currentUser, survey.CompanyId, db, cancellationToken);
 
+        // No audience chosen: a key -- mailed or handed over -- would admit somebody to a survey
+        // aimed at nobody (Survey.AudienceNotChosen).
+        if (survey.AudienceNotChosen)
+        {
+            return SurveyEndpoints.AudienceNotChosen();
+        }
+
         var delivery = request?.Delivery ?? SurveyCredentialDeliveries.Email;
         if (delivery is not (SurveyCredentialDeliveries.Email or SurveyCredentialDeliveries.Handover))
         {
@@ -474,7 +481,7 @@ public static class SurveyCredentialEndpoints
         }
 
         var inAudience = await SurveyQueries
-            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, survey.CompanyId)
+            .Audience(db.Users.AsNoTracking(), db.Surveys.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, survey.CompanyId)
             .AnyAsync(u => u.Id == userId, cancellationToken);
         if (!inAudience)
         {
@@ -643,6 +650,11 @@ public static class SurveyCredentialEndpoints
 
         await AttributeToSurveyCompanyAsync(audit, principal.GetCurrentUser(), survey.CompanyId, db, cancellationToken);
 
+        if (survey.AudienceNotChosen)
+        {
+            return SurveyEndpoints.AudienceNotChosen();
+        }
+
         if ((survey.Settings.CredentialMode ?? CredentialModes.Shared) != CredentialModes.PerSurvey)
         {
             return Refuse(
@@ -676,7 +688,7 @@ public static class SurveyCredentialEndpoints
         }
 
         var inAudience = await SurveyQueries
-            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, survey.CompanyId)
+            .Audience(db.Users.AsNoTracking(), db.Surveys.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, survey.CompanyId)
             .AnyAsync(u => u.Id == userId, cancellationToken);
         if (!inAudience)
         {

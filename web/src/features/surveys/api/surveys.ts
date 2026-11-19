@@ -193,6 +193,13 @@ export interface SurveyDetail {
   isContentEditable: boolean
   createdAt: string
   updatedAt: string
+  /**
+   * True while nobody has chosen who answers this survey: a copy made with «Solo las preguntas»
+   * (2026-11-18). Its `departmentIds` and `userIds` are both empty and it is aimed at NOBODY --
+   * read this before reading the two empty lists as "the whole company". Optional because an API
+   * older than the marker does not send it; absent reads as chosen.
+   */
+  audienceNotChosen?: boolean
 }
 
 /**
@@ -359,10 +366,18 @@ export async function reopenSurvey(
  * title is sent — passing one would mean inventing text in a language the caller
  * cannot know the survey was authored in.
  */
-export async function duplicateSurvey(baseUrl: string, id: string, lang?: string): Promise<SurveyDetail> {
+export async function duplicateSurvey(
+  baseUrl: string,
+  id: string,
+  lang?: string,
+  options: { includeAudience?: boolean } = {},
+): Promise<SurveyDetail> {
   const response = await authFetch(withQuery(baseUrl, `/surveys/${id}/duplicate`, { lang }), {
     method: 'POST',
-    body: JSON.stringify({}),
+    // «Copiar con la misma audiencia» sends exactly the body it always sent; only «Solo las
+    // preguntas» names the option, and the server then leaves the copy's audience UNCHOSEN --
+    // aimed at nobody until «Editar audiencia» saves one, never at the whole company.
+    body: JSON.stringify(options.includeAudience === false ? { includeAudience: false } : {}),
   })
   return response.json() as Promise<SurveyDetail>
 }
@@ -585,6 +600,15 @@ export interface SurveyRosterRow {
    * person still finished, and `status` keeps saying so.
    */
   excludedFromResults?: boolean
+  /**
+   * `personal_link` only (2026-11-18): this person's invitation, its status as
+   * `survey_invitations.status` holds it, and the company-zone day their link was last mailed.
+   * All null for somebody with no invitation, and always absent on the other two modes. The id is
+   * what the roster's «Reenviar enlace» and «Retirar el enlace» act on.
+   */
+  invitationId?: string | null
+  linkStatus?: string | null
+  linkSentOn?: string | null
 }
 
 /** `SurveyDeliveryProblems` on the server. */

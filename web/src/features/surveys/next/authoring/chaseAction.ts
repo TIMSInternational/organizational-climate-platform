@@ -49,3 +49,39 @@ export function chaseActionFor(
   // than helpful, and it is recorded on the credential itself.
   return row.lastSignInOn ? 'remind' : 'reissue'
 }
+
+/**
+ * A person's personal link as the roster knows it (`personal_link`, ruled 2026-11-18): their
+ * invitation, its status, and the day the link was last mailed. All null for somebody with no
+ * invitation. The payload's, unless an action on the page has moved it since.
+ */
+export interface PersonalLinkState {
+  invitationId: string | null
+  status: string | null
+  sentOn: string | null
+}
+
+/** What to do about ONE person's personal link. */
+export type LinkAction =
+  /** No link has gone to them: their first, through `POST /surveys/{id}/invitations` naming them alone. */
+  | 'send'
+  /** A link went, or was withdrawn: a NEW one, through the invitation's resend, which kills the old one. */
+  | 'resend'
+  /** Finished: there is nothing to send them. */
+  | 'none'
+
+/**
+ * The personal-link counterpart of `chaseActionFor`. It SUGGESTS; the API enforces: the invite
+ * route mails nobody whose link already went (so a stale «Enviar enlace» reports «ya tenía» and
+ * sends nothing), and the resend refuses a completed invitation.
+ */
+export function linkActionFor(row: Pick<SurveyRosterRow, 'status'>, link: PersonalLinkState): LinkAction {
+  if (row.status === 'completed' || link.status === 'completed') return 'none'
+  if (link.invitationId === null) return 'send'
+  // A withdrawn link is revived only by the resend -- a new token, the old one stays dead. The
+  // invite route skips a revoked invitation on purpose, so «Enviar enlace» would send nothing.
+  if (link.status === 'revoked') return 'resend'
+  // An invitation whose mail never went (a failed send, or a row minted under another mode)
+  // holds no link anybody has: the invite route mails it.
+  return link.sentOn === null ? 'send' : 'resend'
+}

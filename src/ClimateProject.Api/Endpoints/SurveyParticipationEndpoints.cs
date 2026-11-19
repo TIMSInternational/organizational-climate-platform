@@ -331,6 +331,12 @@ public static class SurveyParticipationEndpoints
         {
             roster = await WithSurveyKeysAsync(roster, survey.Id, survey.CompanyId, db, cancellationToken);
         }
+        else if (credentialMode == CredentialModes.PersonalLink && roster.Count > 0)
+        {
+            // The same for a personal link: whose link went, on which day, and the invitation id
+            // the roster's per-row send, resend and withdrawal act on.
+            roster = await WithPersonalLinksAsync(roster, survey.Id, survey.CompanyId, db, cancellationToken);
+        }
 
         // Three states for a survey whose answers carry a user id, and for an anonymous one
         // that can only be answered by signing in. `BuildRosterAsync` decides the second from
@@ -501,6 +507,52 @@ public static class SurveyParticipationEndpoints
     /// (see <see cref="SurveyRosterRow"/>). A person with no key keeps three nulls, which the
     /// screen reads as "Sin código".
     /// </summary>
+    /// <summary>
+    /// The <c>personal_link</c> counterpart of <see cref="WithSurveyKeysAsync"/>: each person's
+    /// invitation id, its status and the company-zone day their link was last mailed.
+    /// </summary>
+    /// <remarks>
+    /// Read from <c>survey_invitations</c> for the WHOLE roster, never from the invitation list
+    /// route, which returns at most 500 rows: a person past that cap would read as having no link
+    /// when they hold one, and the roster would offer to mail them a first one. A person with no
+    /// invitation row keeps all three null.
+    /// </remarks>
+    private static async Task<List<SurveyRosterRow>> WithPersonalLinksAsync(
+        List<SurveyRosterRow> roster,
+        Guid surveyId,
+        Guid companyId,
+        ClimateProjectDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var invitations = await db.SurveyInvitations
+            .AsNoTracking()
+            .Where(i => i.SurveyId == surveyId)
+            .Select(i => new { i.Id, i.UserId, i.Status, i.SentAt })
+            .ToDictionaryAsync(i => i.UserId, cancellationToken);
+        if (invitations.Count == 0)
+        {
+            return roster;
+        }
+
+        var zone = SchedulingTimeZone.Resolve(await db.Companies
+            .AsNoTracking()
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Settings.Timezone)
+            .FirstOrDefaultAsync(cancellationToken));
+
+        return
+        [
+            .. roster.Select(row => invitations.TryGetValue(row.UserId, out var invitation)
+                ? row with
+                {
+                    InvitationId = invitation.Id,
+                    LinkStatus = invitation.Status,
+                    LinkSentOn = invitation.SentAt is { } sent ? DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(sent, zone)) : null,
+                }
+                : row),
+        ];
+    }
+
     private static async Task<List<SurveyRosterRow>> WithSurveyKeysAsync(
         List<SurveyRosterRow> roster,
         Guid surveyId,
@@ -619,7 +671,7 @@ public static class SurveyParticipationEndpoints
         // invitation resolver apply, so the roster cannot name somebody the survey does not
         // reach. An untargeted survey is company-wide and this is unchanged for it.
         var users = await SurveyQueries
-            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, companyId)
+            .Audience(db.Users.AsNoTracking(), db.Surveys.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, surveyId, companyId)
             .Where(u => u.Email != "")
             .Select(u => new { u.Id, u.Name, u.Email, u.Username, u.Role })
             .ToListAsync(cancellationToken);

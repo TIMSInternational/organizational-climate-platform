@@ -49,6 +49,23 @@ public class Survey
     public string Status { get; set; } = "draft";
     public int ResponseCount { get; set; }
     public int? TargetAudienceCount { get; set; }
+
+    /// <summary>
+    /// True while nobody has chosen this survey's audience: a copy made by «Duplicar» with
+    /// «Solo las preguntas» (ruled 2026-11-18). The marker is what keeps such a copy aimed at
+    /// NOBODY rather than at everyone -- with no targets of either kind the audience rule reads
+    /// the whole company (<c>SurveyQueries.Audience</c>), so "copy without the people" can never
+    /// be "copy with no targets" alone (audit G14; the 28 Oct 2026 incident in CLAUDE.md).
+    /// </summary>
+    /// <remarks>
+    /// While it is set the audience resolves to nobody, and every route that mails or admits
+    /// people refuses with <c>survey_audience_not_chosen</c>, as does moving the survey to
+    /// scheduled or active. Any audience saved through <c>PUT /surveys/{id}</c> -- an explicit
+    /// «Toda la empresa» included -- clears it, so choosing everyone is always a deliberate,
+    /// audited act. False on every survey that existed before the column.
+    /// </remarks>
+    public bool AudienceNotChosen { get; set; }
+
     public int Version { get; set; } = 1;
     public SurveySettings Settings { get; set; } = new();
     public DateTimeOffset CreatedAt { get; set; }

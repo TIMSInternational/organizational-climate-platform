@@ -32,6 +32,7 @@ import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { allResponsesFileName, getAllResponsesWorkbook } from '../../api/responseExport'
 import { companyStatusFileName, getDeliveryAuditWorkbook } from '../../api/statusExport'
 import { StatusWorkbookButton } from '../StatusWorkbookButton'
+import { DuplicateSurveyDialog } from '../DuplicateSurveyDialog'
 
 /**
  * The API origin, the same way every other caller reads it. An empty string here is not a
@@ -260,6 +261,12 @@ export default function SuperSurveysListView() {
           <AlertDescription>{base.actionError}</AlertDescription>
         </Alert>
       )}
+
+      <DuplicateSurveyDialog
+        open={base.duplicateTarget !== null}
+        onOpenChange={(open) => !open && base.cancelDuplicate()}
+        onDuplicate={base.confirmDuplicate}
+      />
 
       {base.status === 'error' ? (
         <NetworkError title={t('errors.loadFailed')} description={base.error ?? undefined} onRetry={base.reload} retryText={t('common.retry')} />

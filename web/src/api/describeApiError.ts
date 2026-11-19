@@ -102,6 +102,7 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   question_options_too_few: 'errors.api.codes.question_options_too_few',
   // Survey distribution
   survey_not_distributable: 'errors.api.codes.survey_not_distributable',
+  survey_audience_not_chosen: 'errors.api.codes.survey_audience_not_chosen',
   survey_window_closed: 'errors.api.codes.survey_window_closed',
   survey_reminders_off: 'errors.api.codes.survey_reminders_off',
   survey_not_collecting: 'errors.api.codes.survey_not_collecting',

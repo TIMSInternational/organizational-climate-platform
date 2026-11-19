@@ -259,7 +259,7 @@ public static class SurveyResponseEndpoints
         // `Audience` is active members of the survey's company, targeted by department or by
         // name (or everyone, when it targets neither): one query answers "still theirs to answer".
         var person = await SurveyQueries
-            .Audience(db.Users.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
+            .Audience(db.Users.AsNoTracking(), db.Surveys.AsNoTracking(), db.SurveyDepartmentTargets, db.SurveyUserTargets, survey.Id, survey.CompanyId)
             .Where(u => u.Id == invitation.UserId)
             .Select(u => new { u.Id, u.DepartmentId })
             .FirstOrDefaultAsync(cancellationToken);
@@ -300,7 +300,9 @@ public static class SurveyResponseEndpoints
             // separate participation list, never joined to the answers.
             // A draft or closed survey is never publicly readable, whatever its settings
             // say -- the settings describe how it will be answered, not whether it may be.
-            if (!SurveyStatuses.AcceptsResponses(survey.Status))
+            // A survey whose audience was never chosen cannot be active (the status change
+            // refuses); restated here so the rule holds wherever it is read.
+            if (!SurveyStatuses.AcceptsResponses(survey.Status) || survey.AudienceNotChosen)
             {
                 return new RespondentResolution(null, Unavailable());
             }
@@ -347,6 +349,13 @@ public static class SurveyResponseEndpoints
         // Forbid, matching every other refusal on this path, so it discloses nothing about
         // which other surveys exist.
         if (currentUser.SurveyScope is { } scopedSurveyId && scopedSurveyId != survey.Id)
+        {
+            return new RespondentResolution(null, Results.Forbid());
+        }
+
+        // No audience chosen is NOBODY, not the whole company (Survey.AudienceNotChosen): the
+        // "no targets of either kind" reading below would otherwise admit everyone.
+        if (survey.AudienceNotChosen)
         {
             return new RespondentResolution(null, Results.Forbid());
         }

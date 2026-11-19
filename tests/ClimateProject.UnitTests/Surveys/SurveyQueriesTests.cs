@@ -78,7 +78,7 @@ public class SurveyQueriesTests
         using var db = CreateContext();
 
         var sql = SurveyQueries
-            .Audience(db.Users, db.SurveyDepartmentTargets, db.SurveyUserTargets, SurveyId, CompanyId)
+            .Audience(db.Users, db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, SurveyId, CompanyId)
             .ToQueryString();
 
         // The audience is the UNION of the two target kinds. Reading only
@@ -91,12 +91,39 @@ public class SurveyQueriesTests
     }
 
     [Fact]
+    public void The_audience_query_reads_the_surveys_own_audience_not_chosen_marker()
+    {
+        using var db = CreateContext();
+
+        var sql = SurveyQueries
+            .Audience(db.Users, db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, SurveyId, CompanyId)
+            .ToQueryString();
+
+        // A questions-only duplicate has no targets of either kind; without this clause the rule
+        // reads that as the whole company. The marker is read from the survey row in the same
+        // query, not passed in by a caller who could forget it.
+        Assert.Contains("audience_not_chosen", sql, StringComparison.Ordinal);
+        Assert.Contains("FROM surveys", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_assigned_to_filter_never_lists_a_survey_whose_audience_was_not_chosen()
+    {
+        using var db = CreateContext();
+
+        var sql = SurveyQueries.AssignedTo(
+            db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, db.Responses, CompanyId, DepartmentId, UserId).ToQueryString();
+
+        Assert.Contains("audience_not_chosen", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_audience_query_tests_department_membership_explicitly_rather_than_against_null()
     {
         using var db = CreateContext();
 
         var sql = SurveyQueries
-            .Audience(db.Users, db.SurveyDepartmentTargets, db.SurveyUserTargets, SurveyId, CompanyId)
+            .Audience(db.Users, db.Surveys, db.SurveyDepartmentTargets, db.SurveyUserTargets, SurveyId, CompanyId)
             .ToQueryString();
 
         // A user with no department is in NO department, not in all of them. The branch has

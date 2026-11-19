@@ -183,7 +183,12 @@ describe('SurveyQuestionsEditorPage — locked', () => {
     expect(banner.textContent).toContain(a.arrivedOneOf.replace('{target}', '24'))
     expect(screen.queryByRole('button', { name: a.save })).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: a.duplicateAndEdit }))
+    // «Duplicar» asks which copy first; the default is today's, with the same audience.
+    const choice = await screen.findByTestId('duplicate-survey-dialog')
+    expect(vi.mocked(duplicateSurvey)).not.toHaveBeenCalled()
+    await userEvent.click(within(choice).getByRole('button', { name: en.surveys.next.duplicate.confirm }))
     expect(vi.mocked(duplicateSurvey).mock.calls[0][1]).toBe('s1')
+    expect(vi.mocked(duplicateSurvey).mock.calls[0][3]).toEqual({ includeAudience: true })
     await waitFor(() => expect(vi.mocked(getSurveyQuestionAuthoring).mock.calls.some((call) => call[1] === 'copy1')).toBe(true))
   })
 

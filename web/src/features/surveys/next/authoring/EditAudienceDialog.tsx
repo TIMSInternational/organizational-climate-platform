@@ -72,6 +72,11 @@ export function EditAudienceDialog({
   const [userIds, setUserIds] = useState<string[]>([])
   const [problem, setProblem] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // A questions-only copy (`audienceNotChosen`) is aimed at nobody until this saves an audience.
+  // Saving none -- «Toda la empresa» -- is a choice like any other, but never a default: it waits
+  // for this box, so the whole company is only ever chosen on purpose.
+  const notChosen = survey.audienceNotChosen === true
+  const [everyoneConfirmed, setEveryoneConfirmed] = useState(false)
 
   // Each opening starts from the survey as it is now, so an abandoned edit never outlives it.
   useEffect(() => {
@@ -79,15 +84,18 @@ export function EditAudienceDialog({
     setDepartmentIds([...survey.departmentIds])
     setUserIds([...survey.userIds])
     setProblem(null)
+    setEveryoneConfirmed(false)
   }, [open, survey.departmentIds, survey.userIds])
 
   const departmentNames = useMemo(() => new Map((departments ?? []).map((d) => [d.id, d.name])), [departments])
   const people = useMemo(() => (users === null ? null : choosablePeople(users, departmentNames)), [departmentNames, users])
   const nameOf = useMemo(() => new Map((users ?? []).map((u) => [u.id, u.name || u.email])), [users])
 
-  const current = { departmentIds: survey.departmentIds, userIds: survey.userIds }
+  const current = { departmentIds: survey.departmentIds, userIds: survey.userIds, audienceNotChosen: notChosen }
   const next = { departmentIds: departmentsEditable ? departmentIds : survey.departmentIds, userIds }
-  const changed = !sameIds(current.departmentIds, next.departmentIds) || !sameIds(current.userIds, next.userIds)
+  // Any save chooses an audience nobody had chosen, even one whose lists match the empty ones.
+  const changed = notChosen || !sameIds(current.departmentIds, next.departmentIds) || !sameIds(current.userIds, next.userIds)
+  const choosesEveryone = notChosen && targetsWholeCompany(next)
   const change = users === null ? null : audienceChange(users, current, next)
   // Targets that resolve to nobody active: a survey nobody can answer. Blocked, as the builder
   // blocks it (#630) -- an empty target set is NOT this, it is the whole company.
@@ -116,8 +124,10 @@ export function EditAudienceDialog({
     }
   }
 
-  const audienceSize = (ids: string[], targets: { departmentIds: readonly string[]; userIds: readonly string[] }) =>
-    targetsWholeCompany(targets)
+  const audienceSize = (ids: string[], targets: { departmentIds: readonly string[]; userIds: readonly string[]; audienceNotChosen?: boolean }) =>
+    targets.audienceNotChosen === true
+      ? copy('notChosen')
+      : targetsWholeCompany(targets)
       ? copy('wholeCompany', { count: ids.length })
       : copy(ids.length === 1 ? 'peopleOne' : 'peopleMany', { count: ids.length })
 
@@ -137,6 +147,12 @@ export function EditAudienceDialog({
           <DialogTitle>{copy('title')}</DialogTitle>
           <DialogDescription>{copy('intro')}</DialogDescription>
         </DialogHeader>
+
+        {notChosen && (
+          <Note role="note" icon={<Info />} className="px-3 py-2.5 text-sm" data-testid="audience-not-chosen-note">
+            {copy('notChosenNote')}
+          </Note>
+        )}
 
         {departmentsEditable ? (
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" data-testid="audience-edit-departments">
@@ -232,6 +248,15 @@ export function EditAudienceDialog({
           )}
         </section>
 
+        {choosesEveryone && change !== null && (
+          <CheckboxField
+            label={copy('confirmEveryone', { count: change.after.length })}
+            checked={everyoneConfirmed}
+            disabled={saving}
+            onChange={setEveryoneConfirmed}
+          />
+        )}
+
         {problem && (
           <Alert variant="destructive" role="alert">
             <AlertDescription>{problem}</AlertDescription>
@@ -244,7 +269,7 @@ export function EditAudienceDialog({
           <Button
             type="button"
             variant="primary"
-            disabled={saving || !changed || change === null || reachesNobody}
+            disabled={saving || !changed || change === null || reachesNobody || (choosesEveryone && !everyoneConfirmed)}
             onClick={() => void save()}
           >
             {saving ? t('common.saving') : copy('save')}

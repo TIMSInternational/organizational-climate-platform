@@ -36,6 +36,7 @@ import { useSurveyDetailModel, type SurveyDetailModel } from './useSurveyDetailM
 import { SurveyWindowDialog } from './SurveyWindowDialog'
 import { DeleteSurveyDialog } from './DeleteSurveyDialog'
 import { EditAudienceDialog } from './EditAudienceDialog'
+import { DuplicateSurveyDialog } from '../DuplicateSurveyDialog'
 import { audienceEditability } from './audienceEdit'
 import { ReopenSurveyDialog } from './ReopenSurveyDialog'
 import { EditSurveyTextDialog } from './EditSurveyTextDialog'
@@ -82,7 +83,7 @@ export default function SurveyDetailNextPage() {
       pending={pending}
       actionError={actionError}
       onTransition={(status) => void transition(status)}
-      onDuplicate={() => void duplicate()}
+      onDuplicate={(includeAudience) => void duplicate(includeAudience)}
       onSaveWindow={saveWindow}
       onSaveAudience={saveAudience}
       onSaveText={saveText}
@@ -109,7 +110,8 @@ export function SurveyDetailView({
   pending: string | null
   actionError: string | null
   onTransition: (status: string) => void
-  onDuplicate: () => void
+  /** After «Duplicar» asked which copy: `includeAudience` false is «Solo las preguntas». */
+  onDuplicate: (includeAudience: boolean) => void
   /** Moves the response window; absent, the dates are not offered for editing. */
   onSaveWindow?: (window: { startDate?: string; endDate: string }) => Promise<void>
   /** Rewrites the survey's targets; absent, "Editar audiencia" is not offered. */
@@ -129,16 +131,20 @@ export function SurveyDetailView({
   const title = survey.title ?? t('surveys.untitled')
   // The survey's own targets, BOTH kinds — `departmentIds` alone reported a survey aimed at
   // people by name as company-wide.
-  const surveyTargets = { departmentIds: survey.departmentIds, userIds: survey.userIds }
+  // A questions-only copy (`audienceNotChosen`) has both lists empty and is aimed at NOBODY: it
+  // prints «Audiencia sin elegir» where an empty target set would read «Toda la empresa».
+  const notChosen = survey.audienceNotChosen === true
+  const surveyTargets = { departmentIds: survey.departmentIds, userIds: survey.userIds, audienceNotChosen: notChosen }
   // ONE audience, the one Distribución prints (`surveyAudience`): the invited once invitations
   // exist, the directory's resolution before that, the stated target only when neither is read.
+  // None at all while it is unchosen -- a count of nobody is not a reach.
   const audience = surveyAudience({
     invited: invitations?.summary.total ?? null,
     resolved:
-      users === null
+      users === null || notChosen
         ? null
         : estimateAudience('allTargeted', users, { departmentIds: [], userIds: [] }, surveyTargets).length,
-    stated: survey.targetAudienceCount,
+    stated: notChosen ? null : survey.targetAudienceCount,
   })
   const rate = responseRate(survey.responseCount, audience?.count ?? null)
   const targets = targetedDepartments(survey.departmentIds, departments)
@@ -181,6 +187,8 @@ export function SurveyDetailView({
   const audienceOffered = canAuthor && onSaveAudience !== undefined
   const audienceFrozen = audienceEditability(survey) === 'ended'
   const [editingAudience, setEditingAudience] = useState(false)
+  // «Duplicar» asks which copy first (`DuplicateSurveyDialog`).
+  const [duplicateAsking, setDuplicateAsking] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   return (
@@ -209,7 +217,7 @@ export function SurveyDetailView({
               </Button>
             )}
             {canAuthor && (
-              <Button type="button" variant="outline" disabled={pending !== null} onClick={onDuplicate}>
+              <Button type="button" variant="outline" disabled={pending !== null} onClick={() => setDuplicateAsking(true)}>
                 <Copy aria-hidden="true" className="size-icon" />
                 {copy('duplicate')}
               </Button>
@@ -267,7 +275,9 @@ export function SurveyDetailView({
           label={copy('audience')}
           value={audience?.count ?? null}
           unit={
-            targetsWholeCompany(surveyTargets)
+            notChosen
+              ? copy('audienceNotChosen')
+              : targetsWholeCompany(surveyTargets)
               ? copy('audienceCompany')
               : survey.departmentIds.length === 0
                 ? copy('audiencePeople')
@@ -437,7 +447,12 @@ export function SurveyDetailView({
                 {copy('audienceEdit.endedReason')}
               </p>
             )}
-            {targetsWholeCompany(surveyTargets) ? (
+            {notChosen ? (
+              <div className="flex flex-col gap-1" data-testid="audience-not-chosen">
+                <p className="m-0 text-sm font-medium">{copy('audienceNotChosen')}</p>
+                <p className="m-0 text-sm text-fg-secondary">{copy('audienceNotChosenCard')}</p>
+              </div>
+            ) : targetsWholeCompany(surveyTargets) ? (
               <p className="m-0 text-sm">{copy('wholeCompany')}</p>
             ) : survey.departmentIds.length === 0 ? (
               // Aimed at people and no department. This card said "Toda la empresa", which
@@ -482,6 +497,16 @@ export function SurveyDetailView({
           onOpenChange={setEditingWindow}
           onSave={onSaveWindow}
           now={() => now}
+        />
+      )}
+      {canAuthor && (
+        <DuplicateSurveyDialog
+          open={duplicateAsking}
+          onOpenChange={setDuplicateAsking}
+          onDuplicate={(includeAudience) => {
+            setDuplicateAsking(false)
+            onDuplicate(includeAudience)
+          }}
         />
       )}
       {audienceOffered && !audienceFrozen && onSaveAudience && (

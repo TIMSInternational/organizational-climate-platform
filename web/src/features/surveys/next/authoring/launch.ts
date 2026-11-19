@@ -195,6 +195,11 @@ export function launchChecklist(input: {
   summary: SurveyInvitationSummary | null
   perSurvey: boolean
   personalLink?: boolean
+  /**
+   * `survey.audienceNotChosen`: a questions-only copy. Its audience step is `missing` whatever
+   * else is open -- an open link does not make "nobody chose who answers" a ready audience.
+   */
+  audienceNotChosen?: boolean
 }): LaunchStep[] {
   const coverage =
     input.summary === null
@@ -204,7 +209,9 @@ export function launchChecklist(input: {
   /** A way in that actually works today. */
   const doorOpen = input.publicLink !== null || invitationsDone
   const audience: LaunchStepState =
-    input.audience === null
+    input.audienceNotChosen === true
+      ? 'missing'
+      : input.audience === null
       ? input.summary !== null && input.summary.total > 0
         ? 'done'
         : 'unknown'

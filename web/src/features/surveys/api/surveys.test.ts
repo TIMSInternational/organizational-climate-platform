@@ -209,6 +209,21 @@ describe('surveys api client', () => {
     expect(result.id).toBe('s2')
   })
 
+  /**
+   * «Solo las preguntas» (2026-11-18) names the option; «Copiar con la misma audiencia» sends the
+   * very body it always sent, so the default copy is byte-for-byte today's request.
+   */
+  it('asks for a questions-only copy by name, and sends the old body for the default copy', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ ...detail, id: 's2', audienceNotChosen: true }, 201))
+    const copy = await duplicateSurvey(baseUrl, 's1', undefined, { includeAudience: false })
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body))).toEqual({ includeAudience: false })
+    expect(copy.audienceNotChosen).toBe(true)
+
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ ...detail, id: 's3' }, 201))
+    await duplicateSurvey(baseUrl, 's1', undefined, { includeAudience: true })
+    expect(String(vi.mocked(fetch).mock.calls[1][1]!.body)).toBe('{}')
+  })
+
   it('sends ONLY selfDeclaredDemographics, because `anonymous` in the same body would 409', async () => {
     // `SurveyEndpoints.cs` classes `settings.anonymous` as CONTENT, and a content edit is
     // refused for any survey that is not a draft with no responses. A settings patch that
