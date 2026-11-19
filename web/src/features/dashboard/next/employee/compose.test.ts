@@ -145,14 +145,14 @@ describe('composeEmployeeHome', () => {
     expect(model.pendingCount).toBe(2)
   })
 
-  it('computes the minutes from the question count — six questions, about four minutes', () => {
+  it('computes the minutes from the question count — six questions, about three minutes', () => {
     const model = composeEmployeeHome({
       dashboard: dashboard(),
       lastOutcome: null,
       leadAllowsSaveForLater: null,
       asOf: CANVAS_EVENING,
     })
-    expect(model.lead?.minutes).toBe(4)
+    expect(model.lead?.minutes).toBe(3)
     // 29: the fixture's close, 02:03 UTC on 10 Oct, is 20:03 on 9 Oct in Costa Rica, and Home
     // counts on the reader's clock (`daysUntilOnReadersClock`, audit 2026-10-22 R2).
     expect(model.lead?.daysLeft).toBe(29)

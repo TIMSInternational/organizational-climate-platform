@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatDayMonth } from './respondEstimate'
+import { estimatedMinutes, formatDayMonth, isUnderAMinute } from './respondEstimate'
 
 /** Audit 2026-10-22, R2: "Cierra el …" on the respondent's own clock. */
 describe('formatDayMonth', () => {
@@ -26,5 +26,32 @@ describe('formatDayMonth', () => {
 
   it('returns a value it cannot parse as the server sent it', () => {
     expect(formatDayMonth('not a date', 'es')).toBe('not a date')
+  })
+})
+
+/** PROCOMER, 2026-11-19: «38 es mucho» for 57 questions — about 30. */
+describe('estimatedMinutes', () => {
+  it('quotes PROCOMER’s 57 questions as 30 minutes, not 38', () => {
+    expect(estimatedMinutes(57)).toBe(30)
+  })
+
+  it('is half a minute a question below 15 minutes', () => {
+    expect(estimatedMinutes(6)).toBe(3)
+    expect(estimatedMinutes(12)).toBe(6)
+    expect(estimatedMinutes(28)).toBe(14)
+  })
+
+  it('rounds to the nearest five from 15 minutes up', () => {
+    expect(estimatedMinutes(30)).toBe(15)
+    expect(estimatedMinutes(40)).toBe(20)
+    expect(estimatedMinutes(64)).toBe(30)
+    expect(estimatedMinutes(66)).toBe(35)
+  })
+
+  it('never says zero, and one or two questions read as under a minute', () => {
+    expect(estimatedMinutes(0)).toBe(1)
+    expect(estimatedMinutes(1)).toBe(1)
+    expect(isUnderAMinute(2)).toBe(true)
+    expect(isUnderAMinute(3)).toBe(false)
   })
 })

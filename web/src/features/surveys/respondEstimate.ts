@@ -2,12 +2,14 @@
  * How long a questionnaire takes, from the only input every payload offers: its
  * question count.
  *
- * Two thirds of a minute a question, floored at one — the ratio the approved employee
- * design reads ("12 questions · about 8 minutes") and the one the canvas prints for
- * Grupo Meridiano's six-question Q4 ("unos 4 minutos", RespondSurveyPhone and
- * EmployeeDashboard, 10 Sep). Deliberately coarse: every catalogue string that prints
- * it says "about", and a survey that reported its own estimate would be a server field
- * rather than this arithmetic.
+ * Half a minute a question, floored at one; from 15 minutes up, rounded to the nearest
+ * five, because a long estimate quoted to the minute claims a precision it does not have.
+ *
+ * It was two thirds of a minute a question (the ratio the 10 Sep canvas read, "12
+ * questions · about 8 minutes"). PROCOMER's review, 2026-11-19, of its 57-question
+ * survey: «38 es mucho» — the time to answer is about 30 minutes. 57 / 2 = 28.5 → 30.
+ * Deliberately coarse: every catalogue string that prints it says "about", and a survey
+ * that reported its own estimate would be a server field rather than this arithmetic.
  *
  * Moved here from `dashboard/components/EmployeeDashboardView.tsx` so that the Home
  * card and the respond page's footer cannot quote the same survey two different ways.
@@ -15,7 +17,9 @@
  * reference: nothing routes to it or imports it any more (`router.test.ts`).
  */
 export function estimatedMinutes(questionCount: number): number {
-  return Math.max(1, Math.round((questionCount * 2) / 3))
+  const minutes = questionCount / 2
+  const rounded = minutes >= 15 ? Math.round(minutes / 5) * 5 : Math.round(minutes)
+  return Math.max(1, rounded)
 }
 
 /**

@@ -123,10 +123,10 @@ describe('groupMySurveys', () => {
   })
 
   it('computes the reading, never takes it from the payload', () => {
-    // Six questions is four minutes at `respondEstimate`'s two thirds of a minute each —
+    // Six questions is three minutes at `respondEstimate`'s half a minute each —
     // the figure Home and the respond page both print for the same survey.
     const [six] = groupMySurveys([item({ questionCount: 6 })], NOW).open
-    expect(six.minutes).toBe(4)
+    expect(six.minutes).toBe(3)
     expect(six.underAMinute).toBe(false)
 
     const [one] = groupMySurveys([item({ questionCount: 1 })], NOW).open

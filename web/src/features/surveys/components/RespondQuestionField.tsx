@@ -150,7 +150,10 @@ export default function RespondQuestionField({
         </span>
         <span
           data-slot="question-text"
-          className="mt-2.5 block font-display text-respond-display font-semibold tracking-title text-fg-primary"
+          // Justified (PROCOMER, 2026-11-19: «esos textos de las preguntas deberían ir
+          // justificados, al igual que el texto de arriba»). See the survey intro in
+          // `SurveyRespondForm` for why `hyphens-auto` comes with it.
+          className="mt-2.5 block text-justify hyphens-auto font-display text-respond-display font-semibold tracking-title text-fg-primary"
         >
           {question.text ?? t('untitledQuestion')}
           {question.required ? <span className="sr-only"> {t('requiredMarker')}</span> : null}

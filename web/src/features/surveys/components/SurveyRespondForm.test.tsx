@@ -1038,13 +1038,37 @@ describe('SurveyRespondForm layout', () => {
    * failure mode of "remove the right column" done carelessly, and it is the one
    * fact a respondent deciding whether to finish later actually needs.
    */
+  /**
+   * PROCOMER, 2026-11-19: the question text is justified like the survey's intro above it,
+   * and the foot is two sentences, the duration under the close. happy-dom has no layout,
+   * so this pins the classes; the rendered page is checked with `npm run shot`.
+   */
+  it('justifies the intro and the question, and stacks the foot as two sentences', async () => {
+    respondWith(view({ description: 'Su opinión cuenta.' }))
+    const { container } = renderForm()
+
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    const question = container.querySelector('[data-slot="question-text"]') as HTMLElement
+    expect(question.className).toContain('text-justify')
+    const intro = container.querySelector('[data-slot="survey-intro"]') as HTMLElement
+    expect(intro.textContent).toBe('Su opinión cuenta.')
+    expect(intro.className).toContain('text-justify')
+
+    const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
+    expect(foot.className).toContain('flex-col')
+    expect([...foot.children].map((node) => node.textContent)).toEqual([
+      'Esta encuesta cierra el 12 de septiembre.',
+      expect.stringMatching(/^La duración aproximada es de (\d+ minutos|menos de un minuto)\.$/),
+    ])
+  })
+
   it('keeps the closing date and the time limit at the foot of the page', async () => {
     respondWith(view({ timeLimitMinutes: 10 }))
     const { container } = renderForm()
 
     await screen.findByRole('radio', { name: 'Muy de acuerdo' })
     const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
-    expect(within(foot).getByText('Cierra el 12 de septiembre')).toBeTruthy()
+    expect(within(foot).getByText('Esta encuesta cierra el 12 de septiembre.')).toBeTruthy()
     const left = foot.querySelector('[data-slot="respond-time-left"]') as HTMLElement
     expect(left.textContent).toBe('Queda 10:00')
     expect(left.className).toContain('tabular-nums')
@@ -1076,8 +1100,8 @@ describe('SurveyRespondForm layout', () => {
       await screen.findByRole('radio', { name: 'Muy de acuerdo' })
 
       const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
-      expect(within(foot).getByText('Cierra el 11 de septiembre')).toBeTruthy()
-      expect(within(foot).queryByText('Cierra el 12 de septiembre')).toBeNull()
+      expect(within(foot).getByText('Esta encuesta cierra el 11 de septiembre.')).toBeTruthy()
+      expect(within(foot).queryByText('Esta encuesta cierra el 12 de septiembre.')).toBeNull()
     } finally {
       process.env.TZ = original
     }
@@ -1093,7 +1117,7 @@ describe('SurveyRespondForm layout', () => {
       await screen.findByRole('radio', { name: 'Muy de acuerdo' })
 
       const foot = container.querySelector('[data-slot="respond-footer"]') as HTMLElement
-      expect(within(foot).getByText('Cierra el 12 de septiembre')).toBeTruthy()
+      expect(within(foot).getByText('Esta encuesta cierra el 12 de septiembre.')).toBeTruthy()
     } finally {
       process.env.TZ = original
     }
