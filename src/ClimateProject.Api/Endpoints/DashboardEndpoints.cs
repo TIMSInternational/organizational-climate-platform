@@ -707,7 +707,8 @@ public static class DashboardEndpoints
                     // Carried straight through from the survey row. `SurveyRespondView`
                     // sends the same field from the same place, so the chip on this card
                     // and the promise on the page it opens are one fact, not two.
-                    s.Anonymous))
+                    s.Anonymous,
+                    s.EstimatedMinutes))
                 .ToList()));
     }
 

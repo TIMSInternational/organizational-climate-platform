@@ -69,7 +69,12 @@ public sealed record SurveySettingsDto(
     /// <summary>The survey's own anonymity-box paragraph, or null for the product default.</summary>
     string? RespondentIntro = null,
     /// <summary>The survey's own thank-you, or null for the product default.</summary>
-    string? ClosingMessage = null);
+    string? ClosingMessage = null,
+    /// <summary>
+    /// The duration the survey states, in minutes, or null when the screens calculate it from
+    /// the question count (<c>SurveySettings.EstimatedMinutes</c>).
+    /// </summary>
+    int? EstimatedMinutes = null);
 
 public sealed record SurveyListItem(
     Guid Id,
@@ -155,7 +160,9 @@ public sealed record MySurveyListItem(
     DateTimeOffset EndDate,
     int QuestionCount,
     bool Anonymous,
-    int? TimeLimitMinutes);
+    int? TimeLimitMinutes,
+    /// <summary>The duration the survey states, or null to calculate it from <c>QuestionCount</c>.</summary>
+    int? EstimatedMinutes = null);
 
 public sealed record MySurveyListResponse(IReadOnlyList<MySurveyListItem> Surveys);
 
@@ -233,7 +240,12 @@ public sealed record SurveySettingsInput(
     /// <summary>Omitted = leave alone; an empty string clears it back to the default.</summary>
     LocalizedInput? RespondentIntro = null,
     /// <summary>Omitted = leave alone; an empty string clears it back to the default.</summary>
-    LocalizedInput? ClosingMessage = null);
+    LocalizedInput? ClosingMessage = null,
+    /// <summary>
+    /// Omitted = leave alone; <c>0</c> clears it back to "calculated from the questions";
+    /// <see cref="SurveyRespondentText.EstimatedMinutesMin"/>-<see cref="SurveyRespondentText.EstimatedMinutesMax"/> states it.
+    /// </summary>
+    int? EstimatedMinutes = null);
 
 public sealed record CreateSurveyRequest(
     LocalizedInput? Title,

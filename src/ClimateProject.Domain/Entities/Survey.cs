@@ -172,6 +172,20 @@ public class SurveySettings
     public string? ClosingMessageEs { get; set; }
 
     /// <summary>
+    /// How long the survey takes, in minutes, as the survey's author states it -- or null to let
+    /// the screens calculate it from the question count (half a minute a question, `respondEstimate.ts`).
+    /// </summary>
+    /// <remarks>
+    /// PROCOMER, 2026-11-19: the calculated «38 minutos» for 57 questions was «mucho», and the
+    /// figure differs per evaluation and per company, so it is the survey's to say. Shown, never
+    /// enforced: <see cref="TimeLimitMinutes"/> is the limit with a countdown, this is the
+    /// sentence «La duración aproximada es de N minutos». Editable while draft, scheduled or
+    /// active, like the respondent texts above. <c>SurveyEndpoints.ApplySettings</c> admits
+    /// 2-600 and clears it back to null on 0.
+    /// </remarks>
+    public int? EstimatedMinutes { get; set; }
+
+    /// <summary>
     /// Whether a respondent WITHOUT an account gets one session only: reloading or coming back
     /// serves the form as it was first served, instead of the half they left.
     /// </summary>

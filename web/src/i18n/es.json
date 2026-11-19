@@ -5477,9 +5477,13 @@
         "closingLabel": "Mensaje final",
         "closingHelp": "Se muestra al enviar las respuestas, en lugar del agradecimiento predeterminado. Máximo {max} caracteres.",
         "open": "Textos para quien responde",
-        "openHelp": "El texto del recuadro de anonimato y el mensaje final de esta encuesta.",
+        "openHelp": "El texto del recuadro de anonimato, la duración aproximada y el mensaje final de esta encuesta.",
         "loadFailed": "No se pudieron cargar los textos de esta encuesta. Cierre y vuelva a intentarlo.",
-        "saved": "Textos guardados. Quien abra la encuesta desde ahora los verá."
+        "saved": "Textos guardados. Quien abra la encuesta desde ahora los verá.",
+        "durationLabel": "Duración aproximada (minutos)",
+        "durationHelp": "Quien responde la lee al inicio y al pie de cada pregunta: «La duración aproximada es de N minutos». Vacío: se calcula con el número de preguntas (hoy, {minutes} minutos).",
+        "durationHelpBrief": "Quien responde la lee al inicio y al pie de cada pregunta. Vacío: se calcula con el número de preguntas (hoy, «menos de un minuto»).",
+        "durationInvalid": "Escriba un número entero de {min} a {max} minutos, o deje el campo vacío para que se calcule."
       },
       "history": {
         "open": "Historial",
@@ -6702,7 +6706,7 @@
     },
     "demographics": {
       "eyebrow": "Sobre usted",
-      "intro": "Estos datos permiten comparar grupos. Los resultados de un departamento, o de un solo dato demográfico, pueden mostrarse aunque haya respondido una sola persona.",
+      "intro": "Estos datos permiten comparar grupos.",
       "choose": "Elija una opción",
       "missing": "Elija una opción para continuar.",
       "start": "Empezar la encuesta"
@@ -6777,6 +6781,7 @@
       "entryPace": "{count} preguntas. Duración aproximada: {minutes} minutos.",
       "entryPaceOne": "Una pregunta. Menos de un minuto.",
       "entryPaceBrief": "{count} preguntas. Duración aproximada: menos de un minuto.",
+      "entryPaceOneQuestion": "Una pregunta. Duración aproximada: {minutes} minutos.",
       "entrySignInTitle": "Esta encuesta registra quién responde",
       "entrySignInBody": "Para responder, inicie sesión con su cuenta.",
       "entryLinkUnavailableBody": "Puede que ya haya cerrado. Si cree que debería poder responderla, avise a quien le compartió el enlace."

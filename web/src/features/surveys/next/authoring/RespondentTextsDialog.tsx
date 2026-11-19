@@ -11,9 +11,13 @@ import {
   DialogTitle,
   SkeletonText,
   TextareaField,
+  TextField,
 } from '../../../../components/ui'
 import {
+  ESTIMATED_MINUTES_MAX,
+  ESTIMATED_MINUTES_MIN,
   getSurveyRespondentTexts,
+  parseStatedMinutes,
   RESPONDENT_CLOSING_MAX,
   RESPONDENT_INTRO_MAX,
   saveSurveyRespondentTexts,
@@ -21,13 +25,14 @@ import {
   type SurveyRespondentTexts,
 } from '../../api/surveyRespondentTexts'
 import { describeApiError } from '../../../../api/describeApiError'
+import { respondDuration } from '../../respondEstimate'
 
 const baseUrl = import.meta.env.VITE_API_BASE_URL
 
 type State =
   | { status: 'loading' }
   | { status: 'error' }
-  | { status: 'ready'; context: SurveyRespondentTexts; draft: SurveyRespondentTexts['texts'] }
+  | { status: 'ready'; context: SurveyRespondentTexts; draft: SurveyRespondentTexts['texts']; minutes: string }
 
 /**
  * "Textos para quien responde": the survey's own anonymity-box paragraph and thank-you, in every
@@ -62,7 +67,9 @@ export function RespondentTextsDialog({
     setState({ status: 'loading' })
     setSaveError(null)
     getSurveyRespondentTexts(baseUrl, surveyId)
-      .then((context) => { if (!cancelled) setState({ status: 'ready', context, draft: context.texts }) })
+      .then((context) => {
+        if (!cancelled) setState({ status: 'ready', context, draft: context.texts, minutes: context.estimatedMinutes === null ? '' : String(context.estimatedMinutes) })
+      })
       .catch(() => { if (!cancelled) setState({ status: 'error' }) })
     return () => { cancelled = true }
   }, [open, surveyId])
@@ -74,12 +81,18 @@ export function RespondentTextsDialog({
         : { ...current, draft: { ...current.draft, [locale]: { ...current.draft[locale], [field]: { text, authored: current.draft[locale][field].authored } } } },
     )
 
+  const editMinutes = (minutes: string) =>
+    setState((current) => (current.status !== 'ready' ? current : { ...current, minutes }))
+
+  const parsedMinutes = state.status === 'ready' ? parseStatedMinutes(state.minutes) : null
+  const minutesInvalid = parsedMinutes !== null && !parsedMinutes.valid
+
   async function save() {
-    if (state.status !== 'ready') return
+    if (state.status !== 'ready' || parsedMinutes === null || !parsedMinutes.valid) return
     setSaving(true)
     setSaveError(null)
     try {
-      await saveSurveyRespondentTexts(baseUrl, surveyId, state.draft, state.context.requiredLocales)
+      await saveSurveyRespondentTexts(baseUrl, surveyId, state.draft, state.context.requiredLocales, parsedMinutes.minutes)
       onSaved(t('surveys.next.respondentTexts.saved'))
       onOpenChange(false)
     } catch (cause) {
@@ -88,6 +101,9 @@ export function RespondentTextsDialog({
       setSaving(false)
     }
   }
+
+  // What the respondent reads while the duration box is empty: the estimate from the questions.
+  const calculated = respondDuration(state.status === 'ready' ? state.context.questionCount : 0)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -143,13 +159,30 @@ export function RespondentTextsDialog({
                 )
               })}
             </div>
+            {/* One per survey, not per language: a number. Empty is the calculation from the
+                questions, and the placeholder is that calculation, so an empty box says exactly
+                what the respondent reads (PROCOMER, 2026-11-19: «38 es mucho»). */}
+            <TextField
+              type="number"
+              label={t('surveys.next.respondentTexts.durationLabel')}
+              description={
+                calculated.underAMinute
+                  ? t('surveys.next.respondentTexts.durationHelpBrief')
+                  : t('surveys.next.respondentTexts.durationHelp', { minutes: calculated.minutes })
+              }
+              placeholder={calculated.underAMinute ? '' : String(calculated.minutes)}
+              value={state.minutes}
+              error={minutesInvalid ? t('surveys.next.respondentTexts.durationInvalid', { min: ESTIMATED_MINUTES_MIN, max: ESTIMATED_MINUTES_MAX }) : undefined}
+              disabled={!state.context.editable || saving}
+              onChange={editMinutes}
+            />
             {saveError && (
               <Alert variant="destructive" role="alert">
                 <AlertDescription>{saveError}</AlertDescription>
               </Alert>
             )}
             <div>
-              <Button onClick={() => void save()} disabled={!state.context.editable || saving}>
+              <Button onClick={() => void save()} disabled={!state.context.editable || saving || minutesInvalid}>
                 {saving ? t('common.saving') : t('common.save')}
               </Button>
             </div>

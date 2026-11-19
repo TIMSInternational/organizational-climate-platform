@@ -22,6 +22,29 @@ export function estimatedMinutes(questionCount: number): number {
   return Math.max(1, rounded)
 }
 
+/** How long a survey takes, as every respondent-facing screen says it. */
+export interface RespondDuration {
+  minutes: number
+  /** Said as "under a minute" rather than as a number. Never for a stated duration. */
+  underAMinute: boolean
+}
+
+/**
+ * The duration a screen prints: the survey's own, when its author stated one
+ * (`settings.estimatedMinutes`, PROCOMER 2026-11-19 — the figure differs per evaluation and
+ * per company), and otherwise `estimatedMinutes` from the question count.
+ *
+ * The one place that decides, so the start page, the respond footer, Home and My Surveys
+ * cannot quote one survey two ways. A stated value below 2 is not one the API stores (it
+ * admits 2-600, 0 clears), and is read here as unstated rather than trusted.
+ */
+export function respondDuration(questionCount: number, stated?: number | null): RespondDuration {
+  if (typeof stated === 'number' && Number.isInteger(stated) && stated >= 2) {
+    return { minutes: stated, underAMinute: false }
+  }
+  return { minutes: estimatedMinutes(questionCount), underAMinute: isUnderAMinute(questionCount) }
+}
+
 /**
  * Whether the estimate is best said as "under a minute" rather than as a number.
  *

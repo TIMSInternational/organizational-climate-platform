@@ -1,7 +1,7 @@
 import type { SurveyPublicLinkDetail, SurveyLinkError } from '../../api/surveyLinks'
 import type { SurveyRespondError, SurveyRespondView } from '../../api/surveyResponses'
 import { publicLinkFailureCopy } from '../../linkFailure'
-import { estimatedMinutes, isUnderAMinute } from '../../respondEstimate'
+import { respondDuration } from '../../respondEstimate'
 
 /**
  * The pure rules behind `/s/:token` — the PublicRespondEntry and
@@ -237,14 +237,17 @@ export interface EntryPace {
  * Three keys rather than one because this catalogue has no plural machinery and
  * `interpolate` is a straight `{name}` substitution: "1 preguntas" is what one key
  * would print for a single-question survey, and "unos 1 minutos" for a short one.
- * `estimatedMinutes` is the product's one estimate — the Home card and the respond
- * footer quote the same arithmetic, so a survey cannot be described two ways.
+ * `respondDuration` is the product's one duration — the survey's stated minutes, or the
+ * estimate from its questions — and the Home card and the respond footer read the same
+ * function, so a survey cannot be described two ways.
  */
-export function entryPace(questionCount: number): EntryPace {
-  const minutes = estimatedMinutes(questionCount)
-  const params = { count: questionCount, minutes }
+export function entryPace(questionCount: number, statedMinutes?: number | null): EntryPace {
+  const duration = respondDuration(questionCount, statedMinutes)
+  const params = { count: questionCount, minutes: duration.minutes }
 
-  if (questionCount === 1) return { key: 'next.entryPaceOne', params }
-  if (isUnderAMinute(questionCount)) return { key: 'next.entryPaceBrief', params }
+  // One question that its author says takes minutes (an open text, say): "Una pregunta", never
+  // "1 preguntas", and the stated figure rather than "menos de un minuto".
+  if (questionCount === 1) return { key: duration.underAMinute ? 'next.entryPaceOne' : 'next.entryPaceOneQuestion', params }
+  if (duration.underAMinute) return { key: 'next.entryPaceBrief', params }
   return { key: 'next.entryPace', params }
 }

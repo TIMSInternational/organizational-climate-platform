@@ -61,6 +61,8 @@ public class SurveyConfiguration : IEntityTypeConfiguration<Survey>
             settings.Property(x => x.RespondentIntroEs).HasColumnName("settings_respondent_intro_es").HasMaxLength(SurveyRespondentText.IntroMaxLength);
             settings.Property(x => x.ClosingMessageEn).HasColumnName("settings_closing_message_en").HasMaxLength(SurveyRespondentText.ClosingMaxLength);
             settings.Property(x => x.ClosingMessageEs).HasColumnName("settings_closing_message_es").HasMaxLength(SurveyRespondentText.ClosingMaxLength);
+            // Nullable with no default: null is the stored meaning "calculate it from the questions".
+            settings.Property(x => x.EstimatedMinutes).HasColumnName("settings_estimated_minutes");
             settings.Property(x => x.InvitationIncludeCredentials).HasColumnName("settings_invitation_include_credentials").IsRequired().HasDefaultValue(false);
             settings.Property(x => x.InvitationSendImmediately).HasColumnName("settings_invitation_send_immediately").IsRequired().HasDefaultValue(false);
             settings.Property(x => x.InvitationCustomSubjectEn).HasColumnName("settings_invitation_custom_subject_en").HasMaxLength(200);

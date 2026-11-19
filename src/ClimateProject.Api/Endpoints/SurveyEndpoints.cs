@@ -215,7 +215,7 @@ public static class SurveyEndpoints
                 s.Id,
                 LocalizedContent.ResolveText(s.TitleEn, s.TitleEs, lang, s.Language),
                 LocalizedContent.ResolveText(s.DescriptionEn, s.DescriptionEs, lang, s.Language),
-                s.Type, s.StartDate, s.EndDate, s.QuestionCount, s.Anonymous, s.TimeLimitMinutes))
+                s.Type, s.StartDate, s.EndDate, s.QuestionCount, s.Anonymous, s.TimeLimitMinutes, s.EstimatedMinutes))
             .ToList();
 
         return Results.Ok(new MySurveyListResponse(surveys));
@@ -2007,6 +2007,22 @@ public static class SurveyEndpoints
         if (input.InvitationBrandingEnabled.HasValue) settings.InvitationBrandingEnabled = input.InvitationBrandingEnabled.Value;
         if (input.OneSessionOnly.HasValue) settings.OneSessionOnly = input.OneSessionOnly.Value;
 
+        // The duration the survey states. Validated before it is applied, and before any text
+        // below, so a refused value leaves nothing half-written. 0 clears it: the screens go back
+        // to calculating it from the questions.
+        if (input.EstimatedMinutes.HasValue)
+        {
+            var minutes = input.EstimatedMinutes.Value;
+            if (minutes != 0 && (minutes < SurveyRespondentText.EstimatedMinutesMin || minutes > SurveyRespondentText.EstimatedMinutesMax))
+            {
+                return Results.Json(
+                    new { message = $"'settings.estimatedMinutes' admits {SurveyRespondentText.EstimatedMinutesMin} to {SurveyRespondentText.EstimatedMinutesMax} minutes, or 0 to calculate it from the questions." },
+                    statusCode: 400);
+            }
+
+            settings.EstimatedMinutes = minutes == 0 ? null : minutes;
+        }
+
         if (input.InvitationCustomMessage is not null)
         {
             if (!input.InvitationCustomMessage.TryResolve(language, "settings.invitationCustomMessage", out var messageEn, out var messageEs, out var messageError))
@@ -2143,7 +2159,8 @@ public static class SurveyEndpoints
                 locale, survey.Language, "settings.respondentIntro", fallbackFields)),
             SurveyRespondentText.OrDefault(SurveyContent.Resolve(
                 survey.Settings.ClosingMessageEn, survey.Settings.ClosingMessageEs,
-                locale, survey.Language, "settings.closingMessage", fallbackFields)));
+                locale, survey.Language, "settings.closingMessage", fallbackFields)),
+            survey.Settings.EstimatedMinutes);
 
         // ResolvedLocale names the language the caller is actually READING, not the one
         // they asked for. A Spanish-only survey fetched with ?lang=en comes back in

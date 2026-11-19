@@ -148,6 +148,12 @@ export interface SurveyRespondView {
   privacyNoticeEn?: string | null
   /** The survey's own thank-you after a completed submit. Null or absent: the default thanks. */
   closingMessage?: string | null
+  /**
+   * The duration the survey states, in minutes (`settings.estimatedMinutes`). Null or absent --
+   * an API that predates it, or a survey nobody configured -- means calculate it from the
+   * questions. Read through `respondDuration`, never directly.
+   */
+  estimatedMinutes?: number | null
 }
 
 /** Who is answering, as typed. Sent on the completing post only, never on a partial save. */

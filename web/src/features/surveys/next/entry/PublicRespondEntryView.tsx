@@ -51,7 +51,7 @@ export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondE
   const { t } = useTranslation('surveyRespond')
 
   const count = view.questions.length
-  const pace = entryPace(count)
+  const pace = entryPace(count, view.estimatedMinutes)
 
   return (
     <>

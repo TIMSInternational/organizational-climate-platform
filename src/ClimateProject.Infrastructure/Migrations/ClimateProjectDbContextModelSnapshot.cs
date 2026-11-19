@@ -6204,6 +6204,10 @@ namespace ClimateProject.Infrastructure.Migrations
                                 .HasColumnType("character varying(20)")
                                 .HasColumnName("settings_credential_mode");
 
+                            b1.Property<int?>("EstimatedMinutes")
+                                .HasColumnType("integer")
+                                .HasColumnName("settings_estimated_minutes");
+
                             b1.Property<bool>("InvitationBrandingEnabled")
                                 .ValueGeneratedOnAdd()
                                 .HasColumnType("boolean")

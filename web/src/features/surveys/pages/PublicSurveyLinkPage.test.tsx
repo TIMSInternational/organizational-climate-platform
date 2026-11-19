@@ -165,6 +165,14 @@ describe('PublicSurveyLinkPage', () => {
    * promise says it is anonymous and what is not kept — no sentence about a department shown
    * from one respondent.
    */
+  /** PROCOMER, 2026-11-19: the start page quotes the minutes the survey states. */
+  it('quotes the duration the survey states on the entry card', async () => {
+    serve({ respond: () => new Response(JSON.stringify(respondView({ estimatedMinutes: 25 })), { status: 200 }) })
+    renderPage()
+
+    expect(await screen.findByText('Una pregunta. Duración aproximada: 25 minutos.')).toBeTruthy()
+  })
+
   it('says the survey is anonymous in the client’s words and draws nothing under the button', async () => {
     serve({})
     renderPage()

@@ -206,6 +206,8 @@ export interface DashboardPendingSurvey {
    * reader is about to answer and the full explanation is beside it. Here it is silence.
    */
   anonymous: boolean
+  /** The duration the survey states, or null/absent to calculate it from `questionCount`. */
+  estimatedMinutes?: number | null
 }
 
 /** `GET /dashboard/employee`. Scoped to the caller's own user row and to nobody else's. */

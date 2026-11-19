@@ -419,6 +419,74 @@ public class SelfDeclaredAreaAndParticipationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The duration a survey states (PROCOMER, 2026-11-19: «38 es mucho», and the figure differs
+    /// per evaluation and per company). Unset is null, which the screens read as "calculate it
+    /// from the questions" -- what every survey before this date keeps doing.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_that_states_no_duration_sends_null_and_the_screen_calculates_it()
+    {
+        var survey = await QrSurveyAsync(collectIdentity: false);
+
+        Assert.Null((await RespondViewAsync(_factory.CreateClient(), survey.Id)).EstimatedMinutes);
+        var detail = await (await AdminAsync()).GetFromJsonAsync<SurveyDetail>($"/surveys/{survey.Id}");
+        Assert.Null(detail!.Settings.EstimatedMinutes);
+    }
+
+    /// <summary>
+    /// «When the evaluation is created, or posted, we should be able to edit it.» Set at create,
+    /// then changed by a company admin on an ACTIVE survey that already has an answer -- the state
+    /// a client is in when they notice the figure -- and read by a visitor with no account and by
+    /// the admin. 0 puts the calculation back.
+    /// </summary>
+    [Fact]
+    public async Task The_duration_is_set_at_create_and_edited_on_a_live_survey_with_answers()
+    {
+        var admin = await AdminAsync();
+        var draft = await SurveyTestHarness.CreateSurveyAsync(admin, SurveyTestHarness.MinimalRequest(_companyId) with
+        {
+            Settings = new SurveySettingsInput(EstimatedMinutes: 25),
+        });
+        Assert.Equal(25, draft.Settings.EstimatedMinutes);
+
+        var survey = await QrSurveyAsync(collectIdentity: false);
+        Assert.Equal(HttpStatusCode.Created, (await SubmitAsync(survey, Area(_operaciones))).StatusCode);
+
+        var edited = await admin.PutAsJsonAsync($"/surveys/{survey.Id}", new UpdateSurveyRequest(
+            Settings: new SurveySettingsInput(EstimatedMinutes: 30)));
+        Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
+
+        Assert.Equal(30, (await RespondViewAsync(_factory.CreateClient(), survey.Id)).EstimatedMinutes);
+        Assert.Equal(30, (await admin.GetFromJsonAsync<SurveyDetail>($"/surveys/{survey.Id}"))!.Settings.EstimatedMinutes);
+
+        var cleared = await admin.PutAsJsonAsync($"/surveys/{survey.Id}", new UpdateSurveyRequest(
+            Settings: new SurveySettingsInput(EstimatedMinutes: 0)));
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+
+        Assert.Null((await RespondViewAsync(_factory.CreateClient(), survey.Id)).EstimatedMinutes);
+        Assert.Null((await admin.GetFromJsonAsync<SurveyDetail>($"/surveys/{survey.Id}"))!.Settings.EstimatedMinutes);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1)]
+    [InlineData(SurveyRespondentText.EstimatedMinutesMax + 1)]
+    public async Task A_duration_out_of_range_is_refused_and_changes_nothing(int minutes)
+    {
+        var admin = await AdminAsync();
+        var survey = await SurveyTestHarness.CreateSurveyAsync(admin, SurveyTestHarness.MinimalRequest(_companyId) with
+        {
+            Settings = new SurveySettingsInput(EstimatedMinutes: 30),
+        });
+
+        var refused = await admin.PutAsJsonAsync($"/surveys/{survey.Id}", new UpdateSurveyRequest(
+            Settings: new SurveySettingsInput(EstimatedMinutes: minutes)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(30, (await admin.GetFromJsonAsync<SurveyDetail>($"/surveys/{survey.Id}"))!.Settings.EstimatedMinutes);
+    }
+
+    /// <summary>
     /// And the write path: a client that asks anyway -- a stale bundle, or a script -- is
     /// REFUSED rather than quietly obeyed, so no row can reach `survey_participations`.
     /// </summary>

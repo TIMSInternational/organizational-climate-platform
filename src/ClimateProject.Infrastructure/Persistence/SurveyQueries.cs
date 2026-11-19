@@ -33,7 +33,8 @@ public sealed record MySurveyRow(
     DateTimeOffset EndDate,
     int QuestionCount,
     bool Anonymous,
-    int? TimeLimitMinutes);
+    int? TimeLimitMinutes,
+    int? EstimatedMinutes);
 
 /// <summary>
 /// The survey listings' LINQ, composed over <see cref="IQueryable{T}"/> rather than over a
@@ -204,7 +205,8 @@ public static class SurveyQueries
                 s.EndDate,
                 questions.Count(q => q.SurveyId == s.Id),
                 s.Settings.Anonymous,
-                s.Settings.TimeLimitMinutes));
+                s.Settings.TimeLimitMinutes,
+                s.Settings.EstimatedMinutes));
 
     private const string LikeEscapeCharacter = "\\";
 

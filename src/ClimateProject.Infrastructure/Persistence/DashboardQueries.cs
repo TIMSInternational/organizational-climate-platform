@@ -139,7 +139,8 @@ public sealed record DashboardPendingSurveyRow(
     DateTimeOffset StartDate,
     DateTimeOffset EndDate,
     int QuestionCount,
-    bool Anonymous);
+    bool Anonymous,
+    int? EstimatedMinutes);
 
 /// <summary>
 /// The aggregate LINQ behind the four role dashboards (#132), composed over
@@ -552,5 +553,6 @@ public static class DashboardQueries
                 // reads. Not a new column and not a derived guess: anonymity is per-survey,
                 // and the card that claims it must be claiming what the questionnaire behind
                 // it will actually do.
-                s.Settings.Anonymous));
+                s.Settings.Anonymous,
+                s.Settings.EstimatedMinutes));
 }

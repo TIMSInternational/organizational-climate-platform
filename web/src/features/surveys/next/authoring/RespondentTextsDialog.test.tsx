@@ -10,12 +10,16 @@ const T = es.surveys.next.respondentTexts
 const SURVEY = '22222222-2222-2222-2222-222222222222'
 
 /** One `GET /surveys/{id}?lang=…` payload per locale, as the API resolves it. */
-function read(lang: 'es' | 'en', over: { language?: string; intro?: string | null; closing?: string | null; fallback?: string[]; status?: string } = {}) {
+function read(
+  lang: 'es' | 'en',
+  over: { language?: string; intro?: string | null; closing?: string | null; fallback?: string[]; status?: string; minutes?: number | null; questions?: number } = {},
+) {
   return {
     language: over.language ?? 'es',
     status: over.status ?? 'active',
     fallbackFields: over.fallback ?? [],
-    settings: { respondentIntro: over.intro ?? null, closingMessage: over.closing ?? null },
+    settings: { respondentIntro: over.intro ?? null, closingMessage: over.closing ?? null, estimatedMinutes: over.minutes ?? null },
+    questions: Array.from({ length: over.questions ?? 57 }, (_, index) => ({ id: `q${index}` })),
     lang,
   }
 }
@@ -103,9 +107,61 @@ describe('RespondentTextsDialog', () => {
       settings: {
         respondentIntro: { es: '' },
         closingMessage: { es: 'Eagle le agradece su participación en la presente encuesta.' },
+        // No duration stated: sent as 0, the API's "calculate it from the questions".
+        estimatedMinutes: 0,
       },
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  /**
+   * PROCOMER, 2026-11-19: «38 es mucho», and the figure differs per evaluation and per company.
+   * The empty box shows the calculation it stands for; a typed figure is what is sent.
+   */
+  it('shows the calculated duration as the empty box’s placeholder and saves a stated one', async () => {
+    serve({ es: read('es', { questions: 57 }), en: read('en', { questions: 57 }) })
+    const { onSaved } = renderDialog()
+
+    const minutes = (await screen.findByLabelText(T.durationLabel, { exact: false })) as HTMLInputElement
+    expect(minutes.value).toBe('')
+    // 57 questions, half a minute each, to the nearest five: 30.
+    expect(minutes.placeholder).toBe('30')
+    expect(screen.getByText(T.durationHelp.replace('{minutes}', '30'))).toBeTruthy()
+
+    await userEvent.type(minutes, '25')
+    await userEvent.click(screen.getByRole('button', { name: es.common.save }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(T.saved))
+    const put = sent.find((s) => s.method === 'PUT')!
+    expect((put.body as { settings: { estimatedMinutes: number } }).settings.estimatedMinutes).toBe(25)
+  })
+
+  it('prefills a stated duration, and an emptied box sends 0 to calculate it again', async () => {
+    serve({ es: read('es', { minutes: 30 }), en: read('en', { minutes: 30 }) })
+    const { onSaved } = renderDialog()
+
+    const minutes = (await screen.findByLabelText(T.durationLabel, { exact: false })) as HTMLInputElement
+    expect(minutes.value).toBe('30')
+    await userEvent.clear(minutes)
+    await userEvent.click(screen.getByRole('button', { name: es.common.save }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const put = sent.find((s) => s.method === 'PUT')!
+    expect((put.body as { settings: { estimatedMinutes: number } }).settings.estimatedMinutes).toBe(0)
+  })
+
+  it('refuses a duration the API would refuse, and sends nothing', async () => {
+    serve({ es: read('es'), en: read('en') })
+    renderDialog()
+
+    const minutes = await screen.findByLabelText(T.durationLabel, { exact: false })
+    await userEvent.type(minutes, '1')
+
+    expect(screen.getByText(T.durationInvalid.replace('{min}', '2').replace('{max}', '600'))).toBeTruthy()
+    const save = screen.getByRole('button', { name: es.common.save }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    await userEvent.click(save)
+    expect(sent.some((s) => s.method === 'PUT')).toBe(false)
   })
 
   it('offers no edit on a closed survey, which the API would refuse', async () => {
