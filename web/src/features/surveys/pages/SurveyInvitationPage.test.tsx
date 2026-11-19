@@ -464,9 +464,10 @@ describe('SurveyInvitationPage', () => {
    * One promise, made once. `RespondShell` used to draw an "Anónima" chip beside the lockup
    * on this route, over the landing card's anonymity block — the same promise twice, in two
    * wordings. The canvas's strip (RespondSurveyPhone, 10 Sep) draws none; the block is the one
-   * statement, on the card and then on the form.
+   * statement, on the card. Since 2026-11-18 (PROCOMER) the form no longer repeats it over the
+   * first question either: «Anónima» is shown on the start page only.
    */
-  it('draws no anonymity chip in the header, and states the promise once on the card and once on the form', async () => {
+  it('draws no anonymity chip in the header, and states the promise on the card only', async () => {
     serve()
     const { container } = renderPage()
 
@@ -478,7 +479,8 @@ describe('SurveyInvitationPage', () => {
     await screen.findByRole('radio', { name: 'Bien' })
 
     expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
-    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(0)
+    expect(screen.queryByText('Esta encuesta es anónima')).toBeNull()
   })
 
   /**

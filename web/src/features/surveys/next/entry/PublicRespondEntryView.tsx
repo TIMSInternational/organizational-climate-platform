@@ -39,8 +39,14 @@ export interface PublicRespondEntryViewProps {
  * is the block the form opens on and the employee's Home draws beside the task. Nothing
  * here is a second implementation of any of them, which is what makes the handover
  * continuous rather than merely similar: the caption on this page and the caption on
- * `/survey-invitations/:token` are the same component, and the promise the respondent
- * reads here is character for character the one the next screen repeats.
+ * `/survey-invitations/:token` are the same component.
+ *
+ * ## The promise is made here, and only here
+ *
+ * «Anónima» is shown on this card and not repeated over the first question (PROCOMER,
+ * 2026-11-18): `PublicSurveyLinkPage` hands the form `entryPromise`, and the form draws no
+ * block of its own. That is sound only because this card draws it from the same respond
+ * view, with the same three inputs, that the form would have used.
  */
 export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondEntryViewProps) {
   const { t } = useTranslation('surveyRespond')

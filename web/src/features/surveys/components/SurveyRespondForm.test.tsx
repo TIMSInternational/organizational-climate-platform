@@ -3,6 +3,7 @@ import { render, screen, cleanup, within, fireEvent, waitFor } from '@testing-li
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import SurveyRespondForm from './SurveyRespondForm'
+import type { EntryPromise } from '../respondPromise'
 import { TranslationProvider } from '../../../i18n'
 import { CATALOGUES, LOCALE_STORAGE_KEY } from '../../../i18n/locale'
 import { createTranslator } from '../../../i18n/translate'
@@ -145,7 +146,7 @@ function respondWith(payload: SurveyRespondView, submission: SubmissionOverrides
   })
 }
 
-function renderForm(props: { publicEntry?: boolean } = {}) {
+function renderForm(props: { publicEntry?: boolean; entryPromise?: EntryPromise } = {}) {
   return render(
     <TranslationProvider>
       <MemoryRouter initialEntries={['/surveys/s1/respond']}>
@@ -1239,6 +1240,10 @@ describe('SurveyRespondForm confirmation', () => {
     await submitOnce()
 
     expect(screen.getByText('Sus respuestas se agrupan de inmediato')).toBeTruthy()
+    // Headings only (PROCOMER, 2026-11-18): no sentence under any of the three titles.
+    expect(screen.queryByText(copy.es('surveyRespond.happensPooledBody'))).toBeNull()
+    expect(screen.queryByText(copy.es('surveyRespond.happensClosesBody'))).toBeNull()
+    expect(screen.queryByText(copy.es('surveyRespond.happensResultsBody'))).toBeNull()
     // The floor is the platform constant, not a number typed into the copy.
     // The cross-tab floor is NOT stated here. Ruled by Federico 2026-10-18 on ESPH's
     // finding 9 -- the reviewer boxed "Los cruces de variables demográficas requieren al
@@ -1250,12 +1255,14 @@ describe('SurveyRespondForm confirmation', () => {
     // more, so the guard has no subject here; `suppression.ts` still owns the constant and
     // the admin-facing strings still interpolate it.
     //
-    // What must NOT be lost is the honest half, asserted on the line below: a single
-    // department or demographic value can still be reported from one response, and the
-    // respondent is still told so before they answer.
+    // What must NOT be lost is the honest half: a single department or demographic value
+    // can still be reported from one response, and the respondent is still told so BEFORE
+    // they answer -- `anonymousBody`, asserted on the respond screens below. Since
+    // 2026-11-18 the confirmation no longer repeats it: the sentence under the pooled row
+    // that carried it went with the other row bodies.
     expect(screen.queryByText(/cruces de variables/i)).toBeNull()
     expect(screen.queryByText(/combine dos/i)).toBeNull()
-    expect(screen.getByText(/pueden mostrarse aunque haya respondido una sola persona/)).toBeTruthy()
+    expect(screen.queryByText(/pueden mostrarse aunque haya respondido una sola persona/)).toBeNull()
     // The close date is `view.endDate`, spelled out rather than abbreviated.
     expect(screen.getByText('La encuesta cierra el 12 de septiembre de 2026')).toBeTruthy()
     // Ruled 2026-10-13: the card may not promise the results reach the respondent's
@@ -1265,9 +1272,20 @@ describe('SurveyRespondForm confirmation', () => {
     expect(screen.queryByText(/avisaremos por correo/)).toBeNull()
   })
 
-  it('says plainly that it cannot show the answers again', async () => {
+  /**
+   * Headings only (PROCOMER, 2026-11-18). The page used to close on a note -- "Puede cerrar
+   * esta pestaña. No podemos volver a mostrarle sus respuestas…" -- and open with a line under
+   * the thanks; both went, for every respondent.
+   */
+  it('keeps only the bold lines: no line under the thanks and no closing note', async () => {
     await submitOnce()
-    expect(screen.getByText(/No podemos volver a mostrarle sus respuestas/)).toBeTruthy()
+
+    expect(screen.getByText(copy.es('surveyRespond.thankYouTitle'))).toBeTruthy()
+    expect(screen.getByText(copy.es('surveyRespond.whatHappensNowTitle'))).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.thankYouBody'))).toBeNull()
+    expect(screen.queryByText(copy.es('surveyRespond.noCopyNote'))).toBeNull()
+    expect(screen.queryByText(/No podemos volver a mostrarle sus respuestas/)).toBeNull()
+    expect(screen.queryByText(/Puede cerrar esta/)).toBeNull()
   })
 
   /**
@@ -1282,7 +1300,8 @@ describe('SurveyRespondForm confirmation', () => {
     await submitOnce({}, {}, { anonymous: false })
 
     expect(screen.getByText('Sus respuestas las procesa un equipo externo')).toBeTruthy()
-    expect(screen.getByText(/su empresa no ve su nombre junto a lo que usted respondió/i)).toBeTruthy()
+    // The title alone, as on the anonymous branch (2026-11-18).
+    expect(screen.queryByText(copy.es('surveyRespond.happensAttributedBody'))).toBeNull()
     expect(screen.queryByText('Sus respuestas se agrupan de inmediato')).toBeNull()
 
     // The floor is still the platform constant on this branch, not a number retyped
@@ -1292,14 +1311,17 @@ describe('SurveyRespondForm confirmation', () => {
     expect(screen.queryByText(/cruces de variables/i)).toBeNull()
   })
 
-  it('tells an attributed respondent that completion is visible, not that it is unlinked', async () => {
+  it('closes on no note for an attributed respondent either', async () => {
     await submitOnce({}, {}, { anonymous: false })
 
-    expect(screen.getByText(/su empresa puede ver quién ya respondió, nunca qué respondió/)).toBeTruthy()
+    expect(screen.getByText(copy.es('surveyRespond.thankYouTitle'))).toBeTruthy()
+    expect(screen.queryByText(copy.es('surveyRespond.thankYouBody'))).toBeNull()
+    expect(screen.queryByText(copy.es('surveyRespond.noCopyNoteIdentified'))).toBeNull()
+    expect(screen.queryByText(/su empresa puede ver quién ya respondió/)).toBeNull()
     expect(screen.queryByText(/sin vincularlo a sus respuestas/)).toBeNull()
   })
 
-  it('reads back what was recorded, and when', async () => {
+  it('reads back what was recorded, as the tile alone', async () => {
     await submitOnce({ answeredQuestionCount: 3, questionCount: 3 })
 
     const receipt = document.querySelector('[data-slot="respond-receipt"]') as HTMLElement
@@ -1307,17 +1329,14 @@ describe('SurveyRespondForm confirmation', () => {
     // The server's own count as a reading, beside what it is out of.
     const reading = receipt.querySelector('.tabular-nums')
     expect(reading?.textContent).toBe('3 de 3')
-    expect(
-      within(receipt).getByText(/^Enviadas a las \d{1,2}:\d{2}\. Se guardaron sin nada que lo identifique\.$/),
-    ).toBeTruthy()
+    // The when-and-how sentence beside the tile went on 2026-11-18 (PROCOMER): the tile is
+    // the whole of the row.
+    expect(receipt.textContent).toBe('Respuestas registradas3 de 3')
+    expect(screen.queryByText(/Enviadas a las/)).toBeNull()
+    expect(screen.queryByText(/sin nada que lo identifique/)).toBeNull()
   })
 
-  /**
-   * "Se guardaron sin nada que lo identifique" describes how THIS response was stored, so
-   * it is said only when the server says the response is anonymous. On a survey that
-   * records who answered, the time is the whole of what is true.
-   */
-  it('says only when it was sent, on a survey that records who answered', async () => {
+  it('says no sent-at time on a survey that records who answered either', async () => {
     respondWith(view({ anonymous: false, questions: [question()] }), { answeredQuestionCount: 1 })
     renderForm()
     await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
@@ -1325,8 +1344,8 @@ describe('SurveyRespondForm confirmation', () => {
     await screen.findByText('Qué pasa ahora')
 
     const receipt = document.querySelector('[data-slot="respond-receipt"]') as HTMLElement
-    expect(within(receipt).getByText(/^Enviadas a las \d{1,2}:\d{2}\.$/)).toBeTruthy()
-    expect(receipt.textContent).not.toMatch(/sin nada que lo identifique/)
+    expect(receipt.querySelector('.tabular-nums')?.textContent).toBe('1 de 1')
+    expect(screen.queryByText(/Enviadas a las/)).toBeNull()
   })
 
   /**
@@ -1659,6 +1678,88 @@ describe('SurveyRespondForm — the anonymity promise under one question at a ti
     expect(collapsed.querySelector('[data-slot="anonymity-label"]')?.textContent).toBe(
       copy.es('surveyRespond.anonymousChip'),
     )
+  })
+})
+
+/**
+ * «Anónima» on the start page only (PROCOMER, 2026-11-18). `/s/:token` and
+ * `/survey-invitations/:token` draw the promise on the card in front of the form and hand the
+ * form `entryPromise`; the form then opens on the survey itself -- its own welcome text and
+ * question 1 -- with no second block, on the demographic screen as on every question page.
+ * When the form's block would say something the card could not, it is drawn anyway
+ * (`respondPromise.ts`).
+ */
+describe('SurveyRespondForm — the promise made on a start page', () => {
+  const notices = () => document.querySelectorAll('[data-slot="anonymity-notice"]')
+
+  it('draws no block over the welcome text and question 1 when the entry card made the promise', async () => {
+    respondWith(view({ description: 'Bienvenida de PROCOMER', questions: [question(), question({ id: 'q2' })] }))
+    renderForm({ publicEntry: true, entryPromise: 'respondView' })
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    expect(notices()).toHaveLength(0)
+    expect(screen.queryByText(copy.es('surveyRespond.anonymousBody'))).toBeNull()
+    // The survey's own welcome text stays, first on the page now.
+    expect(screen.getByText('Bienvenida de PROCOMER')).toBeTruthy()
+
+    // Nor collapsed on the pages after it.
+    await userEvent.click(await screen.findByRole('radio', { name: 'Muy de acuerdo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    expect(notices()).toHaveLength(0)
+  })
+
+  it('draws none on the demographic screen either, and keeps that screen\'s own intro', async () => {
+    respondWith(
+      view({
+        demographics: [
+          { field: 'area', label: '¿En qué área trabaja?', options: [{ value: 'a', label: 'A' }], required: false, order: 0 },
+        ],
+      }),
+    )
+    renderForm({ publicEntry: true, entryPromise: 'respondView' })
+    await screen.findByText('¿En qué área trabaja?')
+
+    expect(notices()).toHaveLength(0)
+    expect(screen.getByText(copy.es('surveyRespond.demographics.intro'))).toBeTruthy()
+  })
+
+  it('draws none after an invitation card that said the same thing', async () => {
+    respondWith(view({ anonymous: true }))
+    renderForm({ publicEntry: true, entryPromise: { invitation: true } })
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    expect(notices()).toHaveLength(0)
+  })
+
+  /** The card has no respond view, so it cannot draw the survey's own paragraph. */
+  it('still draws the survey\'s own intro after an invitation card, which could only draw the default', async () => {
+    respondWith(view({ anonymous: true, respondentIntro: 'Texto propio de la encuesta' }))
+    renderForm({ publicEntry: true, entryPromise: { invitation: true } })
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    expect(notices()).toHaveLength(1)
+    expect(screen.getByText('Texto propio de la encuesta')).toBeTruthy()
+  })
+
+  /**
+   * The card reads the survey's setting, the form the response's: an invitee with no session
+   * on an identified survey is stored anonymously, and only the form can say so.
+   */
+  it('still draws the block when the response\'s anonymity differs from what the card said', async () => {
+    respondWith(view({ anonymous: true }))
+    renderForm({ publicEntry: true, entryPromise: { invitation: false } })
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    expect(notices()).toHaveLength(1)
+    expect(screen.getByText(copy.es('surveyRespond.anonymousBody'))).toBeTruthy()
+  })
+
+  it('keeps the block on a route with no start page', async () => {
+    respondWith(view())
+    renderForm()
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    expect(notices()).toHaveLength(1)
   })
 })
 
@@ -2095,11 +2196,13 @@ describe('SurveyRespondForm — Eagle corrections', () => {
     expect(document.querySelector('[data-slot="respond-receipt"]')).toBeTruthy()
   })
 
-  it('keeps the default thanks when the survey has no closing message of its own', async () => {
+  it('keeps the default thanks, its title alone, when the survey has no closing message of its own', async () => {
     await submitOne(view({ questions: [question()] }))
 
-    await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
-    expect(screen.getByText(copy.es('surveyRespond.thankYouBody'))).toBeTruthy()
+    const title = await screen.findByText(copy.es('surveyRespond.thankYouTitle'))
+    const block = title.closest('[role="status"]') as HTMLElement
+    expect(block.textContent).toBe(copy.es('surveyRespond.thankYouTitle'))
+    expect(screen.queryByText(copy.es('surveyRespond.thankYouBody'))).toBeNull()
   })
 
   const EAGLE_INTRO = 'Estimado colaborador (a) es muy importante contar con su retroalimentación y conocer aspectos, los cuales nos colaboran a mejorar el clima organizacional de la empresa: sus respuestas se manejarán de forma anónima a través de un proveedor externo.'
