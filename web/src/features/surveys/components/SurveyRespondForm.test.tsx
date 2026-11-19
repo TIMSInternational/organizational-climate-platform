@@ -1053,6 +1053,20 @@ describe('SurveyRespondForm layout', () => {
     expect(within(foot).getByText('La duración aproximada es de 25 minutos.')).toBeTruthy()
   })
 
+  /** PROCOMER, 2026-11-19: the welcome text keeps the paragraphs its author wrote. */
+  it('keeps the paragraphs of the survey’s welcome text', async () => {
+    respondWith(view({ description: '¡Tu opinión cuenta!\n\nTe invitamos a participar.\n\nTu participación es fundamental.' }))
+    const { container } = renderForm()
+
+    await screen.findByRole('radio', { name: 'Muy de acuerdo' })
+    const intro = container.querySelector('[data-slot="survey-intro"]') as HTMLElement
+    expect([...intro.querySelectorAll('p')].map((p) => p.textContent)).toEqual([
+      '¡Tu opinión cuenta!',
+      'Te invitamos a participar.',
+      'Tu participación es fundamental.',
+    ])
+  })
+
   it('justifies the intro and the question, and stacks the foot as two sentences', async () => {
     respondWith(view({ description: 'Su opinión cuenta.' }))
     const { container } = renderForm()
