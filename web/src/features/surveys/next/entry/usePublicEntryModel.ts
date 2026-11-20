@@ -4,6 +4,7 @@ import { SurveyLinkError, resolveSurveyPublicLink } from '../../api/surveyLinks'
 import { SurveyRespondError, getSurveyRespondView } from '../../api/surveyResponses'
 import { ensureSessionId } from '../../respondSession'
 import { entryState, type EntryState, type LinkLoad, type ViewLoad } from './derive'
+import { useSurveyInterfaceLocale } from '../../useSurveyInterfaceLocale'
 
 /**
  * The two requests behind `/s/:token`, and the one gesture that ends them.
@@ -52,6 +53,9 @@ export function usePublicEntryModel(token: string | undefined): {
   const [answering, setAnswering] = useState(false)
 
   const begunToken = useRef<string | null>(null)
+
+  // A single-language survey answers in its language, the landing card included (gap #9).
+  useSurveyInterfaceLocale(view.status === 'ready' ? view.view.language : null)
 
   useEffect(() => {
     return () => {

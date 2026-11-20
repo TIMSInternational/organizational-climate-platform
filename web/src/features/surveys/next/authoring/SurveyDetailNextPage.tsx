@@ -40,6 +40,7 @@ import { DuplicateSurveyDialog } from '../DuplicateSurveyDialog'
 import { audienceEditability } from './audienceEdit'
 import { ReopenSurveyDialog } from './ReopenSurveyDialog'
 import { EditSurveyTextDialog } from './EditSurveyTextDialog'
+import { SurveyTextsAndEmailCard } from './SurveyTextsAndEmailCard'
 import { isTextEditable, QUIET_DISABLED } from './model'
 import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, yearIn, zoneLabel } from './zonedWindow'
 
@@ -424,6 +425,7 @@ export function SurveyDetailView({
                   (SurveyDtos.cs:83-111), and a name matched by title would be a guess. */}
             </dl>
           </Card>
+          {canAuthor && <SurveyTextsAndEmailCard surveyId={survey.id} />}
           <Card className="flex flex-col gap-2.5 px-5 pb-4.5 pt-4" data-testid="detail-departments">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardHeading title={copy('departments')} />
