@@ -1,3 +1,4 @@
+using ClimateProject.Application.Reports;
 using ClimateProject.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -14,6 +15,13 @@ public class ReportConfiguration : IEntityTypeConfiguration<Report>
         builder.Property(r => r.TitleEs).HasColumnName("title_es").HasMaxLength(200);
         builder.Property(r => r.DescriptionEn).HasColumnName("description_en").HasMaxLength(1000);
         builder.Property(r => r.DescriptionEs).HasColumnName("description_es").HasMaxLength(1000);
+        // «Notas de TIMS»: nullable, no default -- null is "no note".
+        builder.Property(r => r.NotesIntroEn).HasColumnName("notes_intro_en").HasMaxLength(ReportNotes.MaxLength);
+        builder.Property(r => r.NotesIntroEs).HasColumnName("notes_intro_es").HasMaxLength(ReportNotes.MaxLength);
+        builder.Property(r => r.NotesConclusionsEn).HasColumnName("notes_conclusions_en").HasMaxLength(ReportNotes.MaxLength);
+        builder.Property(r => r.NotesConclusionsEs).HasColumnName("notes_conclusions_es").HasMaxLength(ReportNotes.MaxLength);
+        builder.Property(r => r.NotesRecommendationsEn).HasColumnName("notes_recommendations_en").HasMaxLength(ReportNotes.MaxLength);
+        builder.Property(r => r.NotesRecommendationsEs).HasColumnName("notes_recommendations_es").HasMaxLength(ReportNotes.MaxLength);
         builder.Property(r => r.Type).HasColumnName("type").HasMaxLength(30).IsRequired();
         builder.Property(r => r.CompanyId).HasColumnName("company_id").IsRequired();
         builder.Property(r => r.CreatedBy).HasColumnName("created_by").IsRequired();

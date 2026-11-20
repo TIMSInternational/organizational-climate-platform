@@ -10,6 +10,18 @@ public class Report
     public string? TitleEs { get; set; }
     public string? DescriptionEn { get; set; }
     public string? DescriptionEs { get; set; }
+
+    // «Notas de TIMS» (ruled 2026-11-19, docs/decisions/editable-respondent-content.md): TIMS's
+    // own introduction, conclusions and recommendations, printed as pages of the charted PDF.
+    // Paired language columns like the title's; null is "no note". Bounded by
+    // ReportNotes.MaxLength.
+    public string? NotesIntroEn { get; set; }
+    public string? NotesIntroEs { get; set; }
+    public string? NotesConclusionsEn { get; set; }
+    public string? NotesConclusionsEs { get; set; }
+    public string? NotesRecommendationsEn { get; set; }
+    public string? NotesRecommendationsEs { get; set; }
+
     public required string Type { get; set; }
     public Guid CompanyId { get; set; }
     public Guid CreatedBy { get; set; }
