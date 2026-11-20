@@ -5624,6 +5624,14 @@
           "republish": "Republication",
           "other": "Version"
         }
+      },
+      "respondPreview": {
+        "open": "View as a respondent",
+        "banner": "Preview — nothing is saved",
+        "bannerBody": "This is what someone who receives the link sees. Nothing you choose here is sent or counted.",
+        "restart": "Start over",
+        "back": "Back to the survey",
+        "loadFailed": "The preview of this survey could not be opened."
       }
     }
   },

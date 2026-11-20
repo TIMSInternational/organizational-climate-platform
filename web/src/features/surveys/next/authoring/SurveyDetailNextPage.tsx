@@ -40,6 +40,7 @@ import { DuplicateSurveyDialog } from '../DuplicateSurveyDialog'
 import { audienceEditability } from './audienceEdit'
 import { ReopenSurveyDialog } from './ReopenSurveyDialog'
 import { EditSurveyTextDialog } from './EditSurveyTextDialog'
+import { RespondPreviewAction } from '../../preview/RespondPreviewAction'
 import { isTextEditable, QUIET_DISABLED } from './model'
 import { browserTimeZone, dayMonthIn, dayTimeIn, daysFromIn, isKnownTimeZone, yearIn, zoneLabel } from './zonedWindow'
 
@@ -231,6 +232,7 @@ export function SurveyDetailView({
               </Button>
             )}
             {caps.canOpenResults(survey) && <Button asChild variant="outline"><Link to={`/surveys/${survey.id}/history`}>{t('surveys.next.history.open')}</Link></Button>}
+            <RespondPreviewAction survey={survey} canAdminister={canAuthor} />
           </>
         }
         primaryAction={

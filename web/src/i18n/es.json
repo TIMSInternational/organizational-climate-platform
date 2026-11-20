@@ -5624,6 +5624,14 @@
           "republish": "Nueva publicación",
           "other": "Versión"
         }
+      },
+      "respondPreview": {
+        "open": "Ver como quien responde",
+        "banner": "Vista previa — no se guarda nada",
+        "bannerBody": "Así ve la encuesta quien recibe el enlace. Lo que marque aquí no se envía ni se cuenta.",
+        "restart": "Ver de nuevo",
+        "back": "Volver a la encuesta",
+        "loadFailed": "No se pudo abrir la vista previa de esta encuesta."
       }
     }
   },
