@@ -219,8 +219,9 @@ public class RespondentContentEndpointTests : IAsyncLifetime
     /// <summary>
     /// One answer per text: the old <c>respondentIntro</c> / <c>closingMessage</c> fields are the
     /// content map's <c>anonymousBody</c> / <c>thankYouTitle</c>, from the same chain, in the
-    /// payload's locale only -- so an English reader of a two-language survey whose paragraph
-    /// exists only in Spanish gets neither the Spanish words nor a "fallback" notice for them.
+    /// payload's locale only. A Spanish reader of a two-language survey whose thank-you exists
+    /// only in English used to be handed the English one (the columns fell back to English and
+    /// listed it in <c>fallbackFields</c>) while the content map, rightly, had none.
     /// </summary>
     [Fact]
     public async Task The_old_intro_and_thank_you_fields_are_the_contents_value_and_never_another_languages()
@@ -229,14 +230,19 @@ public class RespondentContentEndpointTests : IAsyncLifetime
         var survey = await LinkSurveyAsync(admin, _companyA, ContentLanguages.Both);
         await OkViewAsync(await admin.PutAsJsonAsync(SurveyRoute(survey.Id), Body(
             ("es", "anonymousBody", "Párrafo solo en español"),
-            ("es", "thankYouTitle", "Gracias solo en español"))));
+            ("en", "thankYouTitle", "Thanks only in English"))));
+
+        var spanishFirst = await RespondViewAsync(survey.Id, "es");
+        Assert.Equal("es", spanishFirst.ResolvedLocale);
+        Assert.Null(spanishFirst.ClosingMessage);
+        Assert.DoesNotContain("settings.closingMessage", spanishFirst.FallbackFields);
+        Assert.False(spanishFirst.Content!.ContainsKey("thankYouTitle"));
 
         var english = await RespondViewAsync(survey.Id, "en");
         Assert.Equal("en", english.ResolvedLocale);
         Assert.Null(english.RespondentIntro);
-        Assert.Null(english.ClosingMessage);
+        Assert.Equal("Thanks only in English", english.ClosingMessage);
         Assert.DoesNotContain("settings.respondentIntro", english.FallbackFields);
-        Assert.DoesNotContain("settings.closingMessage", english.FallbackFields);
         Assert.False(english.Content!.ContainsKey("anonymousBody"));
 
         // The company's English words reach both fields at once.
@@ -246,13 +252,14 @@ public class RespondentContentEndpointTests : IAsyncLifetime
         english = await RespondViewAsync(survey.Id, "en");
         Assert.Equal("The company's paragraph", english.RespondentIntro);
         Assert.Equal(english.Content!["anonymousBody"], english.RespondentIntro);
-        Assert.Equal("The company thanks you", english.ClosingMessage);
+        // The survey's own English thank-you still beats the company's.
+        Assert.Equal("Thanks only in English", english.ClosingMessage);
         Assert.Equal(english.Content["thankYouTitle"], english.ClosingMessage);
 
         var spanish = await RespondViewAsync(survey.Id, "es");
         Assert.Equal("Párrafo solo en español", spanish.RespondentIntro);
         Assert.Equal(spanish.Content!["anonymousBody"], spanish.RespondentIntro);
-        Assert.Equal("Gracias solo en español", spanish.ClosingMessage);
+        Assert.Null(spanish.ClosingMessage);
     }
 
     /// <summary>
