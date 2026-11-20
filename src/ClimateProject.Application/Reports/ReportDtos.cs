@@ -192,7 +192,10 @@ public sealed record ReportDetail(
     bool IsRecurring, string? RecurrencePattern, DateTimeOffset? NextGeneration,
     // #210: Title and Description arrive resolved for the request's locale; this names the
     // ones that had to reach for the other language.
-    IReadOnlyList<string> FallbackFields);
+    IReadOnlyList<string> FallbackFields,
+    // «Notas de TIMS», both languages as stored -- the editor edits both, and they are TIMS's
+    // words rather than anything respondents wrote (ReportNotes).
+    ReportNotesDto Notes);
 
 /// <summary>
 /// What a report is told to include (#88's "report configuration and filter model").
@@ -249,7 +252,9 @@ public sealed record CreateReportRequest(
     string Format,
     string? TemplateId,
     /// <summary>Optional. Absent means the whole company, which is the pre-existing behaviour.</summary>
-    ReportFilters? Filters = null);
+    ReportFilters? Filters = null,
+    /// <summary>Optional «Notas de TIMS»; each field at most <see cref="ReportNotes.MaxLength"/>.</summary>
+    ReportNotesDto? Notes = null);
 
 /// <summary>
 /// Body of <c>PUT /admin/reports/{id}/schedule</c> -- the writer for the three columns

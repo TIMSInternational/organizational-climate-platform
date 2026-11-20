@@ -73,6 +73,7 @@ internal static class AdminRefusals
 
     // Reports and the question bank
     public const string ReportScheduleStartPast = "report_schedule_start_past";
+    public const string ReportNotesTooLong = "report_notes_too_long";
     public const string QuestionBankItemInUse = "question_bank_item_in_use";
     public const string QuestionBankItemHasVariations = "question_bank_item_has_variations";
 
