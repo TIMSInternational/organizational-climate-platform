@@ -46,6 +46,7 @@ import { Meter, type ShareLinkAction } from './parts'
 import SharePanel from './SharePanel'
 import ParticipationPanel from './ParticipationPanel'
 import SurveyRosterPanel from './SurveyRosterPanel'
+import AuthorizedListPanel from './AuthorizedListPanel'
 import { RespondentTextsDialog } from './RespondentTextsDialog'
 import { InvitationEmailDialog } from './InvitationEmailDialog'
 import { useSurveyParticipation } from './useSurveyParticipation'
@@ -455,6 +456,7 @@ export function DistributionView({
           their response carries their user id. So this is answerable for a mass invite whether
           or not the survey asks anybody anything, and gating it would have blanked the one
           screen the launch is watched from. */}
+      {scoped ? <AuthorizedListPanel surveyId={survey.id} /> : null}
       {scoped ? <SurveyRosterPanel state={participation} /> : null}
 
       {/* How people get in -- and, on a `personal_link` survey, the email that carries the link.

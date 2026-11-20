@@ -43,6 +43,7 @@ import { formatParticipationDay } from './participationDay'
 import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { ResponseExclusionDialog } from './ResponseExclusionDialog'
+import { OutsideAuthorizedListMark } from './AuthorizedListPanel'
 
 type Filter = 'all' | SurveyParticipantStatus
 
@@ -89,7 +90,7 @@ type RevokeState =
   | { phase: 'done'; name: string; outcome: SurveyCredentialRevokeOutcome | { kind: 'error' } }
 
 /** What sending ONE person their first code did. */
-type SendCodeOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'error'
+type SendCodeOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'not_authorized' | 'error'
 type SendCodeState = { phase: 'idle' } | { phase: 'done'; name: string; email: string; outcome: SendCodeOutcome }
 
 /**
@@ -99,7 +100,7 @@ type SendCodeState = { phase: 'idle' } | { phase: 'done'; name: string; email: s
  * that went through.
  */
 type LinkActionKind = 'send' | 'resend' | 'revoke'
-type LinkOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'not_in_audience' | 'inactive' | 'done' | 'error'
+type LinkOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'not_in_audience' | 'not_authorized' | 'inactive' | 'done' | 'error'
 type LinkActionState =
   | { phase: 'idle' }
   | { phase: 'done'; action: LinkActionKind; name: string; email: string; outcome: LinkOutcome }
@@ -112,6 +113,7 @@ const LINK_OUTCOME_KEY: Record<LinkActionKind, Partial<Record<LinkOutcome, strin
     already_had: 'sendLinkAlreadyHad',
     not_open: 'sendLinkNotOpen',
     not_in_audience: 'sendLinkNotInAudience',
+    not_authorized: 'notAuthorized',
     inactive: 'resendLinkInactive',
     error: 'sendLinkError',
   },
@@ -120,6 +122,7 @@ const LINK_OUTCOME_KEY: Record<LinkActionKind, Partial<Record<LinkOutcome, strin
     not_sent: 'resendLinkNotSent',
     not_open: 'sendLinkNotOpen',
     not_in_audience: 'sendLinkNotInAudience',
+    not_authorized: 'notAuthorized',
     inactive: 'resendLinkInactive',
     error: 'sendLinkError',
   },
@@ -142,6 +145,7 @@ function linkRefusal(error: unknown): LinkOutcome {
   if (!(error instanceof ApiError)) return 'error'
   if (error.code === 'survey_not_distributable' || error.code === 'survey_window_closed') return 'not_open'
   if (error.code === 'personal_link_not_in_audience') return 'not_in_audience'
+  if (error.code === 'survey_recipient_not_authorized') return 'not_authorized'
   if (error.code === 'personal_link_recipient_inactive') return 'inactive'
   if (error.code === 'personal_link_not_sent') return 'not_sent'
   return error.status === 409 && error.code === undefined ? 'not_open' : 'error'
@@ -167,6 +171,7 @@ const REMIND_REFUSAL_KEY: Record<string, string> = {
   not_in_audience: 'reissueRefusedNotInAudience',
   no_credential: 'reissueRefusedNoCode',
   already_completed: 'remindRefusedCompleted',
+  survey_recipient_not_authorized: 'notAuthorized',
 }
 
 const REVOKE_REFUSAL_KEY: Record<string, string> = {
@@ -185,6 +190,7 @@ const REFUSAL_KEY: Record<string, string> = {
   no_credential: 'reissueRefusedNoCode',
   already_signed_in: 'reissueRefusedSignedIn',
   super_admin_only: 'reissueRefusedSuperAdminOnly',
+  survey_recipient_not_authorized: 'notAuthorized',
 }
 
 /** What the mail service reported, as the roster says it. */
@@ -207,6 +213,7 @@ const SEND_CODE_OUTCOME_KEY: Record<SendCodeOutcome, string> = {
   not_sent: 'sendCodeNotSent',
   already_had: 'sendCodeAlreadyHad',
   not_open: 'sendCodeNotOpen',
+  not_authorized: 'notAuthorized',
   error: 'sendCodeError',
 }
 
@@ -523,7 +530,9 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
       outcome =
         error instanceof ApiError && (error.code === 'survey_not_distributable' || error.code === 'survey_window_closed')
           ? 'not_open'
-          : 'error'
+          : error instanceof ApiError && error.code === 'survey_recipient_not_authorized'
+            ? 'not_authorized'
+            : 'error'
     }
     if (outcome === 'sent') {
       const issuedOn = today()
@@ -860,7 +869,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                   : reissue.outcome.kind === 'send_failed'
                     ? copy('reissueSendFailed', { name: reissue.name })
                     : reissue.outcome.kind === 'refused'
-                      ? copy(REFUSAL_KEY[reissue.outcome.code] ?? 'reissueError')
+                      ? copy(REFUSAL_KEY[reissue.outcome.code] ?? 'reissueError', { name: reissue.name, email: reissue.email })
                       : copy('reissueError')}
               </p>
             ) : null}
@@ -877,7 +886,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                   : remind.outcome.kind === 'send_failed'
                     ? copy('remindFailed')
                     : remind.outcome.kind === 'refused'
-                      ? copy(REMIND_REFUSAL_KEY[remind.outcome.code] ?? 'reissueError')
+                      ? copy(REMIND_REFUSAL_KEY[remind.outcome.code] ?? 'reissueError', { name: remind.name, email: remind.email })
                       : copy('reissueError')}
               </p>
             ) : null}
@@ -1273,6 +1282,7 @@ function RosterRows({
           <span className="flex min-w-0 flex-col">
             <span className="truncate font-medium">{row.name}</span>
             <span className="truncate text-sm text-fg-secondary">{row.email}</span>
+            <OutsideAuthorizedListMark email={row.email} />
           </span>
         </TableCell>
         <TableCell className="px-3 py-2 text-fg-secondary">{roleLabel}</TableCell>

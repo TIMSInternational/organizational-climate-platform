@@ -31,6 +31,7 @@ import {
 } from '../../api/surveyDistribution'
 import { ApiError } from '../../../../api/authFetch'
 import { describeApiError, describeKnownRefusal } from '../../../../api/describeApiError'
+import { describeNotAuthorized } from '../../api/authorizedList'
 import { credentialModeOf } from './audienceEdit'
 
 export interface DistributionModel {
@@ -232,7 +233,7 @@ export function useDistributionModel(surveyId: string) {
         }
         return true
       } catch (error) {
-        setActionError(describeApiError(error, t, 'surveys.distribution.actionFailed'))
+        setActionError(describeNotAuthorized(error, t) ?? describeApiError(error, t, 'surveys.distribution.actionFailed'))
         return false
       } finally {
         setBusy(false)
@@ -286,6 +287,8 @@ export function useDistributionModel(surveyId: string) {
       // (`personal_link_not_in_audience`): nothing went, and resuming would be refused again. The
       // operator is told why and what to do -- widen the audience, or send to fewer people.
       if (error instanceof ApiError && error.code === 'personal_link_not_in_audience') refusal = describeKnownRefusal(error, t)
+      // ...or somebody it would reach is not on the client's authorized list: named, nothing went.
+      refusal ??= describeNotAuthorized(error, t)
     }
     setOutcome(
       refusal !== null

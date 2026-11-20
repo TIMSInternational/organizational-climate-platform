@@ -451,6 +451,13 @@ public static class SurveyDistributionEndpoints
             return audienceError;
         }
 
+        // «Lista autorizada del cliente»: everybody this request resolves must be on it, or the
+        // whole send is refused naming them -- before any invitation, key or link is minted.
+        if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, userIds!, cancellationToken) is { } notAuthorized)
+        {
+            return notAuthorized;
+        }
+
         // `shared` mints rows and nothing else, so 500 of them is one cheap transaction.
         // `per_survey` additionally hashes a password and sends a message PER RECIPIENT, and
         // those are the two expensive things this product does: bcrypt-12 was measured at
@@ -1117,6 +1124,12 @@ public static class SurveyDistributionEndpoints
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // «Lista autorizada del cliente»: refused before the token is rotated.
+        if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, [recipient.Id], cancellationToken) is { } notAuthorized)
+        {
+            return notAuthorized;
+        }
+
         // The link would open nothing: the respond path refuses a deactivated account.
         if (!recipient.IsActive || recipient.CompanyId != survey.CompanyId)
         {

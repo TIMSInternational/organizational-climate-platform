@@ -74,6 +74,14 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   personal_link_not_sent: 'errors.api.codes.personal_link_not_sent',
   personal_link_recipient_inactive: 'errors.api.codes.personal_link_recipient_inactive',
   personal_link_not_in_audience: 'errors.api.codes.personal_link_not_in_audience',
+  // «Lista autorizada del cliente» (2026-11-19): a send naming somebody not on it -- the body's
+  // `notAuthorized` names them (`notAuthorizedOf`) -- and the list's own routes.
+  survey_recipient_not_authorized: 'errors.api.codes.survey_recipient_not_authorized',
+  survey_authorized_list_archived: 'errors.api.codes.survey_authorized_list_archived',
+  survey_authorized_list_locked: 'errors.api.codes.survey_authorized_list_locked',
+  survey_authorized_email_invalid: 'errors.api.codes.survey_authorized_email_invalid',
+  survey_authorized_email_duplicate: 'errors.api.codes.survey_authorized_email_duplicate',
+  survey_authorized_list_invalid: 'errors.api.codes.survey_authorized_list_invalid',
   not_mass_invite: 'errors.api.codes.not_mass_invite',
   inactive: 'errors.api.codes.inactive',
   batch_too_large: 'errors.api.codes.batch_too_large',
