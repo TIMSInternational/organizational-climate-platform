@@ -14,6 +14,7 @@ import * as creating from '../../api/surveyCreate'
 import * as sources from '../../api/respondentContentSources'
 import * as settingsApi from '../../../org-structure/api/companySettings'
 import { textSourceOf, type RespondentContentView } from '../../api/respondentContentSources'
+import { contentView, emptyByLocale } from '../../../../test/respondentContentRegistry'
 
 /**
  * «Textos y correo» (audit 2026-11-19, gap #2): reachable while creating a survey, opening the
@@ -211,8 +212,18 @@ describe('«Textos y correo» in the builder’s Revisión', () => {
 describe('«Textos y correo» on the survey page', () => {
   /** The two dialogs read the survey themselves; any GET answers a draft survey in Spanish. */
   function serveDialogs() {
-    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'PUT') return Promise.resolve(new Response('{}', { status: 200 }))
+      // The texts dialog reads the registry and the stored words from the respondent-content
+      // route (lane L1); everything else it and the email dialog read is the survey itself.
+      if (String(input).endsWith('/surveys/s1/respondent-content')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(contentView({ level: 'survey', surveyId: 's1', surveyStatus: 'draft', surveyValues: emptyByLocale() })),
+            { status: 200 },
+          ),
+        )
+      }
       return Promise.resolve(
         new Response(
           JSON.stringify({
