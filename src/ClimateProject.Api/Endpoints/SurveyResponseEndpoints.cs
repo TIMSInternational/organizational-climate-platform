@@ -489,14 +489,49 @@ public static partial class SurveyResponseEndpoints
             return resolution.Error;
         }
 
-        var respondent = resolution.Respondent!;
+        return await SubmitAsRespondentAsync(
+            survey,
+            resolution.Respondent!,
+            request,
+            new SubmissionOrigin(
+                httpContext.Connection.RemoteIpAddress?.ToString(),
+                httpContext.Request.Headers.UserAgent.ToString(),
+                OperatorEntry: false),
+            httpContext.RequestServices.GetRequiredService<IConfiguration>(),
+            db,
+            loggerFactory,
+            cancellationToken);
+    }
 
+    /// <summary>
+    /// Where a submission came from: the device's address and agent (stored only on an
+    /// identified response), and whether it is a TIMS operator typing a paper questionnaire
+    /// (<c>PaperResponseEndpoints</c>), whose caller has already checked the survey's status.
+    /// </summary>
+    private sealed record SubmissionOrigin(string? RemoteIp, string? UserAgent, bool OperatorEntry);
+
+    /// <summary>
+    /// The submission write path, after the respondent is known: validation, the response
+    /// row, the answers, the licence seat, demographics, the invitation and the participation
+    /// row. ONE path for a respondent's own submit and for a paper questionnaire an operator
+    /// types for them, so the two cannot store different shapes.
+    /// </summary>
+    private static async Task<IResult> SubmitAsRespondentAsync(
+        Survey survey,
+        Respondent respondent,
+        SubmitSurveyResponseRequest request,
+        SubmissionOrigin origin,
+        IConfiguration configuration,
+        ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
         // The whole response window in one predicate, and deliberately status-only.
         // SurveyStatuses already encodes which states are open; re-deriving it from
         // StartDate/EndDate here would let this endpoint refuse a survey that
         // SurveyQueries.AssignedTo still lists in /surveys/my, which is a worse failure
         // than a late response to a survey nobody has closed yet.
-        if (!SurveyStatuses.AcceptsResponses(survey.Status))
+        if (!origin.OperatorEntry && !SurveyStatuses.AcceptsResponses(survey.Status))
         {
             return NotAccepting();
         }
@@ -531,8 +566,7 @@ public static partial class SurveyResponseEndpoints
                 statusCode: 400);
         }
 
-        var resumeSessionId = ResumeSessionIdFor(
-            survey, respondent, httpContext.RequestServices.GetRequiredService<IConfiguration>());
+        var resumeSessionId = ResumeSessionIdFor(survey, respondent, configuration);
         var existing = await FindExistingResponseAsync(
             survey, respondent, sessionId, resumeSessionId, db, cancellationToken);
 
@@ -663,8 +697,8 @@ public static partial class SurveyResponseEndpoints
                 StartTime = now,
                 // Never recorded for an anonymous response, and there is nothing to fall
                 // back to that would be less identifying. See SurveyResponsePrivacy.
-                IpAddress = respondent.IsAnonymous ? null : Truncate(httpContext.Connection.RemoteIpAddress?.ToString(), IpAddressMaxLength),
-                UserAgent = respondent.IsAnonymous ? null : Truncate(httpContext.Request.Headers.UserAgent.ToString(), UserAgentMaxLength),
+                IpAddress = respondent.IsAnonymous ? null : Truncate(origin.RemoteIp, IpAddressMaxLength),
+                UserAgent = respondent.IsAnonymous ? null : Truncate(origin.UserAgent, UserAgentMaxLength),
                 CreatedAt = now,
                 UpdatedAt = now,
             };
