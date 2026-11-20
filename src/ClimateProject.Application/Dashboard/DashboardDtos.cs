@@ -276,7 +276,19 @@ public sealed record DashboardPendingSurvey(
     /// The duration the survey states (<c>SurveySettings.EstimatedMinutes</c>), or null to
     /// calculate it from <c>QuestionCount</c> -- the card and the survey it opens say one figure.
     /// </summary>
-    int? EstimatedMinutes = null);
+    int? EstimatedMinutes = null,
+    /// <summary>
+    /// The locale <see cref="Content"/> is in: the title's, by the respond view's rule, so a
+    /// Spanish-only survey says <c>es</c> whatever was asked.
+    /// </summary>
+    string? ResolvedLocale = null,
+    /// <summary>
+    /// The client's own words for this survey's respondent screens, from the same chain as
+    /// <c>SurveyRespondView.Content</c> (ruled 2026-11-19): Home draws the anonymity promise beside
+    /// the survey, and it must be the promise the respond page makes, word for word. Null from an
+    /// API that predates it.
+    /// </summary>
+    IReadOnlyDictionary<string, string>? Content = null);
 
 /// <summary>
 /// The landing experience for a plain employee -- the "evaluated user" dashboard, and the

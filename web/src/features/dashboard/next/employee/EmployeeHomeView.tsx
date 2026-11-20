@@ -8,6 +8,7 @@ import { instantDay } from '../../../../lib/calendarDay'
 import { cn } from '../../../../lib/cn'
 import DashboardState from '../../components/DashboardState'
 import { AnonymityNotice } from '../../../surveys/components/AnonymityNotice'
+import { effectiveText } from '../../../surveys/api/respondentContent'
 import { formatDayMonth } from '../../../surveys/respondEstimate'
 import { useRespondentShell } from '../../../../navigation/useRespondentShell'
 import { useIsRespondent } from '../../../../navigation/respondentSurface'
@@ -298,7 +299,9 @@ function LeadCard({ survey, allowsSaveForLater }: { survey: HomeSurvey; allowsSa
         </div>
       </div>
 
-      {survey.anonymous ? <AnonymityNotice anonymous /> : null}
+      {/* The client's own paragraph when it has one, in this reader's language — the promise
+          the respond page makes, word for word (ruled 2026-11-19). */}
+      {survey.anonymous ? <AnonymityNotice anonymous intro={effectiveText(survey, locale, 'anonymousBody')} /> : null}
     </div>
   )
 }

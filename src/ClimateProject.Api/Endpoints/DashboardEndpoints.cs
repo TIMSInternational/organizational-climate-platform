@@ -8,6 +8,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Dashboard;
 using ClimateProject.Application.Dashboard.Rendering;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -687,6 +688,25 @@ public static class DashboardEndpoints
             ? null
             : (DateTimeOffset?)await assigned.MinAsync(s => s.EndDate, cancellationToken);
 
+        // The client's own words beside each survey (ruled 2026-11-19): Home makes the anonymity
+        // promise the respond page makes, so it reads the same chain, in the locale the respond
+        // view would be in -- the title's.
+        // One query for all of them: the rows carry the survey columns already, and `assigned`
+        // is scoped to the reader's own company.
+        var contentSources = await RespondentContentStore.LoadManyAsync(
+            db, myCompanyId, pendingRows.ToDictionary(s => s.Id, s => s.RespondentTexts), cancellationToken);
+
+        string ContentLocaleOf(DashboardPendingSurveyRow s)
+        {
+            var requested = SurveyContent.ResolveRequestLocale(lang, s.Language);
+            return LocalizedContent.Resolve(s.TitleEn, s.TitleEs, requested, s.Language).ResolvedLocale ?? requested;
+        }
+
+        IReadOnlyDictionary<string, string>? ContentOf(DashboardPendingSurveyRow s, string locale)
+            => contentSources.TryGetValue(s.Id, out var sources)
+                ? RespondentContentResolver.Resolve(sources, locale, RespondentContentKinds.RespondentPayload)
+                : null;
+
         return Results.Ok(new EmployeeDashboard(
             me.Name,
             myCompanyId,
@@ -708,7 +728,9 @@ public static class DashboardEndpoints
                     // sends the same field from the same place, so the chip on this card
                     // and the promise on the page it opens are one fact, not two.
                     s.Anonymous,
-                    s.EstimatedMinutes))
+                    s.EstimatedMinutes,
+                    ContentLocaleOf(s),
+                    ContentOf(s, ContentLocaleOf(s))))
                 .ToList()));
     }
 

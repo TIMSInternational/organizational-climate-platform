@@ -208,6 +208,14 @@ export interface DashboardPendingSurvey {
   anonymous: boolean
   /** The duration the survey states, or null/absent to calculate it from `questionCount`. */
   estimatedMinutes?: number | null
+  /** The locale `content` is in (the title's, as the respond view's). Absent from an older API. */
+  resolvedLocale?: string | null
+  /**
+   * The client's own words for this survey's respondent screens, from the same chain as
+   * `SurveyRespondView.content`. Home reads `anonymousBody` through `effectiveText`, so the
+   * promise beside the survey is the one its respond page makes. Absent from an older API.
+   */
+  content?: Record<string, string> | null
 }
 
 /** `GET /dashboard/employee`. Scoped to the caller's own user row and to nobody else's. */

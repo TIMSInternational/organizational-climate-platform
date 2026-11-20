@@ -41,6 +41,46 @@ public static class RespondentContentStore
             survey.Settings);
     }
 
+    /// <summary>
+    /// <see cref="LoadAsync(ClimateProjectDbContext, Survey, CancellationToken)"/> for several
+    /// surveys of ONE company in one query -- a list that shows each survey's own words (the
+    /// employee's Home).
+    /// </summary>
+    /// <param name="surveys">
+    /// Survey id → the survey's settings, or as much of them as the chain reads (the legacy
+    /// columns). Every survey must belong to <paramref name="companyId"/>: its company's rows are
+    /// the ones loaded.
+    /// </param>
+    public static async Task<IReadOnlyDictionary<Guid, RespondentContentSources>> LoadManyAsync(
+        ClimateProjectDbContext db,
+        Guid companyId,
+        IReadOnlyDictionary<Guid, SurveySettings> surveys,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(surveys);
+
+        if (surveys.Count == 0)
+        {
+            return new Dictionary<Guid, RespondentContentSources>();
+        }
+
+        var ids = surveys.Keys.ToList();
+        var rows = await db.RespondentContentOverrides
+            .AsNoTracking()
+            .Where(o => o.CompanyId == companyId && (o.SurveyId == null || ids.Contains(o.SurveyId.Value)))
+            .Select(o => new { o.SurveyId, o.Key, o.Locale, o.Value })
+            .ToListAsync(cancellationToken);
+
+        RespondentContentValue[] company = [.. rows.Where(r => r.SurveyId == null).Select(r => new RespondentContentValue(r.Key, r.Locale, r.Value))];
+        return surveys.ToDictionary(
+            pair => pair.Key,
+            pair => new RespondentContentSources(
+                company,
+                [.. rows.Where(r => r.SurveyId == pair.Key).Select(r => new RespondentContentValue(r.Key, r.Locale, r.Value))],
+                pair.Value));
+    }
+
     /// <summary>The company's own rows only: what a reader gets where no survey is involved.</summary>
     public static async Task<RespondentContentSources> LoadAsync(
         ClimateProjectDbContext db,

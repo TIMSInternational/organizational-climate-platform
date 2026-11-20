@@ -287,6 +287,33 @@ public class RespondentContentEndpointTests : IAsyncLifetime
         Assert.Equal("Encuesta de la casa", built.Content!["eyebrow"]);
     }
 
+    /// <summary>
+    /// Home draws the anonymity promise beside each pending survey, so it carries the same words
+    /// from the same chain: the survey's own, else its company's, in the payload's locale.
+    /// </summary>
+    [Fact]
+    public async Task Homes_pending_survey_carries_the_words_its_promise_reads()
+    {
+        var admin = await AdminAsync(_companyA);
+        var survey = await LinkSurveyAsync(admin, _companyA);
+        var other = await LinkSurveyAsync(admin, _companyA);
+        await OkViewAsync(await admin.PutAsJsonAsync(CompanyRoute(_companyA), Body(("es", "anonymousBody", "Párrafo de la empresa"))));
+        await OkViewAsync(await admin.PutAsJsonAsync(SurveyRoute(other.Id), Body(("es", "anonymousBody", "Párrafo de esta encuesta"))));
+
+        var employee = await _harness.ClientAsync(Roles.Employee, _companyA);
+        var http = await employee.GetAsync("/dashboard/employee?lang=en");
+        var raw = await http.Content.ReadAsStringAsync();
+        Assert.True(http.IsSuccessStatusCode, raw);
+        var home = JsonSerializer.Deserialize<ClimateProject.Application.Dashboard.EmployeeDashboard>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        var first = Assert.Single(home.PendingSurveys, s => s.Id == survey.Id);
+        var second = Assert.Single(home.PendingSurveys, s => s.Id == other.Id);
+        // An es-only survey is in Spanish whatever Home was asked for, and says so.
+        Assert.Equal("es", first.ResolvedLocale);
+        Assert.Equal("Párrafo de la empresa", first.Content!["anonymousBody"]);
+        Assert.Equal("Párrafo de esta encuesta", second.Content!["anonymousBody"]);
+    }
+
     /// <summary>A person of company A with a personal invitation to <paramref name="surveyId"/>, in <paramref name="status"/>.</summary>
     private async Task<string> SeedInvitationAsync(Guid surveyId, string status = SurveyInvitationStatuses.Pending)
     {
