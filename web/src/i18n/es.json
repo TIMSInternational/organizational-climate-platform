@@ -5192,6 +5192,37 @@
           "peopleNotSavedRemoved": "No se pudo guardar la lista de personas en la encuesta ({message}), así que la copia se eliminó y no se creó ninguna encuesta. Su borrador sigue aquí: vuelva a intentarlo.",
           "peopleNotSaved": "La encuesta se creó como borrador, pero sin las personas elegidas ({message}): tal como está, llegaría a toda la empresa. No la active.",
           "openSurvey": "Abrir la encuesta"
+        },
+        "texts": {
+          "title": "Textos y correo",
+          "builderHelp": "Lo que lee quien responde y los correos que recibe. Una encuesta nueva empieza con los textos de la empresa o, si la empresa no tiene, con los predeterminados. Para cambiarlos solo en esta encuesta, créela como borrador desde aquí: se abre su página con el editor, y no se envía nada a nadie.",
+          "surveyHelp": "Lo que lee quien responde y los correos que recibe. Si esta encuesta no tiene un texto propio, se usa el de la empresa y, si no hay, el predeterminado.",
+          "groupScreens": "Para quien responde",
+          "groupEmails": "Correos",
+          "sourcesUnknown": "No se pudo leer qué textos tiene la empresa. Podrá verlos y cambiarlos en la página de la encuesta.",
+          "loadFailed": "No se pudo leer de dónde vienen los textos de esta encuesta.",
+          "createAndEditTexts": "Crear borrador y editar textos",
+          "createAndEditEmail": "Crear borrador y editar correo",
+          "editTexts": "Editar textos",
+          "editEmail": "Editar correo",
+          "source": {
+            "default": "Predeterminado",
+            "company": "De la empresa",
+            "survey": "De esta encuesta"
+          },
+          "label": {
+            "anonymousBody": "Recuadro de anonimato",
+            "participationBody": "Cláusula de participación",
+            "identityIntro": "Introducción de «Quién responde»",
+            "demographicsIntro": "Introducción de «Sobre usted»",
+            "thankYouTitle": "Mensaje final",
+            "personalLinkSubject": "Enlace personal: asunto",
+            "personalLinkMessage": "Enlace personal: mensaje",
+            "credentialsSubject": "Usuario y contraseña: asunto",
+            "credentialsMessage": "Usuario y contraseña: mensaje",
+            "reminderSubject": "Recordatorio: asunto",
+            "reminderMessage": "Recordatorio: mensaje"
+          }
         }
       },
       "share": {

@@ -33,6 +33,7 @@ import {
 import { arrangedQuestions, arrangementChanged, materialiseTemplate, templateCovers } from './templateRows'
 import { choosablePeople } from './peopleTargets'
 import { isKnownTimeZone } from './zonedWindow'
+import type { OpenAfterCreate } from './BuilderTextsAndEmail'
 
 /**
  * The model behind `/surveys/new` — THE wiring seam of Nueva encuesta, redesigned as a two-pane
@@ -241,14 +242,16 @@ export function useSurveyBuilderModel(companyId: string) {
   // What a blank "Participantes previstos" stands for: the audience step's choice, counted.
   const audienceEstimate = useMemo(() => builderAudienceEstimate(values, users), [values, users])
 
-  const submit = useCallback(async () => {
+  // `then`: «Textos y correo» in Revisión creates the survey and lands with that editor open.
+  const submit = useCallback(async (then?: OpenAfterCreate) => {
+    const landing = (id: string) => (then === undefined ? `/surveys/${id}` : `/surveys/${id}?open=${then}`)
     setSubmitting(true)
     setSubmitError(null)
     try {
       if (!startsFromTemplate(values)) {
         const created = await createSurvey(baseUrl, buildCreateInput(values, companyId, timeZone, audienceEstimate), locale)
         await draft.discardAfterCreate()
-        navigate(`/surveys/${created.id}`)
+        navigate(landing(created.id))
         return
       }
       const created = await instantiateSurveyTemplate(baseUrl, values.templateId, buildInstantiateInput(values, companyId, timeZone, audienceEstimate), locale)
@@ -288,7 +291,7 @@ export function useSurveyBuilderModel(companyId: string) {
         }
       }
       await draft.discardAfterCreate()
-      navigate(`/surveys/${created.id}`)
+      navigate(landing(created.id))
     } catch (error) {
       setSubmitError(describeApiError(error, t, 'surveys.createFailed'))
     } finally {
