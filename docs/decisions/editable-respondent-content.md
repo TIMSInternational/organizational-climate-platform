@@ -90,12 +90,50 @@ The contract every lane builds on. Grep the symbols; this list is a map, not the
   `Resolve` per locale for a two-language email.
 - **Payloads** — `SurveyRespondView.Content` and `SurveyInvitationTokenDetail.Content`: the
   effective screen + display overrides in the payload's `resolvedLocale`; absent key = product
-  default. Web: `effectiveText(view.content, key, params) ?? t(key, params)` and
-  `textAlignOf(view.content)` from `web/src/features/surveys/api/respondentContent.ts`.
+  default. The employee's Home carries the same pair per pending survey
+  (`DashboardPendingSurvey.Content` / `ResolvedLocale`), so the anonymity promise beside a survey
+  is the one its respond page makes.
+- **Cards drawn from a refusal** — `RespondentCardRefusal` (`message`, `reason`,
+  `resolvedLocale`, `content`) is the body of the respond GET's 400 on a closed survey
+  (`closedTitle`, `closedBody`; reached only by a respondent the route already admitted) and of
+  `GET /survey-invitations/{token}`'s 409 `already_completed` (`alreadyCompletedTitle`,
+  `alreadyCompletedBody`). The web keeps both on `SurveyRespondError` / `SurveyLinkError`. The
+  **unavailable** card is not in the registry: it is drawn only from the respond GET's 401, which
+  stays fail-closed (an id with no live link learns nothing, not even whose survey it is).
+- **Reading it on a screen** — `effectiveText(source, locale, key, params) ?? t(key, params)`,
+  where `source` is the view, the landing, a refusal or a Home survey and `locale` is
+  `useTranslation().locale`; `textAlignOf(view.content)`. Both in
+  `web/src/features/surveys/api/respondentContent.ts`. `effectiveText` returns `null` (the
+  default, in the reader's language) whenever the reader's language is not the payload's
+  `resolvedLocale` — an es-only survey read by somebody who picked English gets English
+  defaults, never the client's Spanish sentence in English chrome. There is no form that takes
+  the bare map.
+- **One answer per text** — `SurveyRespondView.RespondentIntro` / `ClosingMessage` are the same
+  values as `Content["anonymousBody"]` / `Content["thankYouTitle"]` (same chain, `resolvedLocale`
+  only, never in `fallbackFields`). They are superseded: new code reads `content` through
+  `effectiveText` and never chains `?? view.respondentIntro` after it.
+- **The respond view, built once** — `SurveyResponseEndpoints.BuildRespondViewAsync(db, survey,
+  lang, RespondReader, inProgress, ct)` (`SurveyResponseEndpoints.RespondView.cs`): no
+  respondent, session, status check or write. The respond GET calls it after its gates; a preview
+  calls it with `RespondReader.LinkVisitor` and `inProgress: null`.
 - **Routes** — `GET/PUT /admin/companies/{companyId}/respondent-content`,
   `GET/PUT /surveys/{surveyId}/respondent-content` (`RespondentContentEndpoints.cs`). A survey PUT
-  on a key with a legacy column writes the column. Refusals carry a `respondent_content_*` code
-  and name `key`, `locale`, `placeholder`, `maxLength`, `allowed`.
+  on a key with a legacy column writes the column. A survey PUT may SET a text only in a locale
+  the survey offers (`requiredLocales`; else 400 `respondent_content_locale_not_offered`) and may
+  clear one in any. Refusals carry a `respondent_content_*` code and name `key`, `locale`,
+  `placeholder`, `maxLength`, `allowed`.
+- **Two locale rules, said on the entry** — the four legacy keys (`requiresEveryLocale: true` on
+  the registry DTO) are publish-gate fields at the survey level, as they were before the registry:
+  set in one of the survey's languages, they must be set in all of them before it leaves draft
+  («faltan traducciones», `SurveyContent.GateFields`). Every other key, and every company-level
+  value, is per locale with the product default where a locale has none. An editor says which.
+- **Emails** — `RespondentContentPlaceholders.Fill(text, values)` is THE server filler for
+  `{survey}` / `{company}` (the web twin is `interpolateContent`): fill first, then let
+  `EmailBranding` escape. The personal-link email already uses it and already reads the chain:
+  `SurveyPersonalLinks.MailFor(survey, company, RespondentContentStore.LoadAsync(...))` at both
+  send sites, so a company's `email.personalLink.*` reaches a survey that wrote none. The
+  credentials and reminder emails (lane L2) use the same filler and `RespondentContentResolver`,
+  not a second one.
 - **«Duplicar»** copies the survey's own rows on both paths (with and without the audience),
   as `CopySettings` copies the legacy texts: they are words, not people. The client's
   authorized list is not copied by the foundation.
@@ -103,3 +141,24 @@ The contract every lane builds on. Grep the symbols; this list is a map, not the
   `survey_authorized_people` (entity only; the guard is a lane's), `reports.notes_*` (columns
   only). Company deletion removes the company's rows explicitly; survey rows and authorized
   people cascade with their survey.
+
+## For the lanes that build on it (2026-11-19)
+
+So that lanes working in parallel do not edit the same lines:
+
+- **`Program.cs` is not edited by a lane.** `RespondPreviewEndpoints` (L4),
+  `SurveyAuthorizedPeopleEndpoints` (L5) and `PaperResponseEndpoints` (L6, paper responses and
+  wording corrections) are mapped already and empty; each lane fills its own file.
+- **Refusal codes go after the lane's anchor, never at the end of a list.** In
+  `AdminRefusals.cs`, `describeApiError.ts`'s `CODE_KEYS` and `errors.api.codes` in both
+  catalogues, insert immediately after: L4 `respondent_content_locked`; L5
+  `personal_link_not_in_audience` (in `AdminRefusals.cs`, after `SurveyNotCollecting`); L6
+  `company_people_referenced`; L7 `report_schedule_start_past`. Additive, never reordered.
+- **`SurveyRespondForm.tsx`** — L1 changes render-time copy (`t(...)` → `effectiveText(...) ??
+  t(...)`); L4's preview seam touches the props and the effects (session, load, autosave,
+  submit, receipt). Measured 2026-11-19: none of the eight side-effect call sites has a `t('…')`
+  within three lines, so the two edit disjoint hunks. L4 owns the seam's semantics (shuffle seed
+  without a session, the thank-you without a submission result, the respond lock).
+- **Survey-targeted sends** — L2 (text from the chain) and L5 (the authorized-list guard) both
+  touch the send handlers. Merge L2 first; L5 places its guard before each handler's first write
+  (credentials and tokens are minted before the mail goes) and rebases on L2.
