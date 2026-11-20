@@ -44,6 +44,7 @@ import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { ResponseExclusionDialog } from './ResponseExclusionDialog'
 import { OutsideAuthorizedListMark } from './AuthorizedListPanel'
+import { PaperResponseAction } from './PaperResponseAction'
 
 type Filter = 'all' | SurveyParticipantStatus
 
@@ -972,6 +973,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         onReissue={() => setReissueTarget(row)}
                         onSendCode={() => setSendCodeTarget(row)}
                         superAdmin={superAdmin}
+                        surveyId={state.view.surveyId}
                         onHandover={() => setHandoverTarget(row)}
                         onRemind={() => setRemindTarget(row)}
                         onRevoke={() => setRevokeTarget(row)}
@@ -1171,6 +1173,7 @@ function RosterRows({
   onRemind,
   onRevoke,
   superAdmin,
+  surveyId = '',
   onHandover,
   excluded,
   onExclusion,
@@ -1210,6 +1213,8 @@ function RosterRows({
   onRevoke: () => void
   /** A super admin may hand a new password over in person; nobody else is offered it. */
   superAdmin: boolean
+  /** The survey this row is on, for «Registrar respuesta en papel». */
+  surveyId?: string
   onHandover: () => void
   /** This person's response is out of the results. Only ever true for a super admin. */
   excluded: boolean
@@ -1504,6 +1509,7 @@ function RosterRows({
                     {copy(excluded ? 'exclusion.restore' : 'exclusion.exclude')}
                   </Button>
                 ) : null}
+                {superAdmin && surveyId !== '' && row.status !== 'completed' ? <PaperResponseAction surveyId={surveyId} row={row} /> : null}
               </span>
             </TableCell>
             <TableCell className="whitespace-nowrap px-3 py-2 text-fg-secondary">

@@ -1814,6 +1814,14 @@
         "company_has_responses": "This company has responses, so it cannot be deleted.",
         "company_holds_super_admins": "A super administrator belongs to this company; deleting it would delete their account.",
         "company_people_referenced": "Something outside this company still depends on it or its people. Nothing was deleted; tell the development team.",
+        "paper_response_already_completed": "This person has already completed the survey. Nothing was entered.",
+        "paper_response_not_in_population": "This person is not in the survey's population. Nothing was entered.",
+        "paper_response_survey_archived": "The survey is archived and takes no more responses, on paper either.",
+        "paper_response_not_collecting": "The survey is not open yet. A paper response is entered once it can be answered.",
+        "paper_response_super_admin_only": "Only a TIMS super administrator can enter a paper response.",
+        "survey_wording_structure_changed": "Once responses have arrived only the wording can change. The type, scale, required flag, dimension and options must stay the same.",
+        "survey_wording_questions_mismatch": "The questions changed while you were correcting them. Reopen the editor and try again.",
+        "survey_wording_super_admin_only": "Only a TIMS super administrator can correct the wording of a survey with responses.",
         "credential_mode_in_use": "How people get in can no longer be changed: this survey has already sent links or codes under the current mode, and people are holding them.",
         "personal_link_not_sent": "The new link could not be emailed. The previous one was kept and still works.",
         "personal_link_recipient_inactive": "This person's account is no longer active in the company, so a link would not open the survey for them.",
@@ -4539,7 +4547,26 @@
         },
         "keepAtEnd": "Keep at the end",
         "keepAtEndHint": "Asked after every other question, in this order, even when the survey is shown in random order.",
-        "keepAtEndChip": "At the end"
+        "keepAtEndChip": "At the end",
+        "wording": {
+          "action": "Correct wording",
+          "title": "Correct wording",
+          "body": "Only the words change: each question's text, its comment prompt, and the words of its scale and options. The type, scale, whether it is required, the dimension and the options stay the same, so the answers already received keep their meaning. It is saved as a new version and recorded in the activity log.",
+          "question": "Question {position}",
+          "text": "Question text",
+          "commentPrompt": "Comment prompt",
+          "scaleLabelMin": "Word at the low end of the scale",
+          "scaleLabelMax": "Word at the high end of the scale",
+          "option": "Option {position}",
+          "inLocale": "{field} ({language})",
+          "languageEs": "Spanish",
+          "languageEn": "English",
+          "save": "Save correction",
+          "savedOne": "Wording corrected in 1 question. Saved as version {version}.",
+          "savedMany": "Wording corrected in {count} questions. Saved as version {version}.",
+          "nothing": "No word changed; nothing was saved.",
+          "error": "The correction could not be saved. Try again."
+        }
       },
       "template": {
         "eyebrow": "Survey template · {category}",
@@ -5428,7 +5455,20 @@
         "revokeLinkError": "The link could not be withdrawn. Try again.",
         "revokeLinkWhyNoLink": "No link for this survey: there is nothing to withdraw.",
         "revokeLinkWhyAnswered": "They have already answered this survey. Withdrawing the link does not withdraw the response.",
-        "revokeRefusedHasResponses": "That person has already answered this survey. Withdrawing the code does not withdraw the response: decide what happens to the response first."
+        "revokeRefusedHasResponses": "That person has already answered this survey. Withdrawing the code does not withdraw the response: decide what happens to the response first.",
+        "paper": {
+          "action": "Enter paper response",
+          "actionFor": "Enter {name}'s paper response",
+          "title": "{name}'s paper response",
+          "body": "Type the answers exactly as they are on the paper questionnaire. They are saved as if {name} had answered: with the survey's anonymity, and without touching their account, email or password. The activity log records that TIMS entered a paper response.",
+          "anonymous": "This survey is anonymous: the response is saved without the person's name, and only the fact that they answered is recorded.",
+          "loadError": "The questionnaire could not be opened. Try again.",
+          "missing": "Required answers are missing: questions {positions}.",
+          "missingComments": "Required comments are missing: questions {positions}.",
+          "confirm": "Enter response",
+          "done": "Paper response entered for {name}.",
+          "error": "The response could not be entered. Try again."
+        }
       },
       "participation": {
         "title": "Participation",
@@ -9128,6 +9168,8 @@
       "surveys__authorized-people__create": "Added a person to a survey's client authorized list",
       "surveys__authorized-people__bulk__create": "Loaded a survey's client authorized list",
       "surveys__authorized-people__delete": "Removed a person from a survey's client authorized list",
+      "surveys__paper-responses__create": "Entered a paper response",
+      "surveys__wording__update": "Corrected the wording of a survey's questions",
       "surveys__response-exclusions__create": "Excluded a response from the results",
       "surveys__response-exclusions__restore__create": "Put a response back into the results",
       "surveys__credentials__reissue__create": "Reissued a person's access code",

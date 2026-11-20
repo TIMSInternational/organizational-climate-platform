@@ -135,6 +135,15 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   company_has_responses: 'errors.api.codes.company_has_responses',
   company_holds_super_admins: 'errors.api.codes.company_holds_super_admins',
   company_people_referenced: 'errors.api.codes.company_people_referenced',
+  // Paper questionnaires and wording corrections, ruled 2026-11-19 (PaperResponseEndpoints).
+  paper_response_already_completed: 'errors.api.codes.paper_response_already_completed',
+  paper_response_not_in_population: 'errors.api.codes.paper_response_not_in_population',
+  paper_response_survey_archived: 'errors.api.codes.paper_response_survey_archived',
+  paper_response_not_collecting: 'errors.api.codes.paper_response_not_collecting',
+  paper_response_super_admin_only: 'errors.api.codes.paper_response_super_admin_only',
+  survey_wording_structure_changed: 'errors.api.codes.survey_wording_structure_changed',
+  survey_wording_questions_mismatch: 'errors.api.codes.survey_wording_questions_mismatch',
+  survey_wording_super_admin_only: 'errors.api.codes.survey_wording_super_admin_only',
   // What a client reads, ruled 2026-11-19: the respondent-content routes. The body also names
   // `key`, `locale`, `placeholder`, `maxLength` and `allowed`, for a screen that points at the field.
   respondent_content_archived: 'errors.api.codes.respondent_content_archived',
