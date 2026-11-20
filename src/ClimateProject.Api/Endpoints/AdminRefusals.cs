@@ -122,6 +122,9 @@ internal static class AdminRefusals
     /// <summary>A company admin past «active»: only a super admin edits a closed survey's texts. 409.</summary>
     public const string RespondentContentLocked = "respondent_content_locked";
 
+    /// <summary>«Ver como quien responde» on an archived survey: there is nothing left to check before a send. 409.</summary>
+    public const string RespondPreviewArchived = "respond_preview_archived";
+
     public const string RespondentContentUnknownLocale = "respondent_content_unknown_locale";
     public const string RespondentContentLocaleMismatch = "respondent_content_locale_mismatch";
 

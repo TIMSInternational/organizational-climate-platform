@@ -35,9 +35,12 @@ export type RespondLockState = 'held' | 'blocked'
  * back: two tabs taking it in turns is exactly the interleaved write the lock exists
  * to prevent, and it would be worse than no lock because both screens would look fine.
  */
-export function useRespondLock(surveyId: string): RespondLockState {
+export function useRespondLock(surveyId: string | null): RespondLockState {
+  // `null` takes no lock and is never blocked: «Ver como quien responde» (`respondPreview.ts`)
+  // writes nothing to this browser, so a preview neither claims the survey nor shuts a
+  // respondent's tab out of it.
   const [state, setState] = useState<RespondLockState>(() =>
-    heldElsewhere(surveyId) ? 'blocked' : 'held',
+    surveyId !== null && heldElsewhere(surveyId) ? 'blocked' : 'held',
   )
   // The effect's own view of the state. Reading `state` inside the listeners would
   // close over the value from the render that installed them, and re-installing them
@@ -45,6 +48,7 @@ export function useRespondLock(surveyId: string): RespondLockState {
   const held = useRef(state === 'held')
 
   useEffect(() => {
+    if (surveyId === null) return
     let stopped = false
     const channel = openChannel(surveyId)
 

@@ -1826,6 +1826,7 @@
         "survey_authorized_list_invalid": "The pasted list is empty or has entries that are not email addresses. Nothing was changed.",
         "respondent_content_archived": "This survey is archived, so its texts for respondents can no longer be changed.",
         "respondent_content_locked": "This survey is no longer draft, scheduled or active. Only a TIMS super administrator can change its texts for respondents.",
+        "respond_preview_archived": "This survey is archived, so it can no longer be previewed as a respondent.",
         "respondent_content_unknown_locale": "That language does not exist for these texts. Use Spanish, English or, for presentation, “*”.",
         "respondent_content_locale_mismatch": "That text is not stored in that language: texts go in Spanish or English, and presentation choices in “*”. Nothing was saved.",
         "respondent_content_locale_not_offered": "This survey is not written in that language, so no respondent would read that text. Write it in the survey's language; nothing was saved.",
@@ -5783,6 +5784,14 @@
           "republish": "Republication",
           "other": "Version"
         }
+      },
+      "respondPreview": {
+        "open": "View as a respondent",
+        "banner": "Preview — nothing is saved",
+        "bannerBody": "This is what someone who receives the link sees. Nothing you choose here is sent or counted.",
+        "restart": "Start over",
+        "back": "Back to the survey",
+        "loadFailed": "The preview of this survey could not be opened."
       }
     },
     "emailTexts": {

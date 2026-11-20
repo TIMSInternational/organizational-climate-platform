@@ -33,6 +33,7 @@ import SurveyRespondPage from '../features/surveys/pages/SurveyRespondPage'
 import PublicSurveyRespondPage from '../features/surveys/pages/PublicSurveyRespondPage'
 import PublicSurveyLinkPage from '../features/surveys/pages/PublicSurveyLinkPage'
 import SurveyInvitationPage from '../features/surveys/pages/SurveyInvitationPage'
+import RespondPreviewPage from '../features/surveys/preview/RespondPreviewPage'
 import NotificationPreferencesNextPage from '../features/notifications/next/NotificationPreferencesNextPage'
 import ProfileNextPage from '../features/profile/next/ProfileNextPage'
 import PrivacyNextPage from '../features/profile/next/PrivacyNextPage'
@@ -366,6 +367,8 @@ export const router = createBrowserRouter([
           // user row and checks the survey's department targets itself, so every
           // role that can be sent a survey can load this.
           { path: '/surveys/:id/respond', element: <SurveyRespondPage /> },
+          // «Ver como quien responde»: the respondent's frame, saving nothing (`RespondPreviewPage`).
+          { path: '/surveys/:id/preview', element: <RespondPreviewPage /> },
           {
             element: <AdminLayout />,
             children: [

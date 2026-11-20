@@ -139,6 +139,7 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   // `key`, `locale`, `placeholder`, `maxLength` and `allowed`, for a screen that points at the field.
   respondent_content_archived: 'errors.api.codes.respondent_content_archived',
   respondent_content_locked: 'errors.api.codes.respondent_content_locked',
+  respond_preview_archived: 'errors.api.codes.respond_preview_archived',
   respondent_content_unknown_locale: 'errors.api.codes.respondent_content_unknown_locale',
   respondent_content_locale_mismatch: 'errors.api.codes.respondent_content_locale_mismatch',
   respondent_content_locale_not_offered: 'errors.api.codes.respondent_content_locale_not_offered',
