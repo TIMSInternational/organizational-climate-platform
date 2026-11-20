@@ -638,7 +638,9 @@ public static class SurveyDistributionEndpoints
                     .Where(c => c.Id == survey.CompanyId)
                     .Select(c => new SurveyCredentialCompany(
                         c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor, c.Settings.Timezone))
-                    .FirstOrDefaultAsync(cancellationToken));
+                    .FirstOrDefaultAsync(cancellationToken),
+                // The chain, so the survey's -- or its company's -- own credentials words are mailed.
+                await RespondentContentStore.LoadAsync(db, survey, cancellationToken));
 
             // Both namespaces, because the two share one index each and a collision between
             // them would make sign-in ambiguous about which person and which survey.

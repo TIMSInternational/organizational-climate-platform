@@ -545,7 +545,7 @@ public static class BulkImportEndpoints
                     company is null
                         ? EmailBrand.None
                         : new EmailBrand(company.Branding.LogoUrl, company.Name, company.Branding.PrimaryColor),
-                    CredentialsEmailPurpose.Invitation, surveyName: null, surveyClosesOn: null, cancellationToken);
+                    CredentialsEmailPurpose.Invitation, surveyName: null, surveyClosesOn: null, text: null, cancellationToken);
                 if (!outcome.Delivered)
                 {
                     var row = results[resultIndex];

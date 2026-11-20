@@ -1,4 +1,5 @@
 using ClimateProject.Application.Email;
+using ClimateProject.Application.RespondentContent;
 
 namespace ClimateProject.Application.OrgStructure;
 
@@ -27,7 +28,12 @@ public interface ISurveyReminderEmailSender
     /// Which survey is unfinished, so two reminders in one inbox are distinguishable. Null only
     /// in `shared` mode, where naming one survey would be a lie.
     /// </param>
+    /// <param name="text">
+    /// The survey's or its company's own subject and paragraph (<c>email.reminder.*</c>, from
+    /// <c>SurveyEmailText.Reminder</c>), or null for today's copy. Required, with no default, so a
+    /// send site cannot drop the client's words by leaving an argument off.
+    /// </param>
     Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string? companyLanguage,
-        EmailBrand? brand, string? surveyName, CancellationToken cancellationToken);
+        EmailBrand? brand, string? surveyName, SurveyEmailText? text, CancellationToken cancellationToken);
 }

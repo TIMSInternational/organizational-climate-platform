@@ -1,4 +1,5 @@
 using ClimateProject.Application.Email;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.OrgStructure;
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +16,7 @@ public sealed class EmailSurveyReminderEmailSender(
 {
     public async Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string? companyLanguage,
-        EmailBrand? brand, string? surveyName, CancellationToken cancellationToken)
+        EmailBrand? brand, string? surveyName, SurveyEmailText? text, CancellationToken cancellationToken)
     {
         // Refused before composing, for the credentials sender's reason: a reserved domain can
         // only hard-bounce, and the bounce rate is scored against a shared sending account.
@@ -31,7 +32,7 @@ public sealed class EmailSurveyReminderEmailSender(
             toEmail, recipientName, username, options.LinkTo(SurveyReminderEmailComposer.LoginPath),
             // The stored logo is a root-relative path; only this layer holds the base URL it has
             // to be resolved against before a mail client can fetch it.
-            companyLanguage, brand?.ResolvedAgainst(options), surveyName);
+            companyLanguage, brand?.ResolvedAgainst(options), surveyName, text);
         var outcome = await transport.SendAsync(message, cancellationToken).ConfigureAwait(false);
 
         if (!outcome.Delivered)
