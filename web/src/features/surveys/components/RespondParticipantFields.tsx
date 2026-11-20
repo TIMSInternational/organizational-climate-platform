@@ -1,4 +1,6 @@
 import { useTranslation } from '../../../i18n'
+import type { RespondentContentSource } from '../api/respondentContent'
+import { clientText } from '../clientText'
 import { Alert, AlertDescription, Input } from '../../../components/ui'
 import { PARTICIPANT_EMAIL_MAX, PARTICIPANT_NAME_MAX, type ParticipantProblem } from './participantIdentity'
 
@@ -24,6 +26,7 @@ export default function RespondParticipantFields({
   disabled,
   onNameChange,
   onEmailChange,
+  content = null,
 }: {
   name: string
   email: string
@@ -31,8 +34,11 @@ export default function RespondParticipantFields({
   disabled: boolean
   onNameChange: (next: string) => void
   onEmailChange: (next: string) => void
+  /** The respond view: the client's own question, labels and help, where it wrote some (`clientText`). */
+  content?: RespondentContentSource | null
 }) {
-  const { t } = useTranslation('surveyRespond')
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(content, locale, catalogue)
 
   return (
     <fieldset

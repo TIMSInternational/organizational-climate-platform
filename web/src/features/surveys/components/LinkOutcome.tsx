@@ -1,9 +1,12 @@
 import { EntryOutcomeCard } from '../next/entry/EntryOutcomeCard'
 import type { LinkFailureCopy } from '../linkFailure'
+import type { RespondentContentSource } from '../api/respondentContent'
 
 export interface LinkOutcomeProps {
   /** What to say. A null `bodyKey` reads `failure.load`, never the server's message. */
   copy: LinkFailureCopy
+  /** The refusal, which carries the client's card words on a 409 `already_completed`. */
+  source?: RespondentContentSource | null
 }
 
 /**
@@ -42,6 +45,6 @@ export interface LinkOutcomeProps {
  * `SurveyInvitationPage` is a fine follow-up; it is an edit to that page, with that
  * page's tests, rather than a side effect of redrawing the share link's entry.
  */
-export function LinkOutcome({ copy }: LinkOutcomeProps) {
-  return <EntryOutcomeCard outcome={{ ...copy, signIn: false }} />
+export function LinkOutcome({ copy, source = null }: LinkOutcomeProps) {
+  return <EntryOutcomeCard outcome={{ ...copy, signIn: false }} source={source} />
 }

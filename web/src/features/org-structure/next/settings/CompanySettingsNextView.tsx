@@ -21,6 +21,7 @@ import {
 import { useCompanySettingsModel, type CompanySettingsModel } from './useCompanySettingsModel'
 import ResultBandsCard from './ResultBandsCard'
 import CredentialModeCard from './CredentialModeCard'
+import CompanyRespondentContentPanel from './CompanyRespondentContentPanel'
 import CompanyEmailTextsSection from './CompanyEmailTextsSection'
 import { bandsChanged, bandsDraftOf, bandsOut, judgeBands, type BandsDraft } from './bandsDraft'
 import { fromWire, toWire } from '../../../result-bands/api'
@@ -458,6 +459,7 @@ function SettingsForm({
           </Panel>
         </div>
       </div>
+      <CompanyRespondentContentPanel companyId={companyId} className="mt-4" />
       <CompanyEmailTextsSection companyId={companyId} />
     </div>
   )

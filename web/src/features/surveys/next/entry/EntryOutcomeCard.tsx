@@ -8,6 +8,8 @@ import {
   CanvasLinkIcon,
   CanvasLockIcon,
 } from '../../../../components/ui'
+import type { RespondentContentSource } from '../../api/respondentContent'
+import { clientText } from '../../clientText'
 import { outcomeLook, type EntryOutcome, type OutcomeGlyph } from './derive'
 
 export interface EntryOutcomeCardProps {
@@ -18,6 +20,13 @@ export interface EntryOutcomeCardProps {
    * respondents on this card before (audit 2026-10-22, R1).
    */
   outcome: EntryOutcome
+  /**
+   * What carries the client's own words for this card, when anything does: the closed survey's
+   * 400 and the invitation's 409 `already_completed` (`RespondentCardRefusal`), or the respond
+   * view on an already-answered landing. Absent on every dead-link answer, which carries nothing
+   * — those cards always read the catalogue.
+   */
+  source?: RespondentContentSource | null
 }
 
 /**
@@ -55,8 +64,9 @@ export interface EntryOutcomeCardProps {
  * sign-in form they did not ask for. The one exception is the outcome whose answer
  * genuinely is signing in, and `derive.ts` decides that, not this file.
  */
-export function EntryOutcomeCard({ outcome }: EntryOutcomeCardProps) {
-  const { t } = useTranslation('surveyRespond')
+export function EntryOutcomeCard({ outcome, source = null }: EntryOutcomeCardProps) {
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(source, locale, catalogue)
 
   const success = outcome.tone === 'success'
   const look = outcomeLook(outcome.titleKey, outcome.tone)

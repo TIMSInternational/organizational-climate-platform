@@ -1,5 +1,6 @@
 import type { SurveyPublicLinkDetail, SurveyLinkError } from '../../api/surveyLinks'
 import type { SurveyRespondError, SurveyRespondView } from '../../api/surveyResponses'
+import type { RespondentContentSource } from '../../api/respondentContent'
 import { publicLinkFailureCopy } from '../../linkFailure'
 import { respondDuration } from '../../respondEstimate'
 
@@ -165,7 +166,17 @@ const ALREADY_ANSWERED: EntryOutcome = {
 export type EntryState =
   | { status: 'waiting' }
   | { status: 'landing'; detail: SurveyPublicLinkDetail; view: SurveyRespondView }
-  | { status: 'blocked'; outcome: EntryOutcome; serverMessage: string }
+  | {
+      status: 'blocked'
+      outcome: EntryOutcome
+      serverMessage: string
+      /**
+       * What carries the client's words for the card, if anything: the respond GET's refusal
+       * (only the closed survey's 400 has any) or, for an already-answered visitor, the view.
+       * Never the dead link's error -- that answer carries nothing.
+       */
+      source?: RespondentContentSource | null
+    }
   | { status: 'answering'; surveyId: string }
 
 /**
@@ -204,13 +215,14 @@ export function entryState(link: LinkLoad, view: ViewLoad, answering: boolean): 
         status: 'blocked',
         outcome: respondFailureOutcome(view.error?.status ?? null),
         serverMessage: view.error?.message ?? '',
+        source: view.error,
       }
     case 'ready':
       // Somebody who has already finished is not offered "Empezar". The form would
       // meet them with the same sentence one screen later; saying it here means the
       // page they land on is the page they needed.
       return view.view.inProgress?.isComplete
-        ? { status: 'blocked', outcome: ALREADY_ANSWERED, serverMessage: '' }
+        ? { status: 'blocked', outcome: ALREADY_ANSWERED, serverMessage: '', source: view.view }
         : { status: 'landing', detail: link.detail, view: view.view }
   }
 }

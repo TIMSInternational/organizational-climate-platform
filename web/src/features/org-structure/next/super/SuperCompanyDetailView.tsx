@@ -32,6 +32,7 @@ import CompanyEmailTextsSection from '../settings/CompanyEmailTextsSection'
 import { useSuperCompanyDetailModel, type SuperCompanyDetailModel } from './useSuperCompanyDetailModel'
 import CompanySetupChecklist from './CompanySetupChecklist'
 import DeleteCompanyCard from './DeleteCompanyCard'
+import CompanyRespondentContentPanel from '../settings/CompanyRespondentContentPanel'
 import { companySetupSteps, needsSetup } from './companySetup'
 import ResultBandsCard from '../settings/ResultBandsCard'
 import CredentialModeCard from '../settings/CredentialModeCard'
@@ -238,6 +239,7 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
         </div>
       </div>
 
+      <CompanyRespondentContentPanel companyId={company.id} />
       <CompanyEmailTextsSection companyId={company.id} />
 
       {/* Last, and apart: the one irreversible thing on this page. */}

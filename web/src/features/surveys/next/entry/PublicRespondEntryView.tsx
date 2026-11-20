@@ -5,6 +5,8 @@ import { instantDay } from '../../../../lib/calendarDay'
 import { AnonymityNotice } from '../../components/SurveyRespondForm'
 import { PrivacyNoticeLink } from '../../components/PrivacyNoticeLink'
 import type { SurveyRespondView } from '../../api/surveyResponses'
+import { textAlignOf } from '../../api/respondentContent'
+import { clientText } from '../../clientText'
 import { entryPace } from './derive'
 
 export interface PublicRespondEntryViewProps {
@@ -48,7 +50,10 @@ export interface PublicRespondEntryViewProps {
  * view, with the same three inputs, that the form would have used.
  */
 export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondEntryViewProps) {
-  const { t } = useTranslation('surveyRespond')
+  // The client's words where the survey or its company wrote some, the catalogue's elsewhere
+  // (`clientText`, docs/decisions/editable-respondent-content.md).
+  const { t: catalogue } = useTranslation('surveyRespond')
+  const { t } = clientText(view, locale, catalogue)
 
   const count = view.questions.length
   const pace = entryPace(count, view.estimatedMinutes)
@@ -63,6 +68,7 @@ export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondE
         eyebrow={t('eyebrow')}
         title={view.title ?? t('untitledSurvey')}
         description={t(pace.key, pace.params)}
+        align={textAlignOf(view.content)}
       />
 
       {/* Two across at 390px, as the artboard draws them: both readings are short
@@ -83,7 +89,7 @@ export function PublicRespondEntryView({ view, locale, onBegin }: PublicRespondE
       {/* `view.anonymous` — `Survey.Settings.Anonymous`, the flag the server writes the
           response under. Never the link payload's `allowAnonymous`, which is the
           distribution's access rule and answers a different question entirely. */}
-      <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
+      <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} content={view} />
       {/* The company's privacy notice, readable before the respondent begins; nothing when none is set. */}
       <PrivacyNoticeLink view={view} />
 
