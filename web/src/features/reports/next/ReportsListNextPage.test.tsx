@@ -425,7 +425,7 @@ describe('ReportsListNextPage — one action per row', () => {
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label') ?? button.textContent)
     expect(buttons).toEqual(['Descargar', 'Más acciones para Datos de clima — T3 2026'])
-    expect(await menuItems('r-csv')).toEqual(['Compartir', 'Programar'])
+    expect(await menuItems('r-csv')).toEqual(['Compartir', 'Programar', 'Notas de TIMS'])
   })
 
   it('draws Nuevo informe, Descargar and ··· as the canvas\'s 34px buttons', async () => {
@@ -448,7 +448,7 @@ describe('ReportsListNextPage — one action per row', () => {
     renderAs(ADMIN)
     await screen.findByText('Resumen en curso')
     expect((within(rowOf('r-gen')).getByRole('button', { name: 'Descargar' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(await menuItems('r-gen')).toEqual(['Programar'])
+    expect(await menuItems('r-gen')).toEqual(['Programar', 'Notas de TIMS'])
   })
 
   it('opens the share dialog from the menu, and addressed as ?share=<id>', async () => {
@@ -537,7 +537,7 @@ describe('ReportsListNextPage — one test per role that matters', () => {
     // nor offered — and the tile says why instead of printing "0".
     expect(calls((url) => url.pathname.endsWith('/shares'))).toHaveLength(0)
     expect(screen.getByText(es.reports.next.linksHidden)).toBeTruthy()
-    expect(await menuItems('r-csv')).toEqual(['Programar'])
+    expect(await menuItems('r-csv')).toEqual(['Programar', 'Notas de TIMS'])
   })
 
   it('super_admin with no company chosen: ?share=<id> opens no dialog, since the links are not theirs to list', async () => {
@@ -557,7 +557,7 @@ describe('ReportsListNextPage — one test per role that matters', () => {
     renderAs({ role: 'super_admin', companyId: '' })
     await screen.findByText('Datos de clima — T3 2026')
     await waitFor(() => expect(calls((url) => url.pathname.endsWith('/shares')).length).toBe(2))
-    expect(await menuItems('r-csv')).toEqual(['Compartir', 'Programar'])
+    expect(await menuItems('r-csv')).toEqual(['Compartir', 'Programar', 'Notas de TIMS'])
   })
 
   it.each(['leader', 'supervisor', 'employee'])('%s: no request, and a sentence saying whose page it is', async (role) => {

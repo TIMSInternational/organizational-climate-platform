@@ -105,6 +105,33 @@ export interface SharedReport {
    * judges none, rather than painting a scale the company may never have chosen.
    */
   resultBands: ResultBands | null
+  /**
+   * «Notas de TIMS» in the report's own language (the PDF's), or `null` when none is set in
+   * it. TIMS's words, published with the report because they are part of it.
+   */
+  notes: SharedReportNotes | null
+}
+
+/** The notes of one reading -- `ReportNotesText` (C#). Each text `null` when unset. */
+export interface SharedReportNotes {
+  locale: string
+  introduction: string | null
+  conclusions: string | null
+  recommendations: string | null
+}
+
+/** The notes, or `null` for anything that is not an object carrying at least one text. */
+function parseNotes(value: unknown): SharedReportNotes | null {
+  if (typeof value !== 'object' || value === null) return null
+  const wire = value as Record<string, unknown>
+  const text = (raw: unknown) => (typeof raw === 'string' && raw.trim() !== '' ? raw : null)
+  const notes: SharedReportNotes = {
+    locale: typeof wire.locale === 'string' ? wire.locale : '',
+    introduction: text(wire.introduction),
+    conclusions: text(wire.conclusions),
+    recommendations: text(wire.recommendations),
+  }
+  return notes.introduction || notes.conclusions || notes.recommendations ? notes : null
 }
 
 /** The wire shape, before `reportOutput` is parsed. Mirrors `ReportDetail`'s subset. */
@@ -115,6 +142,7 @@ interface SharedReportWire {
   generatedAt?: unknown
   reportOutput?: unknown
   resultBands?: unknown
+  notes?: unknown
 }
 
 /** A scale the page may paint with, or `null`: every field typed, and the boundaries in order. */
@@ -189,5 +217,6 @@ export async function getSharedReport(
       typeof wire.reportOutput === 'string' ? wire.reportOutput : null,
     ),
     resultBands: parseResultBands(wire.resultBands),
+    notes: parseNotes(wire.notes),
   }
 }
