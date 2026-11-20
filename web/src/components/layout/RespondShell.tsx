@@ -312,6 +312,7 @@ export function RespondCaption({
   eyebrow,
   title,
   description,
+  align = 'justify',
 }: {
   /** Already-translated. */
   eyebrow: string
@@ -319,6 +320,11 @@ export function RespondCaption({
   title: string
   /** Author-written content, in the language the payload resolved to. */
   description?: string | null
+  /**
+   * The payload's `display.textAlign` (`textAlignOf(view.content)`): justified, the product
+   * default, or ragged for a client who chose it (`docs/decisions/editable-respondent-content.md`).
+   */
+  align?: 'justify' | 'start'
 }) {
   return (
     <header className="grid gap-1 border-b border-line-light pb-panel-gap">
@@ -350,7 +356,7 @@ export function RespondCaption({
         <AuthoredParagraphs
           slot="respond-caption-description"
           text={description}
-          className="text-justify hyphens-auto text-base text-fg-secondary"
+          className={`${align === 'start' ? 'text-start' : 'text-justify hyphens-auto'} text-base text-fg-secondary`}
         />
       ) : null}
     </header>

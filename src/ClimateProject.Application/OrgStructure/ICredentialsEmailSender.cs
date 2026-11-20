@@ -1,4 +1,5 @@
 using ClimateProject.Application.Email;
+using ClimateProject.Application.RespondentContent;
 
 namespace ClimateProject.Application.OrgStructure;
 
@@ -41,8 +42,15 @@ public interface ICredentialsEmailSender
     /// is named. Required, with no default, for the same reason: a per-survey sender that left
     /// it off would mail a message with no deadline and nothing would notice.
     /// </param>
+    /// <param name="text">
+    /// The survey's or its company's own subject and paragraph (<c>email.credentials.*</c>, from
+    /// <c>SurveyEmailText.Credentials</c>), or null for today's copy. Required, with no default,
+    /// for <paramref name="purpose"/>'s reason: a per-survey send that left it off would mail the
+    /// product's words over the ones the client wrote, and nothing would notice. The account
+    /// resends of `shared` mode pass null: their details open no single survey.
+    /// </param>
     Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
         EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, DateOnly? surveyClosesOn,
-        CancellationToken cancellationToken);
+        SurveyEmailText? text, CancellationToken cancellationToken);
 }

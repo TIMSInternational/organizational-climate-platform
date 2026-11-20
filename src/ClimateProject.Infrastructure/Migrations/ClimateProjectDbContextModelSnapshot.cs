@@ -3285,6 +3285,36 @@ namespace ClimateProject.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("next_generation");
 
+                    b.Property<string>("NotesConclusionsEn")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("notes_conclusions_en");
+
+                    b.Property<string>("NotesConclusionsEs")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("notes_conclusions_es");
+
+                    b.Property<string>("NotesIntroEn")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("notes_intro_en");
+
+                    b.Property<string>("NotesIntroEs")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("notes_intro_es");
+
+                    b.Property<string>("NotesRecommendationsEn")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("notes_recommendations_en");
+
+                    b.Property<string>("NotesRecommendationsEs")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("notes_recommendations_es");
+
                     b.Property<string>("RecurrencePattern")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -3422,6 +3452,65 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("ReportId", "CreatedAt");
 
                     b.ToTable("report_shares", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.RespondentContentOverride", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)")
+                        .HasColumnName("locale");
+
+                    b.Property<Guid?>("SurveyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SurveyId");
+
+                    b.HasIndex("UpdatedBy");
+
+                    b.HasIndex("CompanyId", "Key", "Locale")
+                        .IsUnique()
+                        .HasDatabaseName("ux_respondent_content_overrides_company_key_locale")
+                        .HasFilter("survey_id IS NULL");
+
+                    b.HasIndex("CompanyId", "SurveyId", "Key", "Locale")
+                        .IsUnique()
+                        .HasDatabaseName("ux_respondent_content_overrides_survey_key_locale")
+                        .HasFilter("survey_id IS NOT NULL");
+
+                    b.ToTable("respondent_content_overrides", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.Response", b =>
@@ -3742,6 +3831,45 @@ namespace ClimateProject.Infrastructure.Migrations
                     b.HasIndex("SurveyId", "Timestamp");
 
                     b.ToTable("survey_audit_logs", (string)null);
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyAuthorizedPerson", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.Property<Guid?>("AddedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("added_by");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<Guid>("SurveyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedBy");
+
+                    b.HasIndex("SurveyId", "Email")
+                        .IsUnique();
+
+                    b.ToTable("survey_authorized_people", (string)null);
                 });
 
             modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyCredential", b =>
@@ -6112,6 +6240,25 @@ namespace ClimateProject.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("ClimateProject.Domain.Entities.RespondentContentOverride", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ClimateProject.Domain.Entities.Survey", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("ClimateProject.Domain.Entities.Response", b =>
                 {
                     b.HasOne("ClimateProject.Domain.Entities.Company", null)
@@ -6330,6 +6477,20 @@ namespace ClimateProject.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ClimateProject.Domain.Entities.SurveyAuthorizedPerson", b =>
+                {
+                    b.HasOne("ClimateProject.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AddedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ClimateProject.Domain.Entities.Survey", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

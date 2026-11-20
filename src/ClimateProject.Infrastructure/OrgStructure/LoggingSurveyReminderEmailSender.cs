@@ -1,4 +1,5 @@
 using ClimateProject.Application.Email;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.OrgStructure;
 using Microsoft.Extensions.Logging;
 
@@ -13,7 +14,7 @@ public sealed class LoggingSurveyReminderEmailSender(
 {
     public Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string? companyLanguage,
-        EmailBrand? brand, string? surveyName, CancellationToken cancellationToken)
+        EmailBrand? brand, string? surveyName, SurveyEmailText? text, CancellationToken cancellationToken)
     {
         logger.LogWarning("A survey reminder was NOT sent: no email provider is configured.");
         return Task.FromResult(EmailSendOutcome.PermanentFailure(LoggingInvitationEmailSender.NotConfiguredReason));

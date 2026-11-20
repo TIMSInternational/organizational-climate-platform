@@ -77,7 +77,7 @@ export default function PublicSurveyLinkPage() {
         <RespondSurface>
           {state.status === 'waiting' && <ResolvingNotice />}
           {state.status === 'blocked' && (
-            <EntryOutcomeCard outcome={state.outcome} />
+            <EntryOutcomeCard outcome={state.outcome} source={state.source} />
           )}
           {state.status === 'landing' && (
             <PublicRespondEntryView view={state.view} locale={locale} onBegin={begin} />

@@ -28,9 +28,11 @@ import { HEX_COLOUR, changesOf, draftOf, logoValid, timezoneOptions, utcOffset, 
 import { STATUS_COUNT_KEYS, countText, dayWithYear, languageText, sizeText, tierText } from './labels'
 import { CanvasSelect, Field, IconBox, LinkCard, Panel } from './parts'
 import CompanyServiceLicensesPanel from './CompanyServiceLicensesPanel'
+import CompanyEmailTextsSection from '../settings/CompanyEmailTextsSection'
 import { useSuperCompanyDetailModel, type SuperCompanyDetailModel } from './useSuperCompanyDetailModel'
 import CompanySetupChecklist from './CompanySetupChecklist'
 import DeleteCompanyCard from './DeleteCompanyCard'
+import CompanyRespondentContentPanel from '../settings/CompanyRespondentContentPanel'
 import { companySetupSteps, needsSetup } from './companySetup'
 import ResultBandsCard from '../settings/ResultBandsCard'
 import CredentialModeCard from '../settings/CredentialModeCard'
@@ -236,6 +238,9 @@ function DetailForm({ model, onSaved }: { model: SuperCompanyDetailModel; onSave
           <BrandCard companyName={company.name} draft={draft} setDraft={setDraft} companyId={company.id} onUploaded={onSaved} />
         </div>
       </div>
+
+      <CompanyRespondentContentPanel companyId={company.id} />
+      <CompanyEmailTextsSection companyId={company.id} />
 
       {/* Last, and apart: the one irreversible thing on this page. */}
       <DeleteCompanyCard companyId={company.id} companyName={company.name} />

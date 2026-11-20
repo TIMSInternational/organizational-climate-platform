@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.RespondentContent;
 
 namespace ClimateProject.Application.OrgStructure;
 
@@ -55,9 +56,18 @@ public static class SurveyReminderEmailComposer
     /// somebody in Clima and Teletrabajo receives two of these and the subject is the only thing
     /// telling them apart. Null is accepted for `shared` mode, where naming one would be a lie.
     /// </param>
+    /// <param name="text">
+    /// The survey's or its company's own subject and paragraph (<c>email.reminder.*</c>, ruled
+    /// 2026-11-19, <c>docs/decisions/editable-respondent-content.md</c>), resolved per language by
+    /// the caller. Null, or blank in a language, is today's copy in that language, byte for byte
+    /// (<c>SurveyEmailDefaultsPinTests</c>). It replaces the subject (and the heading) and the
+    /// opening paragraph only: the sentence naming the survey, the username, the button and its
+    /// link, and what to do if the password is lost stay this composer's.
+    /// </param>
     public static EmailMessage Compose(
         string toEmail, string? recipientName, string username, string loginUrl,
-        string? companyLanguage, EmailBrand? brand = null, string? surveyName = null)
+        string? companyLanguage, EmailBrand? brand = null, string? surveyName = null,
+        SurveyEmailText? text = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toEmail);
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
@@ -73,34 +83,55 @@ public static class SurveyReminderEmailComposer
 
         var signInUrl = WithUsername(loginUrl, username);
 
+        var firstWords = Words(first, surveyName, brand, text);
+        var secondWords = second is null ? null : Words(second, surveyName, brand, text);
+
         var html = new StringBuilder();
-        AppendHtml(html, first, username, signInUrl, brand, surveyName);
+        AppendHtml(html, first, firstWords, username, signInUrl, brand, surveyName);
         if (second is not null)
         {
             html.Append("""<hr style="border:none;border-top:1px solid #e4e7eb;margin:28px 0;">""");
-            AppendHtml(html, second, username, signInUrl, brand, surveyName);
+            AppendHtml(html, second, secondWords!, username, signInUrl, brand, surveyName);
         }
 
         html.Append(EmailBranding.Footer(EmailBranding.Escape(
             second is null ? first.Ignore : $"{first.Ignore} / {second.Ignore}")));
 
-        var text = new StringBuilder();
-        AppendText(text, first, username, signInUrl, surveyName);
+        var body = new StringBuilder();
+        AppendText(body, first, firstWords, username, signInUrl, surveyName);
         if (second is not null)
         {
-            text.Append("\n--\n\n");
-            AppendText(text, second, username, signInUrl, surveyName);
+            body.Append("\n--\n\n");
+            AppendText(body, second, secondWords!, username, signInUrl, surveyName);
         }
 
         return new EmailMessage(
             toEmail,
             // Null, so the mail is addressed to the bare address. See `recipientName`.
             ToName: null,
-            EmailMessage.ToHeaderValue(second is null
-                ? Subject(first, surveyName, brand)
-                : $"{Subject(first, surveyName, brand)} / {Subject(second, surveyName, brand)}"),
-            text.Append("\n\n").Append(EmailBranding.Credit(single ?? ContentLanguages.FallbackLocale)).ToString(),
+            EmailMessage.ToHeaderValue(secondWords is null
+                ? firstWords.Subject
+                : $"{firstWords.Subject} / {secondWords.Subject}"),
+            body.Append("\n\n").Append(EmailBranding.Credit(single ?? ContentLanguages.FallbackLocale)).ToString(),
             EmailBranding.Document(single ?? ContentLanguages.FallbackLocale, html.ToString(), brand));
+    }
+
+    /// <summary>
+    /// One language's inbox subject, heading and opening paragraphs: the client's words for that
+    /// language when written (placeholders filled, not yet escaped), the default copy otherwise.
+    /// By default the heading is the short <c>copy.Subject</c> and the inbox line names the survey
+    /// and the company; a client's subject is both, as the personal-link mail's is.
+    /// </summary>
+    private static BlockWords Words(ReminderCopy copy, string? surveyName, EmailBrand? brand, SurveyEmailText? text)
+    {
+        var spanish = ReferenceEquals(copy, ReminderSpanish);
+        var placeholders = SurveyEmailText.Placeholders(surveyName, brand?.CompanyName);
+        var subject = text?.SubjectFor(spanish, placeholders);
+        var message = text?.MessageFor(spanish, placeholders);
+        return new BlockWords(
+            subject ?? Subject(copy, surveyName, brand),
+            subject ?? copy.Subject,
+            message is null ? [copy.Body] : [.. SurveyEmailText.ParagraphsOf(message)]);
     }
 
     /// <summary>
@@ -152,11 +183,15 @@ public static class SurveyReminderEmailComposer
             : string.Format(CultureInfo.InvariantCulture, copy.WhichOne, surveyName.Trim());
 
     private static void AppendHtml(
-        StringBuilder html, ReminderCopy copy, string username, string loginUrl, EmailBrand? brand,
+        StringBuilder html, ReminderCopy copy, BlockWords words, string username, string loginUrl, EmailBrand? brand,
         string? surveyName)
     {
-        html.Append(EmailBranding.Heading(copy.Subject));
-        html.Append(EmailBranding.Paragraphs(copy.Body));
+        html.Append(EmailBranding.Heading(words.Heading));
+        foreach (var paragraph in words.Paragraphs)
+        {
+            html.Append(EmailBranding.Paragraphs(paragraph));
+        }
+
         // Paragraphs escapes every line, so a client-authored survey title is safe here.
         html.Append(EmailBranding.Paragraphs(WhichOne(copy, surveyName)));
         html.Append("""<p style="margin:0 0 16px;font-size:15px;line-height:1.8;">""");
@@ -169,10 +204,10 @@ public static class SurveyReminderEmailComposer
     }
 
     private static void AppendText(
-        StringBuilder text, ReminderCopy copy, string username, string loginUrl, string? surveyName)
+        StringBuilder text, ReminderCopy copy, BlockWords words, string username, string loginUrl, string? surveyName)
     {
-        text.Append(copy.Subject).Append("\n\n");
-        text.Append(copy.Body).Append("\n\n");
+        text.Append(words.Heading).Append("\n\n");
+        text.Append(string.Join("\n\n", words.Paragraphs)).Append("\n\n");
         if (WhichOne(copy, surveyName) is { } which) text.Append(which).Append("\n\n");
         text.Append(copy.UsernameLabel).Append(": ").Append(username).Append("\n\n");
         text.Append(copy.Cta).Append(": ").Append(loginUrl).Append("\n\n");
@@ -208,6 +243,9 @@ public static class SurveyReminderEmailComposer
         Ignore: "If you were not expecting this message you can ignore it.");
 
     private static ReminderCopy CopyFor(bool spanish) => spanish ? ReminderSpanish : ReminderEnglish;
+
+    /// <summary>One language's inbox subject, heading and opening paragraphs, plain text, before escaping.</summary>
+    private sealed record BlockWords(string Subject, string Heading, IReadOnlyList<string> Paragraphs);
 
     /// <summary>
     /// Deliberately has no <c>PasswordLabel</c>. There is nowhere in this type to put a password,

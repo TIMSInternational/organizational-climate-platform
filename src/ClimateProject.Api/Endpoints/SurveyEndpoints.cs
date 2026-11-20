@@ -1438,10 +1438,14 @@ public static class SurveyEndpoints
         var conditionalLogic = await db.QuestionConditionalLogics.Where(c => questionIds.Contains(c.QuestionId)).ToListAsync(cancellationToken);
         var departmentTargets = await db.SurveyDepartmentTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
         var userTargets = await db.SurveyUserTargets.Where(t => t.SurveyId == survey.Id).ToListAsync(cancellationToken);
+        var contentOverrides = await db.RespondentContentOverrides.AsNoTracking()
+            .Where(o => o.SurveyId == survey.Id)
+            .ToListAsync(cancellationToken);
 
         var source = new SurveyStructure(survey, questions, options, emojiOptions, conditionalLogic, departmentTargets)
         {
             UserTargets = userTargets,
+            ContentOverrides = contentOverrides,
         };
 
         // Detached from the change tracker before anything is added: the copy's rows are
@@ -1463,6 +1467,7 @@ public static class SurveyEndpoints
         db.QuestionOptions.AddRange(copy.Options);
         db.QuestionEmojiOptions.AddRange(copy.EmojiOptions);
         db.QuestionConditionalLogics.AddRange(copy.ConditionalLogic);
+        db.RespondentContentOverrides.AddRange(copy.ContentOverrides);
 
         // Two entries, one per survey. The source's history has to show that a copy was
         // taken from it -- a closed survey whose wording reappears in a new draft is a fact

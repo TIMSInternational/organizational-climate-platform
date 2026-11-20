@@ -260,7 +260,7 @@ internal sealed class AuditWritingMiddleware(
     private static string Describe(HttpContext context, AuditEntry entry, Exception? failure)
         => JsonSerializer.Serialize(new AuditDetails(
             context.Request.Method,
-            context.Request.Path.Value ?? string.Empty,
+            entry.RedactedPath ?? context.Request.Path.Value ?? string.Empty,
             StatusToRecord(context, failure),
             entry.Changes.Count == 0 ? null : entry.Changes));
 

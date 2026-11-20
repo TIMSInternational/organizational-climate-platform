@@ -167,11 +167,18 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 /// with a default so a payload from an API that predates it reads as "not asked".
 /// </param>
 /// <param name="RespondentIntro">
-/// The survey's own anonymity-box paragraph in the resolved locale, or null for the product
-/// default (<c>SurveySettings.RespondentIntroEn</c>). Sent for every response; the screen
-/// applies it only to an anonymous one.
+/// SUPERSEDED by <see cref="Content"/>'s <c>anonymousBody</c>, and always the same value: the
+/// anonymity-box paragraph from the chain (survey column → company row) in
+/// <see cref="ResolvedLocale"/> only, or null for the product default. Kept for the screens that
+/// read it today. New code reads <c>Content</c> and must not chain this field after it -- the two
+/// can never disagree, so a fallback to it adds nothing but a second source. Never another
+/// language's paragraph, and never listed in <see cref="FallbackFields"/>. Sent for every
+/// response; the screen applies it only to an anonymous one.
 /// </param>
-/// <param name="ClosingMessage">The survey's own thank-you, or null for the product default.</param>
+/// <param name="ClosingMessage">
+/// SUPERSEDED by <see cref="Content"/>'s <c>thankYouTitle</c>, and always the same value, by the
+/// same rule as <see cref="RespondentIntro"/>; null for the product default.
+/// </param>
 /// <param name="PrivacyNoticeEs">
 /// The survey's company's «Aviso de privacidad» in Spanish, or null when it has set none. Both
 /// languages travel and the screen picks the respondent's first, the other when only that one
@@ -183,6 +190,14 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 /// The duration the survey states (<c>SurveySettings.EstimatedMinutes</c>), or null when the
 /// screen calculates it from the question count. Shown as «La duración aproximada es de N
 /// minutos»; never a limit -- that is <see cref="TimeLimitMinutes"/>.
+/// </param>
+/// <param name="Content">
+/// The client's own words for this survey's screens, in <see cref="ResolvedLocale"/>: key →
+/// text, the EFFECTIVE overrides only (survey → survey column → company), plus the display
+/// choices (<c>display.textAlign</c>). A key that is absent is the product default -- the screen
+/// renders <c>content[key] ?? t(key)</c>. Keys and the chain:
+/// <c>RespondentContentRegistry</c> / <c>RespondentContentResolver</c>. Never another locale's
+/// words, and never an email's. Null from an API that predates it.
 /// </param>
 public sealed record SurveyRespondView(
     Guid Id,
@@ -208,7 +223,33 @@ public sealed record SurveyRespondView(
     string? ClosingMessage = null,
     string? PrivacyNoticeEs = null,
     string? PrivacyNoticeEn = null,
-    int? EstimatedMinutes = null);
+    int? EstimatedMinutes = null,
+    IReadOnlyDictionary<string, string>? Content = null);
+
+/// <summary>
+/// The body of a refusal that a respondent screen draws as one of the registry's cards
+/// (<c>RespondentContentRegistry</c>, group <c>cards</c>), so the card can read the client's
+/// words although no view was loaded: <c>GET /surveys/{id}/respond</c>'s 400 on a closed survey
+/// («Encuesta cerrada»: <c>closedTitle</c>, <c>closedBody</c>) and
+/// <c>GET /survey-invitations/{token}</c>'s 409 <c>already_completed</c> (<c>alreadyCompletedTitle</c>,
+/// <c>alreadyCompletedBody</c>).
+/// </summary>
+/// <remarks>
+/// Only on a refusal whose reader the route has already identified as entitled to the survey --
+/// a signed-in member of its audience, the holder of its personal invitation. Never on a
+/// fail-closed answer (the respond GET's 401 to a link visitor, a dead token's 404/410), which
+/// must not tell an unknown holder whose survey or which company it is; that is why the
+/// unavailable card's words are not in the registry at all.
+/// </remarks>
+/// <param name="Message">Fixed English for logs; a screen never prints it.</param>
+/// <param name="Reason">The machine-readable reason the route already used (<c>already_completed</c>), or null.</param>
+/// <param name="ResolvedLocale">The locale <paramref name="Content"/> is in, by the same rule as <c>SurveyRespondView.ResolvedLocale</c>.</param>
+/// <param name="Content">The same map, from the same resolver, as <c>SurveyRespondView.Content</c>.</param>
+public sealed record RespondentCardRefusal(
+    string Message,
+    string? Reason,
+    string ResolvedLocale,
+    IReadOnlyDictionary<string, string> Content);
 
 /// <param name="AlreadySubmitted">
 /// True when this call found a response that was already complete and therefore changed

@@ -33,6 +33,12 @@ vi.mock('../../../surveys/api/surveys', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../surveys/api/surveys')>()),
   getSurvey: vi.fn(),
 }))
+// «Textos para quien responde» loads on its own beside the settings form; covered in
+// `CompanyRespondentContentPanel.test.tsx`. Here it only has to load.
+vi.mock('../../../surveys/api/respondentContent', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../surveys/api/respondentContent')>()),
+  getCompanyRespondentContent: vi.fn(async () => (await import('../../../../test/respondentContentRegistry')).contentView()),
+}))
 
 /** `CompanySettingsResponse` with the entity defaults (`Company.cs`), as the fixture carries it. */
 const stored: CompanySettingsResponse = {

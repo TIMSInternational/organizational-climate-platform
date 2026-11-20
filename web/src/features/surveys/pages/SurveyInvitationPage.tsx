@@ -9,7 +9,11 @@ import SurveyRespondForm, {
   RespondSurface,
 } from '../components/SurveyRespondForm'
 import { LinkOutcome } from '../components/LinkOutcome'
+import { useSurveyInterfaceLocale } from '../useSurveyInterfaceLocale'
 import { invitationFailureCopy } from '../linkFailure'
+import { textAlignOf } from '../api/respondentContent'
+import { clientText } from '../clientText'
+import { invitationPromise } from '../respondPromise'
 import {
   SurveyLinkError,
   getSurveyInvitation,
@@ -100,6 +104,9 @@ export default function SurveyInvitationPage() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
   const [state, setState] = useState<InvitationState>({ status: 'loading' })
+
+  // A single-language survey answers in its language, the landing card included (gap #9).
+  useSurveyInterfaceLocale(state.status === 'landing' || state.status === 'answering' ? state.detail.language : null)
 
   // The token the respondent has already begun answering under, or null.
   //
@@ -208,13 +215,13 @@ export default function SurveyInvitationPage() {
           surveyId={state.detail.surveyId}
           publicEntry
           onSubmitted={reportCompleted}
-          entryPromise={{ invitation: state.detail.anonymity.anonymous }}
+          entryPromise={invitationPromise(state.detail, locale)}
         />
       ) : (
         <RespondSurface>
           {state.status === 'loading' && <LoadingNotice />}
           {state.status === 'dead' && (
-            <LinkOutcome copy={invitationFailureCopy(state.error)} />
+            <LinkOutcome copy={invitationFailureCopy(state.error)} source={state.error} />
           )}
           {state.status === 'landing' && (
             <Landing detail={state.detail} locale={locale} onBegin={begin} />
@@ -253,7 +260,9 @@ function Landing({
   locale: string
   onBegin: () => void
 }) {
-  const { t } = useTranslation('surveyRespond')
+  // The client's words where the survey or its company wrote some (`clientText`).
+  const { t: catalogue } = useTranslation('surveyRespond')
+  const { t } = clientText(detail, locale, catalogue)
 
   // No sign-in note: nobody who opens an invitation link logs in (ruled 2026-10-12), and the
   // respond endpoint serves an unauthenticated invitee on every open survey, anonymously.
@@ -264,6 +273,7 @@ function Landing({
         eyebrow={t('invitationEyebrow')}
         title={detail.surveyTitle ?? t('untitledSurvey')}
         description={detail.surveyDescription}
+        align={textAlignOf(detail.content)}
       />
 
       {/* `instantDay`, in the reader's own zone: both are instants — the survey stops
@@ -284,7 +294,7 @@ function Landing({
         />
       </section>
 
-      <AnonymityNotice anonymous={detail.anonymity.anonymous} />
+      <AnonymityNotice anonymous={detail.anonymity.anonymous} content={detail} />
 
       {/* The one primary action, full width and 44px: the Respond board's «Comenzar». */}
       <Button type="button" variant="primary" size="lg" className="w-full" onClick={onBegin}>

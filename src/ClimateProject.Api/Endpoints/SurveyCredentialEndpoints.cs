@@ -420,6 +420,12 @@ public static class SurveyCredentialEndpoints
 
         await AttributeToSurveyCompanyAsync(audit, currentUser, survey.CompanyId, db, cancellationToken);
 
+        // «Lista autorizada del cliente»: a key -- mailed or handed over -- only for somebody on it.
+        if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, [userId], cancellationToken) is { } notAuthorized)
+        {
+            return notAuthorized;
+        }
+
         // No audience chosen: a key -- mailed or handed over -- would admit somebody to a survey
         // aimed at nobody (Survey.AudienceNotChosen).
         if (survey.AudienceNotChosen)
@@ -566,7 +572,8 @@ public static class SurveyCredentialEndpoints
 
         var outcome = await SurveyCredentialIssuance.SendAsync(
             credentialsSender,
-            SurveyCredentialIssuance.MailFor(survey, company?.Mail),
+            // The chain, so the survey's -- or its company's -- own credentials words are mailed.
+            SurveyCredentialIssuance.MailFor(survey, company?.Mail, await RespondentContentStore.LoadAsync(db, survey, cancellationToken)),
             user.Email, user.Name, credential.Username, password, cancellationToken);
 
         if (!outcome.Delivered)
@@ -650,6 +657,12 @@ public static class SurveyCredentialEndpoints
 
         await AttributeToSurveyCompanyAsync(audit, principal.GetCurrentUser(), survey.CompanyId, db, cancellationToken);
 
+        // «Lista autorizada del cliente»: a reminder only to somebody on it.
+        if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, [userId], cancellationToken) is { } notAuthorized)
+        {
+            return notAuthorized;
+        }
+
         if (survey.AudienceNotChosen)
         {
             return SurveyEndpoints.AudienceNotChosen();
@@ -731,11 +744,12 @@ public static class SurveyCredentialEndpoints
             })
             .FirstOrDefaultAsync(cancellationToken);
         var zone = SchedulingTimeZone.Resolve(company?.Timezone);
-        var mail = SurveyCredentialIssuance.MailFor(survey, company?.Mail);
+        // The chain, so the survey's -- or its company's -- own reminder words are mailed.
+        var mail = SurveyCredentialIssuance.MailFor(survey, company?.Mail, await RespondentContentStore.LoadAsync(db, survey, cancellationToken));
 
         var outcome = await reminderSender.SendAsync(
             user.Email, user.Name, credential.Username, mail.CompanyLanguage,
-            mail.Brand, mail.SurveyTitle, cancellationToken);
+            mail.Brand, mail.SurveyTitle, mail.ReminderText, cancellationToken);
 
         // Stamped only on a DELIVERED reminder, and only after the send. Unlike reissue there is
         // no secret that has to exist before the mail leaves, so there is nothing to put back

@@ -6,6 +6,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Notifications;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -450,6 +451,13 @@ public static class SurveyDistributionEndpoints
             return audienceError;
         }
 
+        // «Lista autorizada del cliente»: everybody this request resolves must be on it, or the
+        // whole send is refused naming them -- before any invitation, key or link is minted.
+        if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, userIds!, cancellationToken) is { } notAuthorized)
+        {
+            return notAuthorized;
+        }
+
         // `shared` mints rows and nothing else, so 500 of them is one cheap transaction.
         // `per_survey` additionally hashes a password and sends a message PER RECIPIENT, and
         // those are the two expensive things this product does: bcrypt-12 was measured at
@@ -637,7 +645,9 @@ public static class SurveyDistributionEndpoints
                     .Where(c => c.Id == survey.CompanyId)
                     .Select(c => new SurveyCredentialCompany(
                         c.Name, c.Settings.Language, c.Branding.LogoUrl, c.Branding.PrimaryColor, c.Settings.Timezone))
-                    .FirstOrDefaultAsync(cancellationToken));
+                    .FirstOrDefaultAsync(cancellationToken),
+                // The chain, so the survey's -- or its company's -- own credentials words are mailed.
+                await RespondentContentStore.LoadAsync(db, survey, cancellationToken));
 
             // Both namespaces, because the two share one index each and a collision between
             // them would make sign-in ambiguous about which person and which survey.
@@ -733,7 +743,11 @@ public static class SurveyDistributionEndpoints
         var linkNotSentEmails = new List<string>();
         if (personalLink && recipients.Count > 0)
         {
-            var mail = SurveyPersonalLinks.MailFor(survey, await MailCompanyAsync(db, survey.CompanyId, cancellationToken));
+            var mail = SurveyPersonalLinks.MailFor(
+                survey,
+                await MailCompanyAsync(db, survey.CompanyId, cancellationToken),
+                // The chain, so a company's own invitation words reach a survey that wrote none.
+                await RespondentContentStore.LoadAsync(db, survey, cancellationToken));
             var batchIds = recipients.Select(r => r.Id).ToList();
             var invitationsByUser = await db.SurveyInvitations
                 .Where(i => i.SurveyId == surveyId && batchIds.Contains(i.UserId))
@@ -1110,6 +1124,12 @@ public static class SurveyDistributionEndpoints
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // «Lista autorizada del cliente»: refused before the token is rotated.
+        if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, [recipient.Id], cancellationToken) is { } notAuthorized)
+        {
+            return notAuthorized;
+        }
+
         // The link would open nothing: the respond path refuses a deactivated account.
         if (!recipient.IsActive || recipient.CompanyId != survey.CompanyId)
         {
@@ -1143,7 +1163,11 @@ public static class SurveyDistributionEndpoints
         invitation.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        var mail = SurveyPersonalLinks.MailFor(survey, await MailCompanyAsync(db, survey.CompanyId, cancellationToken));
+        var mail = SurveyPersonalLinks.MailFor(
+            survey,
+            await MailCompanyAsync(db, survey.CompanyId, cancellationToken),
+            // The chain, so a company's own invitation words reach a survey that wrote none.
+            await RespondentContentStore.LoadAsync(db, survey, cancellationToken));
         var outcome = await linkSender.SendAsync(recipient.Email, invitation.InvitationToken, mail, cancellationToken);
 
         if (!outcome.Delivered)
@@ -1372,16 +1396,26 @@ public static class SurveyDistributionEndpoints
             return error;
         }
 
+        var locale = SurveyContent.ResolveRequestLocale(lang, survey!.Language);
+        var resolvedLocale = ResolvedLocaleOf(survey, locale);
+
         // Distinct from expired and from revoked, and deliberately not a 200: the client has
-        // to render "you already answered this" rather than an answerable survey.
+        // to render "you already answered this" rather than an answerable survey. The card is
+        // drawn from THIS body, so it carries the client's words for it (`alreadyCompletedTitle`,
+        // `alreadyCompletedBody`): the holder of a live token is the invitee, the one person the
+        // landing would otherwise have shown the survey to.
         if (invitation!.Status == SurveyInvitationStatuses.Completed)
         {
             return Results.Json(
-                new { message = "This invitation has already been used.", reason = "already_completed" },
+                new RespondentCardRefusal(
+                    "This invitation has already been used.",
+                    "already_completed",
+                    resolvedLocale,
+                    await RespondentContentStore.ResolveAsync(
+                        db, survey, resolvedLocale, RespondentContentKinds.RespondentPayload, cancellationToken)),
                 statusCode: 409);
         }
 
-        var locale = SurveyContent.ResolveRequestLocale(lang, survey!.Language);
         var fallbackFields = new List<string>();
         var title = SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "surveyTitle", fallbackFields);
         var description = SurveyContent.Resolve(survey.DescriptionEn, survey.DescriptionEs, locale, survey.Language, "surveyDescription", fallbackFields);
@@ -1392,13 +1426,17 @@ public static class SurveyDistributionEndpoints
             title,
             description,
             survey.Language,
-            ResolvedLocaleOf(survey, locale),
+            resolvedLocale,
             fallbackFields,
             invitation.Status,
             survey.StartDate,
             survey.EndDate,
             invitation.ExpiresAt,
-            AnonymityOf(survey, locale)));
+            AnonymityOf(survey, locale),
+            // The respond view's map, from the same resolver: the landing is the first screen of
+            // the same flow and must read the same words.
+            await RespondentContentStore.ResolveAsync(
+                db, survey, resolvedLocale, RespondentContentKinds.RespondentPayload, cancellationToken)));
     }
 
     /// <summary>

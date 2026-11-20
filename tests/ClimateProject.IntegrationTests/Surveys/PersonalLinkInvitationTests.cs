@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using ClimateProject.Api.Endpoints;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -252,6 +253,37 @@ public class PersonalLinkInvitationTests(PostgresContainerFixture postgres, Capt
         var (subject, message) = PersonalLinkEmailComposer.WordsFor(mail, spanish: true);
         Assert.Equal(Subject, subject);
         Assert.Equal(Body, message);
+    }
+
+    /// <summary>
+    /// The chain reaches the inline send: a survey that wrote no invitation words of its own mails
+    /// its company's (<c>email.personalLink.*</c> at the company level), with <c>{company}</c> and
+    /// <c>{survey}</c> filled -- an editor whose words no mail carried would be one that lies.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_without_its_own_words_mails_the_companys_with_the_placeholders_filled()
+    {
+        var admin = await AdminClientAsync();
+        var survey = await ActiveSurveyAsync(admin, CredentialModes.PersonalLink);
+        (await admin.PutAsJsonAsync($"/surveys/{survey.Id}/respondent-content", new UpdateRespondentContentRequest(new()
+        {
+            ["es"] = new() { [RespondentContentRegistry.EmailPersonalLinkSubject] = "", [RespondentContentRegistry.EmailPersonalLinkMessage] = "" },
+        }))).EnsureSuccessStatusCode();
+        (await admin.PutAsJsonAsync($"/admin/companies/{_companyId}/respondent-content", new UpdateRespondentContentRequest(new()
+        {
+            ["es"] = new()
+            {
+                [RespondentContentRegistry.EmailPersonalLinkSubject] = "Su encuesta de {company}",
+                [RespondentContentRegistry.EmailPersonalLinkMessage] = "Le invitamos a responder «{survey}».",
+            },
+        }))).EnsureSuccessStatusCode();
+        var ana = await SeedPersonAsync(_comercio);
+
+        await InviteAsync(admin, survey.Id, new CreateSurveyInvitationsRequest(UserIds: [ana.Id]));
+
+        var (subject, message) = PersonalLinkEmailComposer.WordsFor(Assert.Single(LinksTo(ana.Email)).Mail, spanish: true);
+        Assert.Equal("Su encuesta de PROCOMER", subject);
+        Assert.Equal($"Le invitamos a responder «{survey.Title}».", message);
     }
 
     // ------------------------------------------------------------------ resend

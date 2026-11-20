@@ -224,6 +224,39 @@ describe('surveyResponses api', () => {
     })
   })
 
+  /**
+   * The «Encuesta cerrada» card is drawn from this refusal with no view loaded, so the client's
+   * words for it travel on the 400 (`RespondentCardRefusal`) and the error keeps them.
+   */
+  it('keeps the client words a closed survey refusal carries, and their locale', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: 'This survey is not currently accepting responses',
+          reason: null,
+          resolvedLocale: 'es',
+          content: { closedTitle: 'La encuesta de ESPH cerró', 'display.textAlign': 'start', junk: 7 },
+        }),
+        { status: 400 },
+      ),
+    )
+
+    const error = (await getSurveyRespondView('http://api', 's1').catch((e: unknown) => e)) as SurveyRespondError
+    expect(error.status).toBe(400)
+    expect(error.resolvedLocale).toBe('es')
+    expect(error.content).toEqual({ closedTitle: 'La encuesta de ESPH cerró', 'display.textAlign': 'start' })
+  })
+
+  it('carries no client words on a refusal that has none', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ message: 'This survey is not currently available' }), { status: 401 }),
+    )
+
+    const error = (await getSurveyRespondView('http://api', 's1').catch((e: unknown) => e)) as SurveyRespondError
+    expect(error.content).toBeNull()
+    expect(error.resolvedLocale).toBeNull()
+  })
+
   it('still reports the status when the body is not JSON', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response('<html>502</html>', { status: 502 }))
 

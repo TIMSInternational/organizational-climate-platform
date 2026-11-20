@@ -140,7 +140,27 @@ public sealed record DashboardPendingSurveyRow(
     DateTimeOffset EndDate,
     int QuestionCount,
     bool Anonymous,
-    int? EstimatedMinutes);
+    int? EstimatedMinutes,
+    /// <summary>
+    /// The survey's own anonymity paragraph and thank-you (<c>SurveySettings.RespondentIntro*</c>,
+    /// <c>ClosingMessage*</c>): the survey level of <c>anonymousBody</c> and <c>thankYouTitle</c>
+    /// in the respondent-content chain, read with the row so Home costs one query for the
+    /// company's and the surveys' own rows and no more.
+    /// </summary>
+    string? RespondentIntroEn = null,
+    string? RespondentIntroEs = null,
+    string? ClosingMessageEn = null,
+    string? ClosingMessageEs = null)
+{
+    /// <summary>The legacy columns the respondent payload's chain reads, as a <see cref="SurveySettings"/>.</summary>
+    public SurveySettings RespondentTexts => new()
+    {
+        RespondentIntroEn = RespondentIntroEn,
+        RespondentIntroEs = RespondentIntroEs,
+        ClosingMessageEn = ClosingMessageEn,
+        ClosingMessageEs = ClosingMessageEs,
+    };
+}
 
 /// <summary>
 /// The aggregate LINQ behind the four role dashboards (#132), composed over
@@ -554,5 +574,9 @@ public static class DashboardQueries
                 // and the card that claims it must be claiming what the questionnaire behind
                 // it will actually do.
                 s.Settings.Anonymous,
-                s.Settings.EstimatedMinutes));
+                s.Settings.EstimatedMinutes,
+                s.Settings.RespondentIntroEn,
+                s.Settings.RespondentIntroEs,
+                s.Settings.ClosingMessageEn,
+                s.Settings.ClosingMessageEs));
 }

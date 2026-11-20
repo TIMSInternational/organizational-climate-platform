@@ -71,6 +71,8 @@ function toSurvey(survey: DashboardPendingSurvey, asOf: string): HomeSurvey {
     // A literal `true`, never a truthiness test: a field gone missing — an older server,
     // a cached body — must read as no claim at all.
     anonymous: survey.anonymous === true,
+    content: survey.content ?? null,
+    resolvedLocale: survey.resolvedLocale ?? null,
   }
 }
 

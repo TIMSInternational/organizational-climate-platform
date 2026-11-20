@@ -1031,7 +1031,9 @@ public class DashboardEndpointsTests : IAsyncLifetime
         // moved by a row count. The remaining slack is one rather than two, and that is still
         // not enough to hide an N+1: the smallest any of these pages could acquire costs five
         // more (the survey lists are capped at five rows) and the largest costs eleven
-        // (company A's departments).
+        // (company A's departments). The employee page is 10 since 2026-11-19, AT its ceiling:
+        // one SELECT of the company's and the five surveys' respondent-content rows, for the
+        // anonymity promise beside each survey -- one for all five, never one each.
         Assert.True(platform.Commands <= 7, $"platform overview sent {platform.Commands} commands");
         Assert.True(tenant.Commands <= 10, $"tenant dashboard sent {tenant.Commands} commands");
         Assert.True(department.Commands <= 10, $"department dashboard sent {department.Commands} commands");

@@ -63,6 +63,31 @@ internal static class AdminRefusals
     public const string SurveyRemindersOff = "survey_reminders_off";
     public const string SurveyNotCollecting = "survey_not_collecting";
 
+    // «Lista autorizada del cliente», ruled 2026-11-19 (docs/decisions/editable-respondent-content.md,
+    // ruling 3; SurveyAuthorizedPeopleEndpoints, SurveyAuthorizedListGuard).
+
+    /// <summary>
+    /// A send, resend, reissue or reminder names somebody whose address is not on the survey's
+    /// authorized list. 409, before anything is minted, written or mailed; <c>notAuthorized</c>
+    /// names each of them (user id, email, name). The whole send is refused, never trimmed.
+    /// </summary>
+    public const string SurveyRecipientNotAuthorized = "survey_recipient_not_authorized";
+
+    /// <summary>An archived survey's authorized list cannot be changed, by anybody. 409.</summary>
+    public const string SurveyAuthorizedListArchived = "survey_authorized_list_archived";
+
+    /// <summary>A company admin past «active»: only a super admin changes a closed survey's list. 409.</summary>
+    public const string SurveyAuthorizedListLocked = "survey_authorized_list_locked";
+
+    /// <summary>The one address to add is not an email address. 400.</summary>
+    public const string SurveyAuthorizedEmailInvalid = "survey_authorized_email_invalid";
+
+    /// <summary>The one address to add is on the list already. 409.</summary>
+    public const string SurveyAuthorizedEmailDuplicate = "survey_authorized_email_duplicate";
+
+    /// <summary>A pasted list that is empty or holds an entry that is not an address; nothing was written. 400; <c>invalid</c> names them.</summary>
+    public const string SurveyAuthorizedListInvalid = "survey_authorized_list_invalid";
+
     // Microclimates (admin)
     public const string MicroclimateWindowOutOfOrder = "microclimate_window_out_of_order";
     public const string MicroclimateClosedWindow = "microclimate_closed_window";
@@ -73,6 +98,7 @@ internal static class AdminRefusals
 
     // Reports and the question bank
     public const string ReportScheduleStartPast = "report_schedule_start_past";
+    public const string ReportNotesTooLong = "report_notes_too_long";
     public const string QuestionBankItemInUse = "question_bank_item_in_use";
     public const string QuestionBankItemHasVariations = "question_bank_item_has_variations";
 
@@ -86,4 +112,37 @@ internal static class AdminRefusals
     public const string CompanyHasResponses = "company_has_responses";
     public const string CompanyHoldsSuperAdmins = "company_holds_super_admins";
     public const string CompanyPeopleReferenced = "company_people_referenced";
+
+    // Paper questionnaires and wording corrections, ruled 2026-11-19 (PaperResponseEndpoints).
+    public const string PaperResponseAlreadyCompleted = "paper_response_already_completed";
+    public const string PaperResponseNotInPopulation = "paper_response_not_in_population";
+    public const string PaperResponseSurveyArchived = "paper_response_survey_archived";
+    public const string PaperResponseNotCollecting = "paper_response_not_collecting";
+    public const string PaperResponseSuperAdminOnly = "paper_response_super_admin_only";
+    public const string SurveyWordingStructureChanged = "survey_wording_structure_changed";
+    public const string SurveyWordingQuestionsMismatch = "survey_wording_questions_mismatch";
+    public const string SurveyWordingSuperAdminOnly = "survey_wording_super_admin_only";
+
+    // What a client reads, ruled 2026-11-19 (docs/decisions/editable-respondent-content.md).
+    // The PUT's refusals carry `key`, `locale`, `placeholder`, `maxLength` and `allowed` beside
+    // the code, so a screen can point at the field; the code's sentence says what kind of problem.
+
+    /// <summary>An archived survey's respondent texts cannot be changed, by anybody. 409.</summary>
+    public const string RespondentContentArchived = "respondent_content_archived";
+
+    /// <summary>A company admin past «active»: only a super admin edits a closed survey's texts. 409.</summary>
+    public const string RespondentContentLocked = "respondent_content_locked";
+
+    /// <summary>«Ver como quien responde» on an archived survey: there is nothing left to check before a send. 409.</summary>
+    public const string RespondPreviewArchived = "respond_preview_archived";
+
+    public const string RespondentContentUnknownLocale = "respondent_content_unknown_locale";
+    public const string RespondentContentLocaleMismatch = "respondent_content_locale_mismatch";
+
+    /// <summary>At the survey level, a text set in a language the survey is not written in. 400; <c>allowed</c> names the survey's locales.</summary>
+    public const string RespondentContentLocaleNotOffered = "respondent_content_locale_not_offered";
+    public const string RespondentContentUnknownKey = "respondent_content_unknown_key";
+    public const string RespondentContentTooLong = "respondent_content_too_long";
+    public const string RespondentContentUnknownPlaceholder = "respondent_content_unknown_placeholder";
+    public const string RespondentContentValueNotAllowed = "respondent_content_value_not_allowed";
 }

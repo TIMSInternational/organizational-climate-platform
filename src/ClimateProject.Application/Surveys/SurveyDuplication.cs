@@ -17,6 +17,12 @@ public sealed record SurveyStructure(
     /// only because a template-built survey has none and its constructor call predates it.
     /// </summary>
     public IReadOnlyList<SurveyUserTarget> UserTargets { get; init; } = [];
+
+    /// <summary>
+    /// The survey's own wording in <c>respondent_content_overrides</c> (its rows, never its
+    /// company's). An init property for the reason <see cref="UserTargets"/> is one.
+    /// </summary>
+    public IReadOnlyList<RespondentContentOverride> ContentOverrides { get; init; } = [];
 }
 
 /// <summary>Caller-supplied overrides for the copy. Anything null keeps the original's value.</summary>
@@ -222,12 +228,37 @@ public static class SurveyDuplication
                 .Select(t => new SurveyUserTarget { SurveyId = newSurveyId, UserId = t.UserId })
                 .ToList();
 
-        // Responses, invitations, distributions, drafts, versions and audit logs are
-        // absent by construction rather than by filter: they are not inputs to this
-        // function, so there is no code path that could copy one.
+        // The survey's own respondent texts in the overrides table travel with the copy on BOTH
+        // paths, like the legacy texts `CopySettings` carries (the anonymity paragraph, the
+        // thank-you, the invitation words): they are the survey's words, not its people, and
+        // «Solo las preguntas» is "the same survey, nobody chosen yet" -- a copy that kept the
+        // questions and the paragraph column but dropped the «Sobre usted» intro would read
+        // differently from its source for no decision anybody took. The company's rows are not
+        // copied: the copy is in the same company and inherits them anyway. Attributed to whoever
+        // made the copy, as the copy itself is.
+        var contentOverrides = source.ContentOverrides
+            .Where(o => o.SurveyId == original.Id)
+            .Select(o => new RespondentContentOverride
+            {
+                // The caller's id factory, so this function still invents no id of its own.
+                Id = newQuestionId(),
+                CompanyId = original.CompanyId,
+                SurveyId = newSurveyId,
+                Key = o.Key,
+                Locale = o.Locale,
+                Value = o.Value,
+                UpdatedBy = createdBy,
+                UpdatedAt = now,
+            })
+            .ToList();
+
+        // Responses, invitations, distributions, drafts, versions, audit logs and the client's
+        // authorized list are absent by construction rather than by filter: they are not inputs
+        // to this function, so there is no code path that could copy one.
         return new SurveyStructure(survey, questions, options, emojiOptions, conditionalLogic, departmentTargets)
         {
             UserTargets = userTargets,
+            ContentOverrides = contentOverrides,
         };
     }
 

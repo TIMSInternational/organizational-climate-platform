@@ -1,4 +1,5 @@
 using ClimateProject.Application.Email;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 
@@ -49,6 +50,65 @@ public class PersonalLinkEmailComposerTests
         // HTML escapes every accented letter (&#243;), which is what keeps authored text inert.
         var html = System.Net.WebUtility.HtmlDecode(message.HtmlBody);
         Assert.Equal(2, CountOf(html, "line-height:1.55;\">¡Tu opinión", "line-height:1.55;\">Tu participación"));
+    }
+
+    /// <summary>
+    /// The two placeholders the registry allows an email override are filled with this survey's
+    /// title and this company's name -- never mailed as written, the #586 class -- and any other
+    /// `{name}` stays exactly as the author typed it.
+    /// </summary>
+    [Fact]
+    public void The_survey_and_company_placeholders_are_filled_and_an_unknown_one_stays_as_written()
+    {
+        var message = Compose(Mail(text: new PersonalLinkText("Su encuesta de {company}", null, "Le invitamos a «{survey}». {nombre}", null)));
+
+        Assert.Equal("Su encuesta de PROCOMER", message.Subject);
+        Assert.Contains("Le invitamos a «Clima PROCOMER 2026». {nombre}", message.TextBody, StringComparison.Ordinal);
+        var html = System.Net.WebUtility.HtmlDecode(message.HtmlBody);
+        Assert.Contains("Su encuesta de PROCOMER", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("{company}", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("{survey}", message.TextBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>Filled first, escaped after: a company name is inert in the HTML whatever it holds.</summary>
+    [Fact]
+    public void A_filled_value_is_escaped_like_the_rest_of_the_authors_words()
+    {
+        var mail = Mail(text: new PersonalLinkText("Encuesta de {company}", null, null, null)) with
+        {
+            Brand = new EmailBrand("https://climate.example.com/brand/acme.png", "<b>Acme & Co</b>", "#003b71"),
+        };
+
+        var message = Compose(mail);
+
+        Assert.Equal("Encuesta de <b>Acme & Co</b>", message.Subject);
+        Assert.DoesNotContain("<b>Acme", message.HtmlBody, StringComparison.Ordinal);
+        Assert.Contains("Encuesta de <b>Acme & Co</b>", System.Net.WebUtility.HtmlDecode(message.HtmlBody), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The chain reaches the mail: per language, the survey's column, else the company's
+    /// <c>email.personalLink.*</c>, else the default -- and never the other language's words.
+    /// </summary>
+    [Fact]
+    public void The_words_come_from_the_survey_then_the_company_and_never_from_the_other_language()
+    {
+        var settings = new SurveySettings { InvitationCustomSubjectEs = "De la encuesta" };
+        var sources = new RespondentContentSources(
+            [
+                new RespondentContentValue(RespondentContentRegistry.EmailPersonalLinkSubject, "es", "De la empresa"),
+                new RespondentContentValue(RespondentContentRegistry.EmailPersonalLinkMessage, "es", "Mensaje de la empresa"),
+                new RespondentContentValue(RespondentContentRegistry.EmailPersonalLinkSubject, "en", "From the company"),
+            ],
+            [],
+            settings);
+
+        var text = PersonalLinkText.From(sources);
+
+        Assert.Equal(new PersonalLinkText("De la encuesta", "From the company", "Mensaje de la empresa", null), text);
+        var survey = new Survey { Type = "periodic", TitleEs = "Clima", Language = "es", EndDate = DateTimeOffset.UtcNow.AddDays(5), Settings = settings };
+        Assert.Equal(text, SurveyPersonalLinks.MailFor(survey, company: null, sources).Text);
+        Assert.Equal(PersonalLinkText.From(settings), SurveyPersonalLinks.MailFor(survey, company: null).Text);
     }
 
     [Fact]

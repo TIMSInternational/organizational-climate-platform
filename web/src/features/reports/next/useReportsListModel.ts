@@ -11,6 +11,7 @@ import {
   type ReportListItem,
 } from '../api/reports'
 import { listReportShares, type ReportShareSummary } from '../api/reportShares'
+import { hasAnyNote } from '../api/reportNotes'
 import { parseReportDocument } from '../reportDocument'
 import type { ReportFormValues } from '../components/ReportForm'
 import { contentsOf } from './derive'
@@ -170,6 +171,7 @@ export function useReportsListModel(companyId: string | undefined, access: Repor
         companyId,
         format: values.format,
         ...(values.surveyId ? { filters: { surveyIds: [values.surveyId] } } : {}),
+        ...(values.notes && hasAnyNote(values.notes) ? { notes: values.notes } : {}),
       })
       await load()
     },

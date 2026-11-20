@@ -46,6 +46,7 @@ import { Meter, type ShareLinkAction } from './parts'
 import SharePanel from './SharePanel'
 import ParticipationPanel from './ParticipationPanel'
 import SurveyRosterPanel from './SurveyRosterPanel'
+import AuthorizedListPanel from './AuthorizedListPanel'
 import { RespondentTextsDialog } from './RespondentTextsDialog'
 import { InvitationEmailDialog } from './InvitationEmailDialog'
 import { useSurveyParticipation } from './useSurveyParticipation'
@@ -455,6 +456,7 @@ export function DistributionView({
           their response carries their user id. So this is answerable for a mass invite whether
           or not the survey asks anybody anything, and gating it would have blanked the one
           screen the launch is watched from. */}
+      {scoped ? <AuthorizedListPanel surveyId={survey.id} /> : null}
       {scoped ? <SurveyRosterPanel state={participation} /> : null}
 
       {/* How people get in -- and, on a `personal_link` survey, the email that carries the link.
@@ -477,10 +479,10 @@ export function DistributionView({
               else if (linkOffMode !== null) actions.setCredentialMode(linkOffMode)
             }}
           />
-          {personalLink ? (
+          {personalLink || perSurvey ? (
             <div className="flex flex-col gap-2 border-t border-line-default pt-4" data-testid="invitation-email">
               <p className="m-0 text-base font-medium text-fg-primary">{copy('link.email')}</p>
-              <p className="m-0 text-sm text-fg-secondary">{copy('link.emailOpen')}</p>
+              <p className="m-0 text-sm text-fg-secondary">{personalLink ? copy('link.emailOpen') : t('surveys.emailTexts.openPerSurvey')}</p>
               <div>
                 <Button type="button" variant="outline" disabled={!actionable} onClick={() => { setEmailSaved(null); setEmailOpen(true) }}>
                   {t('common.edit')}
@@ -770,7 +772,7 @@ export function DistributionView({
       </Dialog>
 
       <RespondentTextsDialog surveyId={survey.id} open={textsOpen} onOpenChange={setTextsOpen} onSaved={setTextsSaved} />
-      <InvitationEmailDialog surveyId={survey.id} open={emailOpen} onOpenChange={setEmailOpen} onSaved={setEmailSaved} />
+      <InvitationEmailDialog surveyId={survey.id} open={emailOpen} onOpenChange={setEmailOpen} onSaved={setEmailSaved} initialMail={personalLink ? 'personalLink' : 'credentials'} />
 
       <ConfirmationDialog
         open={resendTarget !== null}

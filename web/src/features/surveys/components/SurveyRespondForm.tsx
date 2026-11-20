@@ -41,6 +41,8 @@ import { formatDayMonth, respondDuration } from '../respondEstimate'
 import { respondFailureKey, respondFailureKind } from '../respondFailure'
 import { AuthoredParagraphs } from '../../../components/layout'
 import { AnonymityNotice } from './AnonymityNotice'
+import { effectiveText, textAlignOf, type RespondentContentSource } from '../api/respondentContent'
+import { clientText, respondAlignClass } from '../clientText'
 import { PrivacyNoticeLink } from './PrivacyNoticeLink'
 import RespondDemographicField from './RespondDemographicField'
 import RespondParticipantFields from './RespondParticipantFields'
@@ -61,6 +63,7 @@ import { hasAnswered, markAnswered } from '../respondReceipt'
 import { promiseMadeAtEntry, type EntryPromise } from '../respondPromise'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import { useRespondLock } from '../useRespondLock'
+import { previewSubmission, type RespondPreviewSeam } from '../respondPreview'
 import {
   SurveyRespondError,
   getSurveyRespondView,
@@ -117,6 +120,14 @@ export interface SurveyRespondFormProps {
    * where the form remains the first place the promise is made. See `respondPromise.ts`.
    */
   entryPromise?: EntryPromise
+  /**
+   * «Ver como quien responde»: the same screens, saving nothing (`respondPreview.ts`). The view
+   * comes from `preview.load`, the shuffle is seeded by `preview.seed`, and the session, the
+   * lock, the answered-on-this-device flag, the autosave, the submit and `onSubmitted` are not
+   * used -- the thank-you is drawn from `previewSubmission`. Pass `publicEntry` with it: a
+   * preview is what a visitor to the survey's link sees.
+   */
+  preview?: RespondPreviewSeam
 }
 
 type LoadState =
@@ -213,6 +224,7 @@ export default function SurveyRespondForm({
   publicEntry = false,
   onSubmitted,
   entryPromise,
+  preview,
 }: SurveyRespondFormProps) {
   const { t, locale, adoptContentLocale } = useTranslation('surveyRespond')
   const { t: tRoot } = useTranslation()
@@ -293,7 +305,9 @@ export default function SurveyRespondForm({
   // The session id is minted before the first read, because it is both the resume
   // key on the way in and the idempotency key on the way out. Deriving it later
   // would mean the GET could not find a response the POST would then duplicate.
-  const sessionId = useMemo(() => ensureSessionId(surveyId), [surveyId])
+  // A preview has no session: its seed stands in for the shuffle, and nothing is stored.
+  const previewSeed = preview?.seed
+  const sessionId = useMemo(() => previewSeed ?? ensureSessionId(surveyId), [surveyId, previewSeed])
 
   // Whether this browser remembers answering this survey, read ONCE on mount rather than
   // on every render. The submission itself writes the flag, and re-reading it would swap
@@ -301,14 +315,14 @@ export default function SurveyRespondForm({
   // finished. Held in state so the shared-device escape below can clear it for THIS
   // render without touching storage -- see the `publicEntry` branch for why that escape
   // exists on the public path and nowhere else.
-  const [answeredHere, setAnsweredHere] = useState(() => hasAnswered(surveyId))
+  const [answeredHere, setAnsweredHere] = useState(() => preview === undefined && hasAnswered(surveyId))
 
   // One open assessment at a time. Two tabs share one session id — `respondSession`
   // stores it per survey in `localStorage` — so both would hydrate and autosave into
   // the same in-progress response and the last writer would win, silently. The lock
   // is browser-local and is not a one-response-per-person guarantee; `respondLock`
   // records precisely what it does and does not promise.
-  const lock = useRespondLock(surveyId)
+  const lock = useRespondLock(preview === undefined ? surveyId : null)
 
   // Answers are hydrated from the server exactly once. The read is re-issued when the
   // respondent switches language — the question TEXT has to come back translated —
@@ -338,7 +352,7 @@ export default function SurveyRespondForm({
     let cancelled = false
     setState({ status: 'loading' })
 
-    getSurveyRespondView(baseUrl, surveyId, { lang: locale, sessionId })
+    ;(preview ? preview.load(locale) : getSurveyRespondView(baseUrl, surveyId, { lang: locale, sessionId }))
       .then((view) => {
         if (cancelled) return
         if (!hydrated.current) {
@@ -370,7 +384,7 @@ export default function SurveyRespondForm({
     return () => {
       cancelled = true
     }
-  }, [baseUrl, surveyId, locale, sessionId, lock])
+  }, [baseUrl, surveyId, locale, sessionId, lock, preview])
 
   const view = state.status === 'ready' ? state.view : null
   const timeLimitMinutes = view?.timeLimitMinutes ?? null
@@ -543,6 +557,7 @@ export default function SurveyRespondForm({
     async (options: { keepalive?: boolean } = {}): Promise<void> => {
       const current = latest.current
       const currentView = current.view
+      if (preview !== undefined) return
       if (!respondAutosaveAllowed(currentView) || currentView === null) return
       if (finished.current) return
       if (busyRef.current !== 'idle') return
@@ -613,11 +628,13 @@ export default function SurveyRespondForm({
         setSaveState((previous) => ({ status: 'error', savedAt: previous.savedAt, message }))
       }
     },
-    [announce, baseUrl, enqueue, publicEntry, recordServerAnswers, sessionId, t],
+    [announce, baseUrl, enqueue, preview, publicEntry, recordServerAnswers, sessionId, t],
   )
 
   async function send(isComplete: boolean): Promise<void> {
     if (!view) return
+    // A preview keeps nothing, so there is no partial save to make.
+    if (preview !== undefined && !isComplete) return
     setSubmitError(null)
     setBusy(isComplete ? 'submitting' : 'saving')
     if (!isComplete) setSaveState(markSaving)
@@ -627,7 +644,7 @@ export default function SurveyRespondForm({
       // and presses Save Progress has asked for the erasure at least as plainly as one
       // who waited for the debounce.
       const cleared = clearedQuestionIds(serverAnswered.current, questions, answers)
-      const submission = await enqueue(() =>
+      const submission = preview !== undefined ? previewSubmission(view, inputs, preview.seed) : await enqueue(() =>
         submitSurveyResponse(baseUrl, view.id, {
           answers: inputs,
           ...(cleared.length > 0 ? { clearedQuestionIds: cleared } : {}),
@@ -685,7 +702,7 @@ export default function SurveyRespondForm({
         finished.current = true
         // Nothing left to resume, and on a shared browser the id must not outlive
         // the response it belongs to.
-        clearSessionId(view.id)
+        if (preview === undefined) clearSessionId(view.id)
         // The resume credential goes; a flag saying "answered" stays. Dropping the id is
         // what stops the next person at a shared browser reading these answers back (the
         // respond GET returns them, free text included), and it is also what makes the
@@ -693,12 +710,12 @@ export default function SurveyRespondForm({
         // nothing anywhere would stop the same person answering again. See
         // `respondReceipt.ts` for why the flag is browser-local and why it is not, and
         // must not be described as, a one-response-per-person guarantee.
-        markAnswered(view.id)
+        if (preview === undefined) markAnswered(view.id)
         setResult(submission)
         // After the state updates, never before: whatever the caller does with this
         // must not be able to stand between the respondent and their confirmation.
         // `alreadySubmitted` is excluded for the reason written on the prop.
-        if (!submission.alreadySubmitted) onSubmitted?.()
+        if (!submission.alreadySubmitted && preview === undefined) onSubmitted?.()
       } else {
         setSaveState(
           inputs.length === 0
@@ -794,7 +811,7 @@ export default function SurveyRespondForm({
    * that cancels itself out from costing a write.
    */
   useEffect(() => {
-    if (!respondAutosaveAllowed(view) || finished.current) return
+    if (preview !== undefined || !respondAutosaveAllowed(view) || finished.current) return
 
     const inputs = toAnswerInputs(questions, answers)
     const cleared = clearedQuestionIds(serverAnswered.current, questions, answers)
@@ -817,7 +834,7 @@ export default function SurveyRespondForm({
     return () => window.clearTimeout(handle)
     // `savesLanded` is a dependency and not a value: see its declaration. Without it an
     // erasure made while a save was in flight is never reconsidered.
-  }, [answers, autosave, questions, savesLanded, view])
+  }, [answers, autosave, preview, questions, savesLanded, view])
 
   /**
    * The save that beats the debounce window, on the three ways out of a page.
@@ -833,7 +850,7 @@ export default function SurveyRespondForm({
    * `keepalive` is what makes the request outlive the document that started it.
    */
   useEffect(() => {
-    if (!respondAutosaveAllowed(view)) return
+    if (preview !== undefined || !respondAutosaveAllowed(view)) return
 
     const flush = () => void autosave({ keepalive: true })
     const onVisibility = () => {
@@ -846,7 +863,7 @@ export default function SurveyRespondForm({
       window.removeEventListener('pagehide', flush)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [autosave, view])
+  }, [autosave, preview, view])
 
   /**
    * The last attempt, on the way out of the component.
@@ -979,7 +996,7 @@ export default function SurveyRespondForm({
           endDate={view?.endDate ?? null}
           locale={locale}
           publicEntry={publicEntry}
-          closingMessage={view?.closingMessage?.trim() ? view.closingMessage : null}
+          source={view}
         />
       </RespondSurface>
     )
@@ -988,7 +1005,7 @@ export default function SurveyRespondForm({
   if (view && view.inProgress?.isComplete) {
     return (
       <RespondSurface>
-        <AlreadyCompleted />
+        <AlreadyCompleted source={view} />
       </RespondSurface>
     )
   }
@@ -1021,6 +1038,7 @@ export default function SurveyRespondForm({
           on their own device.
         */}
         <AnsweredOnThisDevice
+          source={view}
           recordsParticipation={view.asksParticipantIdentity === true}
           onShared={publicEntry ? () => setAnsweredHere(false) : undefined}
         />
@@ -1031,7 +1049,12 @@ export default function SurveyRespondForm({
   if (!view) return null
 
   // The start page in front of this form already made the promise: draw no second block.
-  const promiseAtEntry = promiseMadeAtEntry(entryPromise, view)
+  const promiseAtEntry = promiseMadeAtEntry(entryPromise, view, locale)
+  // The client's words for the registry's screen keys where the survey or its company wrote
+  // some, the catalogue's elsewhere; and how its paragraphs are aligned
+  // (docs/decisions/editable-respondent-content.md).
+  const client = clientText(view, locale, t)
+  const align = textAlignOf(view.content)
 
   /*
    * The demographic prelude: a respondent with NO account answering the company's own
@@ -1096,7 +1119,7 @@ export default function SurveyRespondForm({
             None at all when the start page in front of this screen made it
             (`promiseAtEntry`): it was read there, one tap ago. */}
         {promiseAtEntry ? null : (
-          <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
+          <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} content={view} />
         )}
         {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
         <PrivacyNoticeLink view={view} />
@@ -1110,7 +1133,7 @@ export default function SurveyRespondForm({
         <header data-slot="respond-progress" className={RESPOND_HEAD}>
           <div className="flex min-w-0 flex-1 items-baseline justify-between gap-2">
             <h1 className="m-0 min-w-0 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
-              {t('demographics.eyebrow')}
+              {client.t('demographics.eyebrow')}
             </h1>
           </div>
         </header>
@@ -1119,7 +1142,7 @@ export default function SurveyRespondForm({
             field it would push the field itself down the phone, which is the same
             reasoning the author's description follows on the question pages. */}
         {demographicStep === 0 ? (
-          <p className="m-0 text-respond text-fg-secondary">{t('demographics.intro')}</p>
+          <p className="m-0 text-respond text-fg-secondary">{client.t('demographics.intro')}</p>
         ) : null}
 
         <div className="flex flex-col gap-4">
@@ -1159,7 +1182,7 @@ export default function SurveyRespondForm({
             >
               {/* "Empezar la encuesta" only when the survey really starts next: when the
                   identity screen follows, this button leads to it, not to question 1. */}
-              {isLastField && view.asksParticipantIdentity !== true ? t('demographics.start') : t('next.next')}
+              {isLastField && view.asksParticipantIdentity !== true ? client.t('demographics.start') : t('next.next')}
               <ArrowRight aria-hidden="true" />
             </Button>
           </div>
@@ -1197,7 +1220,7 @@ export default function SurveyRespondForm({
             and the promise about what happens to it is the consent -- unless the start
             page already made it (`promiseAtEntry`). */}
         {promiseAtEntry ? null : (
-          <AnonymityNotice anonymous={view.anonymous} recordsParticipation intro={view.respondentIntro} />
+          <AnonymityNotice anonymous={view.anonymous} recordsParticipation content={view} />
         )}
         {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
         <PrivacyNoticeLink view={view} />
@@ -1210,12 +1233,12 @@ export default function SurveyRespondForm({
 
         <header data-slot="respond-progress" className={RESPOND_HEAD}>
           <h1 className="m-0 min-w-0 flex-1 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
-            {t('identity.eyebrow')}
+            {client.t('identity.eyebrow')}
           </h1>
         </header>
 
         <p data-slot="identity-intro" className="m-0 text-respond text-fg-secondary">
-          {t('identity.intro')}
+          {client.t('identity.intro')}
         </p>
 
         <form
@@ -1227,6 +1250,7 @@ export default function SurveyRespondForm({
           }}
         >
           <RespondParticipantFields
+            content={view}
             name={participantName}
             email={participantEmail}
             problem={identityProblem}
@@ -1251,7 +1275,7 @@ export default function SurveyRespondForm({
               }}
             />
             <Button type="submit" variant="primary" size="lg" className="flex-1" disabled={busy !== 'idle'}>
-              {t('demographics.start')}
+              {client.t('demographics.start')}
               <ArrowRight aria-hidden="true" />
             </Button>
           </div>
@@ -1296,7 +1320,7 @@ export default function SurveyRespondForm({
           (`promiseAtEntry`, PROCOMER 2026-11-18): «Anónima» is shown there only, and
           the first question page opens on the survey's own welcome text. */}
       {promiseAtEntry ? null : (
-        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} intro={view.respondentIntro} />
+        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} content={view} />
       )}
       {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
       <PrivacyNoticeLink view={view} />
@@ -1352,7 +1376,7 @@ export default function SurveyRespondForm({
         // a justified line from opening wide gaps on a phone; it hyphenates in the reader's
         // language because `TranslationProvider` sets `<html lang>` to the locale. The
         // author's paragraphs are kept (`AuthoredParagraphs`).
-        <AuthoredParagraphs slot="survey-intro" text={view.description} className="text-justify hyphens-auto text-respond text-fg-secondary" />
+        <AuthoredParagraphs slot="survey-intro" text={view.description} className={`${respondAlignClass(align)} text-respond text-fg-secondary`} />
       ) : null}
 
       {remainingMs !== null && remainingMs > 0 ? (
@@ -1391,6 +1415,7 @@ export default function SurveyRespondForm({
             disabled={busy !== 'idle'}
             onChange={(next) => updateAnswer(current.id, next)}
             onAnnounce={announce}
+            align={align}
           />
         ) : null}
 
@@ -1503,14 +1528,14 @@ export default function SurveyRespondForm({
         data-slot="respond-footer"
         className="mt-auto flex flex-col gap-1 text-respond-sm text-fg-secondary"
       >
-        <span>{t('next.closesOn', { date: formatDayMonth(view.endDate, locale) })}</span>
+        <span>{client.t('next.closesOn', { date: formatDayMonth(view.endDate, locale) })}</span>
         {remainingMs !== null && remainingMs > 0 ? (
           <span data-slot="respond-time-left" className="tabular-nums">
             {t('timeLimitRemaining', { time: formatDuration(remainingMs) })}
           </span>
         ) : (
           <span>
-            {duration.underAMinute ? t('next.underAMinute') : t('next.aboutMinutes', { minutes: duration.minutes })}
+            {duration.underAMinute ? client.t('next.underAMinute') : client.t('next.aboutMinutes', { minutes: duration.minutes })}
           </span>
         )}
       </footer>
@@ -1722,7 +1747,10 @@ function LoadFailure({
   error: SurveyRespondError | null
   publicEntry: boolean
 }) {
-  const { t } = useTranslation('surveyRespond')
+  // The closed survey's 400 carries the client's own card (`RespondentCardRefusal`); every
+  // other refusal carries nothing and reads the catalogue.
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(error, locale, catalogue)
 
   const body = (): { title: string; description: string; signIn: boolean } => {
     switch (error?.status) {
@@ -1768,8 +1796,9 @@ function LoadFailure({
   )
 }
 
-function AlreadyCompleted() {
-  const { t } = useTranslation('surveyRespond')
+function AlreadyCompleted({ source }: { source: RespondentContentSource | null }) {
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(source, locale, catalogue)
 
   return (
     <Alert variant="default" role="status">
@@ -1804,9 +1833,12 @@ function AlreadyCompleted() {
  * deliberately has no such control.
  */
 function AnsweredOnThisDevice({
+  source,
   onShared,
   recordsParticipation = false,
 }: {
+  /** The respond view: its `answeredOnThisDeviceTitle`. The bodies state what is kept and stay the catalogue's. */
+  source: RespondentContentSource | null
   onShared?: () => void
   /**
    * The survey asked who is answering. The plain body says the platform does not keep who
@@ -1815,7 +1847,8 @@ function AnsweredOnThisDevice({
    */
   recordsParticipation?: boolean
 }) {
-  const { t } = useTranslation('surveyRespond')
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(source, locale, catalogue)
 
   return (
     <Alert variant="default" role="status">
@@ -1907,17 +1940,25 @@ function Submitted({
   endDate,
   locale,
   publicEntry,
-  closingMessage,
+  source,
 }: {
   result: SurveySubmissionResult
   /** `SurveyRespondView.endDate`, or null if the view never loaded. */
   endDate: string | null
   locale: string
   publicEntry: boolean
-  /** `SurveyRespondView.closingMessage`: the survey's own thanks, or null for the default. */
-  closingMessage: string | null
+  /**
+   * The respond view, or null if it never loaded: the survey's or its company's thanks
+   * (`thankYouTitle`, the closing message) and the receipt's and «Qué pasa ahora»'s words.
+   */
+  source: RespondentContentSource | null
 }) {
-  const { t } = useTranslation('surveyRespond')
+  const { t: catalogue } = useTranslation('surveyRespond')
+  const { t } = clientText(source, locale, catalogue)
+  // The storage claims read the catalogue only (named `t` so keysExist still checks the keys).
+  const storage = { t: catalogue }
+  // A client's own thanks is set as a message, not as the default's one-line title.
+  const closingMessage = effectiveText(source, locale, 'thankYouTitle')
 
   const closesOn = endDate === null ? null : formatDate(endDate, locale, 'long')
 
@@ -2034,7 +2075,10 @@ function Submitted({
               unconditionally until that export shipped. */}
           <WhatHappensRow
             icon={<Lock aria-hidden="true" className="size-icon" />}
-            title={result.isAnonymous ? t('happensPooledTitle') : t('happensAttributedTitle')}
+            // From the catalogue ALWAYS, never the client's words: each states how the answers
+            // are kept, which changes by ruling, not by preference -- out of the registry
+            // (RespondentContentRegistry, "What is deliberately NOT here").
+            title={result.isAnonymous ? storage.t('happensPooledTitle') : storage.t('happensAttributedTitle')}
           />
           {/* Dropped rather than guessed at when the payload never loaded — a date
               is the one part of this the page cannot approximate. */}

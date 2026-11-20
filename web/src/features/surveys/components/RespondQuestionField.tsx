@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Frown, Smile } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
+import type { RespondentTextAlign } from '../api/respondentContent'
+import { respondAlignClass } from '../clientText'
 import { Textarea } from '../../../components/ui'
 // Not re-exported from `components/ui`, so it is imported by path — the same shape
 // as every other primitive that is not in the barrel yet.
@@ -38,6 +40,8 @@ export interface RespondQuestionFieldProps {
   onChange: (next: AnswerState) => void
   /** Routed to the page's live region, for changes that move nothing visible into focus. */
   onAnnounce: (message: string) => void
+  /** The survey's `display.textAlign` (`textAlignOf(view.content)`); justified when not given. */
+  align?: RespondentTextAlign
 }
 
 /**
@@ -77,6 +81,7 @@ export default function RespondQuestionField({
   disabled,
   onChange,
   onAnnounce,
+  align = 'justify',
 }: RespondQuestionFieldProps) {
   const { t } = useTranslation('surveyRespond')
   const shape = answerShapeOf(question)
@@ -153,7 +158,7 @@ export default function RespondQuestionField({
           // Justified (PROCOMER, 2026-11-19: «esos textos de las preguntas deberían ir
           // justificados, al igual que el texto de arriba»). See the survey intro in
           // `SurveyRespondForm` for why `hyphens-auto` comes with it.
-          className="mt-2.5 block text-justify hyphens-auto font-display text-respond-display font-semibold tracking-title text-fg-primary"
+          className={`mt-2.5 block ${respondAlignClass(align)} font-display text-respond-display font-semibold tracking-title text-fg-primary`}
         >
           {question.text ?? t('untitledQuestion')}
           {question.required ? <span className="sr-only"> {t('requiredMarker')}</span> : null}

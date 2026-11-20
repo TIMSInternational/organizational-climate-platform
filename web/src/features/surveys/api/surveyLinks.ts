@@ -1,4 +1,5 @@
 import type { SurveyAnonymityGuarantee } from './surveyDistribution'
+import { respondentContentOf, type RespondentContent, type RespondentContentSource } from './respondentContent'
 
 /**
  * The two links this product actually hands to a human, from the respondent's side of
@@ -80,6 +81,11 @@ export interface SurveyInvitationTokenDetail {
   surveyEndDate: string
   expiresAt: string
   anonymity: SurveyAnonymityGuarantee
+  /**
+   * The same map, from the same resolver, as `SurveyRespondView.content`: the client's own
+   * words in `resolvedLocale`, plus the display choices. Null or absent from an older API.
+   */
+  content?: Record<string, string> | null
 }
 
 /**
@@ -127,17 +133,33 @@ export interface SurveyInvitationStateResult {
  * 404 for unknown, revoked and out-of-window, because a share link is held by anyone at
  * all and "this link existed but was revoked" confirms a tenant's survey exists to
  * someone who should learn nothing from a dead URL.
+ *
+ * `content` and `resolvedLocale` are set on the one refusal the landing draws as a card for the
+ * invitee — `GET /survey-invitations/{token}`'s 409 `already_completed` (`alreadyCompletedTitle`,
+ * `alreadyCompletedBody`) — so the card reads the client's words through
+ * `effectiveText(error, locale, key)`. Null on every dead-token answer, which carries nothing.
  */
-export class SurveyLinkError extends Error {
+export class SurveyLinkError extends Error implements RespondentContentSource {
   readonly status: number
 
   readonly reason: string | null
 
-  constructor(status: number, message: string, reason: string | null) {
+  readonly content: RespondentContent | null
+
+  readonly resolvedLocale: string | null
+
+  constructor(
+    status: number,
+    message: string,
+    reason: string | null,
+    card: { content: RespondentContent | null; resolvedLocale: string | null } = { content: null, resolvedLocale: null },
+  ) {
     super(message)
     this.name = 'SurveyLinkError'
     this.status = status
     this.reason = reason
+    this.content = card.content
+    this.resolvedLocale = card.resolvedLocale
   }
 }
 
@@ -156,6 +178,7 @@ async function fail(response: Response): Promise<never> {
     response.status,
     stringField(body, 'message') ?? '',
     stringField(body, 'reason'),
+    respondentContentOf(body),
   )
 }
 

@@ -7,6 +7,7 @@ using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -26,7 +27,7 @@ namespace ClimateProject.Api.Endpoints;
 /// here: the two routes below are answered by employees who administer nothing, and on
 /// an anonymous survey by visitors who are not authenticated at all.
 /// </summary>
-public static class SurveyResponseEndpoints
+public static partial class SurveyResponseEndpoints
 {
     /// <summary>
     /// Shared with Program.cs's rate limiter registration. Its own policy rather than the
@@ -128,6 +129,9 @@ public static class SurveyResponseEndpoints
         /// purpose, so no other line can get it wrong.
         /// </summary>
         public Guid? StoredUserId => IsAnonymous ? null : ActingUserId;
+
+        /// <summary>The two facts about this respondent a respond view depends on (<see cref="RespondReader"/>).</summary>
+        public RespondReader Reader => new(IsAnonymous, HasAccount: ActingUserId is not null);
     }
 
     private sealed record RespondentResolution(Respondent? Respondent, IResult? Error);
@@ -418,14 +422,22 @@ public static class SurveyResponseEndpoints
         }
 
         var respondent = resolution.Respondent!;
+        var locale = SurveyContent.ResolveRequestLocale(lang, survey.Language);
+
+        // ResolvedLocale names the language the payload is ACTUALLY in, not the one asked
+        // for -- a Spanish-only survey opened with ?lang=en comes back in Spanish and says
+        // so. Reporting 'en' there is the silent substitution #195 exists to prevent, and
+        // it shipped once already on this domain.
+        var resolvedLocale = ResolvedLocaleOf(survey, locale);
+
         if (!SurveyStatuses.AcceptsResponses(survey.Status))
         {
-            return NotAccepting();
+            // The «Encuesta cerrada» card is drawn from THIS body, so it carries the client's
+            // words for it. Reached only by a respondent the route has already admitted -- a
+            // signed-in member of the audience: a link visitor and a personal link on a closed
+            // survey get the fail-closed 401 inside ResolveRespondentAsync, which carries nothing.
+            return await NotAcceptingWithContentAsync(db, survey, resolvedLocale, cancellationToken);
         }
-
-        var locale = SurveyContent.ResolveRequestLocale(lang, survey.Language);
-        var fallbackFields = new List<string>();
-        var questions = await LoadQuestionDtosAsync(survey, db, locale, fallbackFields, cancellationToken);
 
         var existing = await FindExistingResponseAsync(
             survey, respondent, sessionId, ResumeSessionIdFor(survey, respondent, configuration), db, cancellationToken);
@@ -446,59 +458,7 @@ public static class SurveyResponseEndpoints
             ? null
             : await ToResponseStateAsync(existing, db, cancellationToken);
 
-        // ResolvedLocale names the language the payload is ACTUALLY in, not the one asked
-        // for -- a Spanish-only survey opened with ?lang=en comes back in Spanish and says
-        // so. Reporting 'en' there is the silent substitution #195 exists to prevent, and
-        // it shipped once already on this domain.
-        var resolvedLocale = LocalizedContent
-            .Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language)
-            .ResolvedLocale ?? locale;
-
-        // The company's «Aviso de privacidad», and nothing else of the company: this view is
-        // served to anonymous link visitors too, so what it may carry is chosen here.
-        var privacyNotice = await db.Companies.AsNoTracking()
-            .Where(c => c.Id == survey.CompanyId)
-            .Select(c => new { c.Branding.PrivacyNoticeEs, c.Branding.PrivacyNoticeEn })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return Results.Ok(new SurveyRespondView(
-            survey.Id,
-            SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields),
-            SurveyContent.Resolve(survey.DescriptionEn, survey.DescriptionEs, locale, survey.Language, "description", fallbackFields),
-            survey.Type,
-            survey.Language,
-            resolvedLocale,
-            fallbackFields,
-            survey.StartDate,
-            survey.EndDate,
-            // What is stored for THIS visitor, not the survey's setting: an unauthenticated
-            // visitor to an identified survey answers anonymously, and the promise on their
-            // screen has to say so.
-            respondent.IsAnonymous,
-            survey.Settings.AllowPartialResponses,
-            survey.Settings.AutoSave,
-            survey.Settings.RandomizeQuestions,
-            survey.Settings.ShowProgress,
-            survey.Settings.TimeLimitMinutes,
-            questions,
-            AsksSelfDeclaredDemographics(survey, respondent)
-                ? ToDemographicDtos(
-                    await LoadSelfDeclaredFieldsAsync(survey.CompanyId, db, cancellationToken),
-                    locale,
-                    survey.Language,
-                    fallbackFields)
-                : [],
-            inProgress,
-            AsksParticipantIdentity(survey, respondent),
-            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
-                survey.Settings.RespondentIntroEn, survey.Settings.RespondentIntroEs,
-                locale, survey.Language, "settings.respondentIntro", fallbackFields)),
-            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
-                survey.Settings.ClosingMessageEn, survey.Settings.ClosingMessageEs,
-                locale, survey.Language, "settings.closingMessage", fallbackFields)),
-            BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEs),
-            BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEn),
-            survey.Settings.EstimatedMinutes));
+        return Results.Ok(await BuildRespondViewAsync(db, survey, lang, respondent.Reader, inProgress, cancellationToken));
     }
 
     // ------------------------------------------------------------------
@@ -529,14 +489,49 @@ public static class SurveyResponseEndpoints
             return resolution.Error;
         }
 
-        var respondent = resolution.Respondent!;
+        return await SubmitAsRespondentAsync(
+            survey,
+            resolution.Respondent!,
+            request,
+            new SubmissionOrigin(
+                httpContext.Connection.RemoteIpAddress?.ToString(),
+                httpContext.Request.Headers.UserAgent.ToString(),
+                OperatorEntry: false),
+            httpContext.RequestServices.GetRequiredService<IConfiguration>(),
+            db,
+            loggerFactory,
+            cancellationToken);
+    }
 
+    /// <summary>
+    /// Where a submission came from: the device's address and agent (stored only on an
+    /// identified response), and whether it is a TIMS operator typing a paper questionnaire
+    /// (<c>PaperResponseEndpoints</c>), whose caller has already checked the survey's status.
+    /// </summary>
+    private sealed record SubmissionOrigin(string? RemoteIp, string? UserAgent, bool OperatorEntry);
+
+    /// <summary>
+    /// The submission write path, after the respondent is known: validation, the response
+    /// row, the answers, the licence seat, demographics, the invitation and the participation
+    /// row. ONE path for a respondent's own submit and for a paper questionnaire an operator
+    /// types for them, so the two cannot store different shapes.
+    /// </summary>
+    private static async Task<IResult> SubmitAsRespondentAsync(
+        Survey survey,
+        Respondent respondent,
+        SubmitSurveyResponseRequest request,
+        SubmissionOrigin origin,
+        IConfiguration configuration,
+        ClimateProjectDbContext db,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
         // The whole response window in one predicate, and deliberately status-only.
         // SurveyStatuses already encodes which states are open; re-deriving it from
         // StartDate/EndDate here would let this endpoint refuse a survey that
         // SurveyQueries.AssignedTo still lists in /surveys/my, which is a worse failure
         // than a late response to a survey nobody has closed yet.
-        if (!SurveyStatuses.AcceptsResponses(survey.Status))
+        if (!origin.OperatorEntry && !SurveyStatuses.AcceptsResponses(survey.Status))
         {
             return NotAccepting();
         }
@@ -571,8 +566,7 @@ public static class SurveyResponseEndpoints
                 statusCode: 400);
         }
 
-        var resumeSessionId = ResumeSessionIdFor(
-            survey, respondent, httpContext.RequestServices.GetRequiredService<IConfiguration>());
+        var resumeSessionId = ResumeSessionIdFor(survey, respondent, configuration);
         var existing = await FindExistingResponseAsync(
             survey, respondent, sessionId, resumeSessionId, db, cancellationToken);
 
@@ -610,7 +604,7 @@ public static class SurveyResponseEndpoints
         // completion -- see CaptureDemographicsAsync -- so an abandoned partial response
         // still leaves no demographic trail, which is the property that comment protects.
         List<ResolvedDemographicValue> selfDeclared = [];
-        if (AsksSelfDeclaredDemographics(survey, respondent))
+        if (AsksSelfDeclaredDemographics(survey, respondent.Reader))
         {
             var offered = await LoadSelfDeclaredFieldsAsync(survey.CompanyId, db, cancellationToken);
 
@@ -647,7 +641,7 @@ public static class SurveyResponseEndpoints
         // only after the response has committed (see RecordParticipationAsync). Required on
         // the COMPLETING post only: a partial save never carries it and writes none of it.
         ValidatedParticipant? participant = null;
-        if (AsksParticipantIdentity(survey, respondent))
+        if (AsksParticipantIdentity(survey, respondent.Reader))
         {
             if (request.IsComplete || request.Participant is not null)
             {
@@ -703,8 +697,8 @@ public static class SurveyResponseEndpoints
                 StartTime = now,
                 // Never recorded for an anonymous response, and there is nothing to fall
                 // back to that would be less identifying. See SurveyResponsePrivacy.
-                IpAddress = respondent.IsAnonymous ? null : Truncate(httpContext.Connection.RemoteIpAddress?.ToString(), IpAddressMaxLength),
-                UserAgent = respondent.IsAnonymous ? null : Truncate(httpContext.Request.Headers.UserAgent.ToString(), UserAgentMaxLength),
+                IpAddress = respondent.IsAnonymous ? null : Truncate(origin.RemoteIp, IpAddressMaxLength),
+                UserAgent = respondent.IsAnonymous ? null : Truncate(origin.UserAgent, UserAgentMaxLength),
                 CreatedAt = now,
                 UpdatedAt = now,
             };
@@ -1214,13 +1208,13 @@ public static class SurveyResponseEndpoints
     /// </list>
     /// </para>
     /// </remarks>
-    private static bool AsksSelfDeclaredDemographics(Survey survey, Respondent respondent)
+    private static bool AsksSelfDeclaredDemographics(Survey survey, RespondReader reader)
         // No `IsAnonymous` arm since 2026-10-12: every survey has a link, nobody who opens one
         // logs in, and a link visitor to an identified survey is served anonymously -- so "has
         // no account" is the whole test, and it is the one that keeps a signed-in respondent
         // from typing their own cohort.
         => survey.Settings.SelfDeclaredDemographics
-            && respondent.ActingUserId is null;
+            && !reader.HasAccount;
 
     /// <summary>
     /// Whether THIS request is asked who is answering. <b>It never is.</b> One predicate read
@@ -1250,9 +1244,9 @@ public static class SurveyResponseEndpoints
     /// discarded rather than removed so the signature still says what the question was.
     /// </para>
     /// </remarks>
-    private static bool AsksParticipantIdentity(Survey survey, Respondent respondent)
+    private static bool AsksParticipantIdentity(Survey survey, RespondReader reader)
     {
-        _ = respondent;
+        _ = reader;
         // One predicate for the whole product, in SurveyResponsePrivacy. The admin's
         // participation view reads the same call, because it was reporting the stored
         // column while this path had stopped asking -- see that method's remarks.
@@ -1706,8 +1700,36 @@ public static class SurveyResponseEndpoints
     private static IResult NotFound()
         => Results.Json(new { message = "Survey not found" }, statusCode: 404);
 
+    private const string NotAcceptingMessage = "This survey is not currently accepting responses";
+
     private static IResult NotAccepting()
-        => Results.Json(new { message = "This survey is not currently accepting responses" }, statusCode: 400);
+        => Results.Json(new { message = NotAcceptingMessage }, statusCode: 400);
+
+    /// <summary>
+    /// The GET's 400 for a closed survey, carrying what the «Encuesta cerrada» card needs to
+    /// read the client's words (<c>closedTitle</c>, <c>closedBody</c>) -- the card is drawn from
+    /// this body, and no view is loaded beside it. Same message as <see cref="NotAccepting"/>.
+    /// </summary>
+    private static async Task<IResult> NotAcceptingWithContentAsync(
+        ClimateProjectDbContext db,
+        Survey survey,
+        string resolvedLocale,
+        CancellationToken cancellationToken)
+        => Results.Json(
+            new RespondentCardRefusal(
+                NotAcceptingMessage,
+                Reason: null,
+                resolvedLocale,
+                await RespondentContentStore.ResolveAsync(
+                    db, survey, resolvedLocale, RespondentContentKinds.RespondentPayload, cancellationToken)),
+            statusCode: 400);
+
+    /// <summary>
+    /// The locale a respond payload is ACTUALLY in: the title's, so a Spanish-only survey read
+    /// with <c>?lang=en</c> says <c>es</c>. The content map is resolved in this locale and no other.
+    /// </summary>
+    private static string ResolvedLocaleOf(Survey survey, string locale)
+        => LocalizedContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language).ResolvedLocale ?? locale;
 
     // 402: the company's licence for this survey's service has no seat for this completion (exhausted
     // or suspended). Distinct from NotAccepting's 400 so the admin surface and the client can tell

@@ -21,6 +21,8 @@ const DIFF_PATHS = [
   'settings.oneSessionOnly', 'settings.respondentIntro', 'settings.closingMessage', 'departmentIds',
   // 2026-11-18: «Editar audiencia» choosing the audience of a questions-only copy.
   'audienceNotChosen',
+  // 2026-11-19: the survey's own respondent texts, written by PUT /surveys/{id}/respondent-content.
+  'respondentContent',
   ...['added', 'removed', 'type', 'text', 'scaleMin', 'scaleMax', 'scaleLabelMin', 'scaleLabelMax', 'required',
     'commentRequired', 'commentPrompt', 'category', 'options', 'keepAtEnd'].map((part) => `questions[2].${part}`),
 ]

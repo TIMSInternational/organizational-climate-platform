@@ -46,6 +46,8 @@ public class ClimateProjectDbContext(DbContextOptions<ClimateProjectDbContext> o
     public DbSet<QuestionResponse> QuestionResponses => Set<QuestionResponse>();
     public DbSet<ResponseDemographic> ResponseDemographics => Set<ResponseDemographic>();
     public DbSet<SurveyParticipation> SurveyParticipations => Set<SurveyParticipation>();
+    public DbSet<RespondentContentOverride> RespondentContentOverrides => Set<RespondentContentOverride>();
+    public DbSet<SurveyAuthorizedPerson> SurveyAuthorizedPeople => Set<SurveyAuthorizedPerson>();
     public DbSet<MicroclimateTemplate> MicroclimateTemplates => Set<MicroclimateTemplate>();
     public DbSet<MicroclimateTemplateQuestion> MicroclimateTemplateQuestions => Set<MicroclimateTemplateQuestion>();
     public DbSet<MicroclimateTemplateQuestionOption> MicroclimateTemplateQuestionOptions => Set<MicroclimateTemplateQuestionOption>();

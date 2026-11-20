@@ -213,6 +213,19 @@ public static class SubjectErasure
         }
         actions.Add(Action("UserInvitation", userInvitations.Count));
 
+        // Redacted, not deleted: removing the last address would empty the client's list, and an
+        // empty list switches the send guard off for everyone else on the survey. The address
+        // becomes a value that matches nobody (unique per row: the list is unique per survey).
+        var authorizedEntries = await SubjectAccessExport
+            .AuthorizedListEntriesFor(db, originalEmail, companyScope)
+            .ToListAsync(cancellationToken);
+        foreach (var entry in authorizedEntries)
+        {
+            entry.Email = NonResolvableToken();
+            entry.DisplayName = null;
+        }
+        actions.Add(Action("SurveyAuthorizedPerson", authorizedEntries.Count));
+
         // Deleted: a redacted row would still say that somebody answered, the one fact it holds.
         actions.Add(await DeleteAsync("SurveyParticipation",
             SubjectAccessExport.ParticipationsFor(db, originalEmail, companyScope), cancellationToken));

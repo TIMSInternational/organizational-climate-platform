@@ -74,6 +74,14 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   personal_link_not_sent: 'errors.api.codes.personal_link_not_sent',
   personal_link_recipient_inactive: 'errors.api.codes.personal_link_recipient_inactive',
   personal_link_not_in_audience: 'errors.api.codes.personal_link_not_in_audience',
+  // «Lista autorizada del cliente» (2026-11-19): a send naming somebody not on it -- the body's
+  // `notAuthorized` names them (`notAuthorizedOf`) -- and the list's own routes.
+  survey_recipient_not_authorized: 'errors.api.codes.survey_recipient_not_authorized',
+  survey_authorized_list_archived: 'errors.api.codes.survey_authorized_list_archived',
+  survey_authorized_list_locked: 'errors.api.codes.survey_authorized_list_locked',
+  survey_authorized_email_invalid: 'errors.api.codes.survey_authorized_email_invalid',
+  survey_authorized_email_duplicate: 'errors.api.codes.survey_authorized_email_duplicate',
+  survey_authorized_list_invalid: 'errors.api.codes.survey_authorized_list_invalid',
   not_mass_invite: 'errors.api.codes.not_mass_invite',
   inactive: 'errors.api.codes.inactive',
   batch_too_large: 'errors.api.codes.batch_too_large',
@@ -115,6 +123,7 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   microclimate_invite_window_closed: 'errors.api.codes.microclimate_invite_window_closed',
   // Reports and the question bank
   report_schedule_start_past: 'errors.api.codes.report_schedule_start_past',
+  report_notes_too_long: 'errors.api.codes.report_notes_too_long',
   question_bank_item_in_use: 'errors.api.codes.question_bank_item_in_use',
   question_bank_item_has_variations: 'errors.api.codes.question_bank_item_has_variations',
   // TIMS operations ruled 2026-11-08: reopen, exclude a response, delete a company
@@ -127,6 +136,27 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   company_has_responses: 'errors.api.codes.company_has_responses',
   company_holds_super_admins: 'errors.api.codes.company_holds_super_admins',
   company_people_referenced: 'errors.api.codes.company_people_referenced',
+  // Paper questionnaires and wording corrections, ruled 2026-11-19 (PaperResponseEndpoints).
+  paper_response_already_completed: 'errors.api.codes.paper_response_already_completed',
+  paper_response_not_in_population: 'errors.api.codes.paper_response_not_in_population',
+  paper_response_survey_archived: 'errors.api.codes.paper_response_survey_archived',
+  paper_response_not_collecting: 'errors.api.codes.paper_response_not_collecting',
+  paper_response_super_admin_only: 'errors.api.codes.paper_response_super_admin_only',
+  survey_wording_structure_changed: 'errors.api.codes.survey_wording_structure_changed',
+  survey_wording_questions_mismatch: 'errors.api.codes.survey_wording_questions_mismatch',
+  survey_wording_super_admin_only: 'errors.api.codes.survey_wording_super_admin_only',
+  // What a client reads, ruled 2026-11-19: the respondent-content routes. The body also names
+  // `key`, `locale`, `placeholder`, `maxLength` and `allowed`, for a screen that points at the field.
+  respondent_content_archived: 'errors.api.codes.respondent_content_archived',
+  respondent_content_locked: 'errors.api.codes.respondent_content_locked',
+  respond_preview_archived: 'errors.api.codes.respond_preview_archived',
+  respondent_content_unknown_locale: 'errors.api.codes.respondent_content_unknown_locale',
+  respondent_content_locale_mismatch: 'errors.api.codes.respondent_content_locale_mismatch',
+  respondent_content_locale_not_offered: 'errors.api.codes.respondent_content_locale_not_offered',
+  respondent_content_unknown_key: 'errors.api.codes.respondent_content_unknown_key',
+  respondent_content_too_long: 'errors.api.codes.respondent_content_too_long',
+  respondent_content_unknown_placeholder: 'errors.api.codes.respondent_content_unknown_placeholder',
+  respondent_content_value_not_allowed: 'errors.api.codes.respondent_content_value_not_allowed',
 }
 
 /** Every `code` with a sentence here — for the test that sweeps the API's list against it. */

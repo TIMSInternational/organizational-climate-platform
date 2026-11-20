@@ -192,14 +192,20 @@ export interface CredentialsResendBatchResult {
   outcomes: CredentialsResendOutcome[]
 }
 
+/**
+ * @param surveyId the survey whose roster the send comes from, when it does: the server then
+ * enforces that survey's «Lista autorizada del cliente» before minting anything, and refuses the
+ * whole chunk with 409 `survey_recipient_not_authorized`, naming whoever is not on it.
+ */
 export async function resendCredentialsBatch(
   baseUrl: string,
   userIds: readonly string[],
+  surveyId?: string,
 ): Promise<CredentialsResendBatchResult> {
   const response = await authFetch(`${baseUrl}/admin/users/credentials`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userIds }),
+    body: JSON.stringify(surveyId === undefined ? { userIds } : { userIds, surveyId }),
   })
   return response.json() as Promise<CredentialsResendBatchResult>
 }

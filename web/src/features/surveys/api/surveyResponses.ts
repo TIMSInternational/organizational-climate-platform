@@ -1,4 +1,5 @@
 import { getToken } from '../../../auth/token'
+import { respondentContentOf, type RespondentContent, type RespondentContentSource } from './respondentContent'
 
 /**
  * The respondent surface of the survey API (#118): fetch a survey to answer, and
@@ -134,9 +135,12 @@ export interface SurveyRespondView {
    */
   asksParticipantIdentity?: boolean
   /**
-   * The survey's own paragraph for the anonymity box, set per survey ("Textos para quien
-   * responde"). Applied to an anonymous response only. Null or absent -- an API that predates it,
-   * or a survey nobody configured -- means the product's default paragraph.
+   * **Superseded by `content.anonymousBody`, and always the same value** (the server fills both
+   * from one chain: survey → company, in `resolvedLocale` only). Kept for the screens that read
+   * it today. New code reads `effectiveText(view, locale, 'anonymousBody') ?? t('anonymousBody')`
+   * and must NOT chain `?? view.respondentIntro` after it: the field holds nothing `content` does
+   * not, and it is not guarded by the reader's language the way `effectiveText` is. Applied to an
+   * anonymous response only. Null or absent means the product's default paragraph.
    */
   respondentIntro?: string | null
   /**
@@ -146,7 +150,11 @@ export interface SurveyRespondView {
    */
   privacyNoticeEs?: string | null
   privacyNoticeEn?: string | null
-  /** The survey's own thank-you after a completed submit. Null or absent: the default thanks. */
+  /**
+   * **Superseded by `content.thankYouTitle`, and always the same value**, by the same rule as
+   * `respondentIntro`: read `effectiveText(view, locale, 'thankYouTitle')`, never chain this after
+   * it. Null or absent: the default thanks.
+   */
   closingMessage?: string | null
   /**
    * The duration the survey states, in minutes (`settings.estimatedMinutes`). Null or absent --
@@ -154,6 +162,15 @@ export interface SurveyRespondView {
    * questions. Read through `respondDuration`, never directly.
    */
   estimatedMinutes?: number | null
+  /**
+   * The client's own words for this survey's screens, in `resolvedLocale`: `key → text`, the
+   * EFFECTIVE overrides only (survey → company), plus the display choices
+   * (`display.textAlign`). A key that is absent is the catalogue default, so read it through
+   * `effectiveText(view, locale, key) ?? t(key)` (`./respondentContent`), which also gives the
+   * default when the reader's language is not `resolvedLocale`. Null or absent from an API that
+   * predates it.
+   */
+  content?: Record<string, string> | null
 }
 
 /** Who is answering, as typed. Sent on the completing post only, never on a partial save. */
@@ -254,14 +271,29 @@ export interface SurveySubmissionResult {
  * (403) — instead of rendering one generic failure for all of them. Matching on the
  * server's English message text would be the alternative, and it would break the
  * moment that message was translated.
+ *
+ * `content` and `resolvedLocale` are set on the one refusal a screen draws as a card with no
+ * view loaded — the 400 for a closed survey («Encuesta cerrada»: `closedTitle`, `closedBody`)
+ * — so the card reads the client's words through `effectiveText(error, locale, key)`. Null on
+ * every other status, and always on the 401: that answer is fail-closed and carries nothing.
  */
-export class SurveyRespondError extends Error {
+export class SurveyRespondError extends Error implements RespondentContentSource {
   readonly status: number
 
-  constructor(status: number, message: string) {
+  readonly content: RespondentContent | null
+
+  readonly resolvedLocale: string | null
+
+  constructor(
+    status: number,
+    message: string,
+    card: { content: RespondentContent | null; resolvedLocale: string | null } = { content: null, resolvedLocale: null },
+  ) {
     super(message)
     this.name = 'SurveyRespondError'
     this.status = status
+    this.content = card.content
+    this.resolvedLocale = card.resolvedLocale
   }
 }
 
@@ -368,7 +400,7 @@ async function fail(response: Response): Promise<never> {
     body && typeof body === 'object' && typeof (body as { message?: unknown }).message === 'string'
       ? (body as { message: string }).message
       : ''
-  throw new SurveyRespondError(response.status, message)
+  throw new SurveyRespondError(response.status, message, respondentContentOf(body))
 }
 
 /**

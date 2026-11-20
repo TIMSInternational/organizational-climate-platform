@@ -43,6 +43,9 @@ import { formatParticipationDay } from './participationDay'
 import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { ResponseExclusionDialog } from './ResponseExclusionDialog'
+import { OutsideAuthorizedListMark } from './AuthorizedListPanel'
+import { notAuthorizedOf, useOutsideAuthorizedList, useOutsideAuthorizedListTest } from '../../api/authorizedList'
+import { PaperResponseAction } from './PaperResponseAction'
 
 type Filter = 'all' | SurveyParticipantStatus
 
@@ -89,7 +92,7 @@ type RevokeState =
   | { phase: 'done'; name: string; outcome: SurveyCredentialRevokeOutcome | { kind: 'error' } }
 
 /** What sending ONE person their first code did. */
-type SendCodeOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'error'
+type SendCodeOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'not_authorized' | 'error'
 type SendCodeState = { phase: 'idle' } | { phase: 'done'; name: string; email: string; outcome: SendCodeOutcome }
 
 /**
@@ -99,7 +102,7 @@ type SendCodeState = { phase: 'idle' } | { phase: 'done'; name: string; email: s
  * that went through.
  */
 type LinkActionKind = 'send' | 'resend' | 'revoke'
-type LinkOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'not_in_audience' | 'inactive' | 'done' | 'error'
+type LinkOutcome = 'sent' | 'not_sent' | 'already_had' | 'not_open' | 'not_in_audience' | 'not_authorized' | 'inactive' | 'done' | 'error'
 type LinkActionState =
   | { phase: 'idle' }
   | { phase: 'done'; action: LinkActionKind; name: string; email: string; outcome: LinkOutcome }
@@ -112,6 +115,7 @@ const LINK_OUTCOME_KEY: Record<LinkActionKind, Partial<Record<LinkOutcome, strin
     already_had: 'sendLinkAlreadyHad',
     not_open: 'sendLinkNotOpen',
     not_in_audience: 'sendLinkNotInAudience',
+    not_authorized: 'notAuthorized',
     inactive: 'resendLinkInactive',
     error: 'sendLinkError',
   },
@@ -120,6 +124,7 @@ const LINK_OUTCOME_KEY: Record<LinkActionKind, Partial<Record<LinkOutcome, strin
     not_sent: 'resendLinkNotSent',
     not_open: 'sendLinkNotOpen',
     not_in_audience: 'sendLinkNotInAudience',
+    not_authorized: 'notAuthorized',
     inactive: 'resendLinkInactive',
     error: 'sendLinkError',
   },
@@ -142,6 +147,7 @@ function linkRefusal(error: unknown): LinkOutcome {
   if (!(error instanceof ApiError)) return 'error'
   if (error.code === 'survey_not_distributable' || error.code === 'survey_window_closed') return 'not_open'
   if (error.code === 'personal_link_not_in_audience') return 'not_in_audience'
+  if (error.code === 'survey_recipient_not_authorized') return 'not_authorized'
   if (error.code === 'personal_link_recipient_inactive') return 'inactive'
   if (error.code === 'personal_link_not_sent') return 'not_sent'
   return error.status === 409 && error.code === undefined ? 'not_open' : 'error'
@@ -167,6 +173,7 @@ const REMIND_REFUSAL_KEY: Record<string, string> = {
   not_in_audience: 'reissueRefusedNotInAudience',
   no_credential: 'reissueRefusedNoCode',
   already_completed: 'remindRefusedCompleted',
+  survey_recipient_not_authorized: 'notAuthorized',
 }
 
 const REVOKE_REFUSAL_KEY: Record<string, string> = {
@@ -185,6 +192,7 @@ const REFUSAL_KEY: Record<string, string> = {
   no_credential: 'reissueRefusedNoCode',
   already_signed_in: 'reissueRefusedSignedIn',
   super_admin_only: 'reissueRefusedSuperAdminOnly',
+  survey_recipient_not_authorized: 'notAuthorized',
 }
 
 /** What the mail service reported, as the roster says it. */
@@ -207,6 +215,7 @@ const SEND_CODE_OUTCOME_KEY: Record<SendCodeOutcome, string> = {
   not_sent: 'sendCodeNotSent',
   already_had: 'sendCodeAlreadyHad',
   not_open: 'sendCodeNotOpen',
+  not_authorized: 'notAuthorized',
   error: 'sendCodeError',
 }
 
@@ -215,6 +224,8 @@ const OUTCOME_KEY: Record<string, string> = {
   inactive: 'outcomeInactive',
   not_found: 'outcomeNotFound',
   send_failed: 'outcomeSendFailed',
+  not_authorized: 'outcomeNotAuthorized',
+  not_authorized_batch: 'outcomeNotAuthorizedBatch',
 }
 
 /**
@@ -290,6 +301,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   const superAdmin = readViewerClaims().role === 'super_admin'
 
   const roster = state.status === 'ready' ? state.view.roster : NO_ROWS
+  const outsideList = useOutsideAuthorizedListTest()
 
   /**
    * One key per person per survey. Such a person has no account username, so the account
@@ -357,7 +369,12 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
 
   // Only the people a resend can actually reach: an account that signs in by email has no
   // generated details, so offering to send it some would be an action that cannot succeed.
-  const sendable = perSurvey || personalLink ? [] : visible.filter((row) => row.username !== null)
+  //
+  // Nor anybody off «Lista autorizada del cliente» (ruling 3, 2026-11-19): the server refuses a
+  // batch that names one, so «seleccionar todo» must not pick them up.
+  const sendable = perSurvey || personalLink
+    ? []
+    : visible.filter((row) => row.username !== null && !outsideList(row.email))
   const chosen = [...selected].filter((id) => roster.some((row) => row.userId === id))
   const allShownChosen = sendable.length > 0 && sendable.every((row) => selected.has(row.userId))
 
@@ -408,9 +425,27 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
     let done = 0
     for (const chunk of chunks) {
       try {
-        const result = await resendCredentialsBatch(baseUrl, chunk)
+        const result = await resendCredentialsBatch(baseUrl, chunk, state.status === 'ready' ? state.view.surveyId : undefined)
         outcomes.push(...result.outcomes)
-      } catch {
+      } catch (error) {
+        // «Lista autorizada del cliente»: the server refused this chunk whole and minted nothing.
+        // Its outsiders are named as such; everybody else in it was simply not sent.
+        const outsiders = notAuthorizedOf(error)
+        if (outsiders !== null) {
+          const named = new Set(outsiders.map((person) => person.userId))
+          outcomes.push(
+            ...chunk.map((userId) => ({
+              userId,
+              email: outsiders.find((person) => person.userId === userId)?.email ?? null,
+              delivered: false,
+              failureReason: null,
+              code: named.has(userId) ? 'not_authorized' : 'not_authorized_batch',
+            })),
+          )
+          done += chunk.length
+          setSend({ phase: 'sending', done, total: ids.length })
+          continue
+        }
         // A chunk that never reached the server is still every one of its people failing, and
         // saying so beats a summary that quietly counts fewer than were asked for.
         outcomes.push(
@@ -523,7 +558,9 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
       outcome =
         error instanceof ApiError && (error.code === 'survey_not_distributable' || error.code === 'survey_window_closed')
           ? 'not_open'
-          : 'error'
+          : error instanceof ApiError && error.code === 'survey_recipient_not_authorized'
+            ? 'not_authorized'
+            : 'error'
     }
     if (outcome === 'sent') {
       const issuedOn = today()
@@ -860,7 +897,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                   : reissue.outcome.kind === 'send_failed'
                     ? copy('reissueSendFailed', { name: reissue.name })
                     : reissue.outcome.kind === 'refused'
-                      ? copy(REFUSAL_KEY[reissue.outcome.code] ?? 'reissueError')
+                      ? copy(REFUSAL_KEY[reissue.outcome.code] ?? 'reissueError', { name: reissue.name, email: reissue.email })
                       : copy('reissueError')}
               </p>
             ) : null}
@@ -877,7 +914,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                   : remind.outcome.kind === 'send_failed'
                     ? copy('remindFailed')
                     : remind.outcome.kind === 'refused'
-                      ? copy(REMIND_REFUSAL_KEY[remind.outcome.code] ?? 'reissueError')
+                      ? copy(REMIND_REFUSAL_KEY[remind.outcome.code] ?? 'reissueError', { name: remind.name, email: remind.email })
                       : copy('reissueError')}
               </p>
             ) : null}
@@ -963,6 +1000,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
                         onReissue={() => setReissueTarget(row)}
                         onSendCode={() => setSendCodeTarget(row)}
                         superAdmin={superAdmin}
+                        surveyId={state.view.surveyId}
                         onHandover={() => setHandoverTarget(row)}
                         onRemind={() => setRemindTarget(row)}
                         onRevoke={() => setRevokeTarget(row)}
@@ -1162,6 +1200,7 @@ function RosterRows({
   onRemind,
   onRevoke,
   superAdmin,
+  surveyId = '',
   onHandover,
   excluded,
   onExclusion,
@@ -1201,6 +1240,8 @@ function RosterRows({
   onRevoke: () => void
   /** A super admin may hand a new password over in person; nobody else is offered it. */
   superAdmin: boolean
+  /** The survey this row is on, for «Registrar respuesta en papel». */
+  surveyId?: string
   onHandover: () => void
   /** This person's response is out of the results. Only ever true for a super admin. */
   excluded: boolean
@@ -1213,6 +1254,8 @@ function RosterRows({
   onToggle: () => void
   onToggleDetails: () => void
 }) {
+  // Off «Lista autorizada del cliente»: not selectable for a resend, which the server would refuse.
+  const outsideList = useOutsideAuthorizedList(row.email)
   const label = (demographic: { labelEs: string | null; labelEn: string | null; field: string }) =>
     (locale === 'es' ? demographic.labelEs : demographic.labelEn) ?? demographic.field
 
@@ -1263,7 +1306,7 @@ function RosterRows({
               checked={selected}
               // An account that signs in by email has no generated details, so there is nothing
               // a resend could send it.
-              disabled={row.username === null || !accountResend}
+              disabled={row.username === null || !accountResend || outsideList}
               aria-label={copy('selectRow', { name: row.name })}
               onCheckedChange={onToggle}
             />
@@ -1273,6 +1316,7 @@ function RosterRows({
           <span className="flex min-w-0 flex-col">
             <span className="truncate font-medium">{row.name}</span>
             <span className="truncate text-sm text-fg-secondary">{row.email}</span>
+            <OutsideAuthorizedListMark email={row.email} />
           </span>
         </TableCell>
         <TableCell className="px-3 py-2 text-fg-secondary">{roleLabel}</TableCell>
@@ -1494,6 +1538,7 @@ function RosterRows({
                     {copy(excluded ? 'exclusion.restore' : 'exclusion.exclude')}
                   </Button>
                 ) : null}
+                {superAdmin && surveyId !== '' && row.status !== 'completed' ? <PaperResponseAction surveyId={surveyId} row={row} /> : null}
               </span>
             </TableCell>
             <TableCell className="whitespace-nowrap px-3 py-2 text-fg-secondary">

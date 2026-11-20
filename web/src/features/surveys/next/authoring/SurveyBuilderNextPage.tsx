@@ -73,6 +73,7 @@ import {
 } from '../../wizardValues'
 import { Eyebrow } from '../../../shared-next/parts'
 import { PreviewQuestion, PreviewSection } from './QuestionPreview'
+import { BuilderTextsAndEmail, type OpenAfterCreate } from './BuilderTextsAndEmail'
 import { QuestionBankPicker } from './QuestionBankPicker'
 import { PasteQuestionsDialog } from './PasteQuestionsDialog'
 import { Card, PanelHeading } from './parts'
@@ -178,6 +179,15 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
     }
     if (last) void m.submit()
     else setStepIndex(stepIndex + 1)
+  }
+
+  /** «Textos y correo»: the same checks as «Crear borrador», then the survey page with that editor open. */
+  function createThenOpen(open: OpenAfterCreate) {
+    if (errors.review.length > 0) {
+      setAttempted((current) => new Set(current).add('review'))
+      return
+    }
+    void m.submit(open)
   }
 
   function move(from: number, to: number) {
@@ -524,7 +534,12 @@ function SurveyBuilder({ companyId }: { companyId: string }) {
               />
             </>
           ) : (
-            <StepForm step={step} m={m} both={both} copy={copy} />
+            <>
+              <StepForm step={step} m={m} both={both} copy={copy} />
+              {step === 'review' && (
+                <BuilderTextsAndEmail companyId={companyId} locales={both ? ['es', 'en'] : [shown]} disabled={m.submitting || m.unsaved !== null} onCreateAndOpen={createThenOpen} />
+              )}
+            </>
           )}
           {attempted.has(step) && errors[step].length > 0 && (
             <ul role="alert" className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-accent-red-ink">

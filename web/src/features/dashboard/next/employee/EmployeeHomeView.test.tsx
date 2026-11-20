@@ -266,6 +266,38 @@ describe('EmployeeHomeView', () => {
     expect(within(notice).getByText(es('surveyRespond.anonymousBody'))).toBeTruthy()
   })
 
+  /**
+   * The client's paragraph (ruled 2026-11-19) reaches Home as it reaches the respond page: the
+   * promise beside the survey is the one the survey makes, word for word — and only in the
+   * language it was written in, so an English reader of the same payload gets the default.
+   */
+  it('makes the promise in the client’s own words when the survey or its company set them', async () => {
+    const paragraph = 'Sus respuestas llegan a TIMS sin su nombre, y la empresa solo ve grupos.'
+    serves({ dashboard: home({ pendingSurveys: [survey({ resolvedLocale: 'es', content: { anonymousBody: paragraph } })] }) })
+    renderHome()
+
+    const notice = await waitFor(() => {
+      const node = document.querySelector<HTMLElement>('[data-slot="anonymity-notice"]')
+      if (!node) throw new Error('no notice yet')
+      return node
+    })
+    expect(within(notice).getByText(paragraph)).toBeTruthy()
+    expect(within(notice).queryByText(es('surveyRespond.anonymousBody'))).toBeNull()
+  })
+
+  it('keeps the default promise when the client’s words are in another language than the reader’s', async () => {
+    serves({ dashboard: home({ pendingSurveys: [survey({ resolvedLocale: 'en', content: { anonymousBody: 'Written in English.' } })] }) })
+    renderHome()
+
+    const notice = await waitFor(() => {
+      const node = document.querySelector<HTMLElement>('[data-slot="anonymity-notice"]')
+      if (!node) throw new Error('no notice yet')
+      return node
+    })
+    expect(within(notice).getByText(es('surveyRespond.anonymousBody'))).toBeTruthy()
+    expect(within(notice).queryByText('Written in English.')).toBeNull()
+  })
+
   it('makes no promise at all beside a survey that records who answered', async () => {
     serves({ dashboard: home({ pendingSurveys: [survey({ anonymous: false })] }) })
     renderHome()

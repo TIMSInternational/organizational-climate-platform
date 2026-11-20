@@ -1,4 +1,5 @@
 import { authFetch } from '../../../api/authFetch'
+import type { ReportNotes } from './reportNotes'
 
 /**
  * Typed client for `/admin/reports` (ReportEndpoints.cs).
@@ -66,6 +67,8 @@ export interface Report {
    * sent since #210.
    */
   fallbackFields?: string[]
+  /** «Notas de TIMS», both languages as stored; `null` for a note that is not set. `notesFromWire` reads it. */
+  notes?: Partial<Record<keyof ReportNotes, string | null>>
 }
 
 export interface CreateReportInput {
@@ -81,6 +84,8 @@ export interface CreateReportInput {
    * empty list is refused by the server, so it is never sent.
    */
   filters?: { surveyIds: string[] }
+  /** «Notas de TIMS». Omitted when none is written. */
+  notes?: ReportNotes
 }
 
 /**

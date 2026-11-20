@@ -749,6 +749,12 @@ app.MapTrackingInternalEndpoints();
 app.MapSurveyEndpoints();
 app.MapSurveyResponseEndpoints();
 app.MapSurveyDistributionEndpoints();
+app.MapRespondentContentEndpoints();
+// Mapped empty by the respondent-content foundation (2026-11-19): each lane fills its own class
+// and none of them edits this list.
+app.MapRespondPreviewEndpoints();
+app.MapSurveyAuthorizedPeopleEndpoints();
+app.MapPaperResponseEndpoints();
 app.MapSurveyParticipationEndpoints();
 app.MapSurveyCredentialEndpoints();
 app.MapSurveyResponseExclusionEndpoints();

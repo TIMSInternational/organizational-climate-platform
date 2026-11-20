@@ -34,6 +34,12 @@ export interface HomeSurvey {
    * `DashboardPendingSurvey.anonymous`: silence is the only safe reading of anything else.
    */
   anonymous: boolean
+  /**
+   * The client's own words for the survey's respondent screens and the locale they are in, as
+   * the payload sent them — a `RespondentContentSource`, read through `effectiveText`.
+   */
+  content: Record<string, string> | null
+  resolvedLocale: string | null
 }
 
 /** "What came of the last one", or `null` when the company has never closed a survey. */

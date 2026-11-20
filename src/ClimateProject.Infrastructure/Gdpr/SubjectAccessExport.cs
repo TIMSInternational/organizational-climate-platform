@@ -177,6 +177,10 @@ public static class SubjectAccessExport
             await FullAsync(db, "SurveyParticipation", "Email",
                 ParticipationsFor(db, email, companyScope), cancellationToken),
 
+            // Which client authorized lists name the subject's address (stored lower-cased).
+            await FullAsync(db, "SurveyAuthorizedPerson", "Email",
+                AuthorizedListEntriesFor(db, email, companyScope), cancellationToken),
+
             // Which surveys were aimed at the subject by name rather than at their department
             // (#587). Membership only: the row is (SurveyId, UserId) and carries no answer.
             // Not company-scoped, like the other sections keyed on the user id rather than on
@@ -240,6 +244,9 @@ public static class SubjectAccessExport
             await ReferencesAsync("DemographicSnapshotChange", "ChangedBy",
                 db.DemographicSnapshotChanges.Where(c => c.ChangedBy == id)
                     .Select(c => new Reference(c.Id, c.Field)), cancellationToken),
+            await ReferencesAsync("RespondentContentOverride", "UpdatedBy",
+                db.RespondentContentOverrides.Where(o => o.UpdatedBy == id)
+                    .Select(o => new Reference(o.Id, o.Key + " (" + o.Locale + ")")), cancellationToken),
             await ReferencesAsync("Department", "ManagerId",
                 db.Departments.Where(d => d.ManagerId == id).Select(d => new Reference(d.Id, d.Name)), cancellationToken),
 
@@ -304,6 +311,23 @@ public static class SubjectAccessExport
         var lowered = email.ToLowerInvariant();
         var query = db.SurveyParticipations.Where(p => p.Email == lowered);
         return companyScope is { } company ? query.Where(p => p.CompanyId == company) : query;
+    }
+
+    /// <summary>
+    /// Entries on a survey's client authorized list naming the subject's address. Lower-cased on
+    /// both sides (<c>SurveyAuthorizedPerson.NormaliseEmail</c>); the row has no company of its own,
+    /// so the tenant is the survey's.
+    /// </summary>
+    internal static IQueryable<SurveyAuthorizedPerson> AuthorizedListEntriesFor(
+        ClimateProjectDbContext db,
+        string email,
+        Guid? companyScope)
+    {
+        var lowered = SurveyAuthorizedPerson.NormaliseEmail(email);
+        var query = db.SurveyAuthorizedPeople.Where(p => p.Email == lowered);
+        return companyScope is { } company
+            ? query.Where(p => db.Surveys.Any(s => s.Id == p.SurveyId && s.CompanyId == company))
+            : query;
     }
 
     /// <summary>

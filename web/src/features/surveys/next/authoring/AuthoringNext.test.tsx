@@ -1550,6 +1550,11 @@ describe('Distribución, personal_link', () => {
     expect(setCredentialMode).toHaveBeenCalledWith('personal_link')
   })
 
+  it('offers the mail words on a per_survey survey too: its username-and-password mail and its reminder', () => {
+    distribution({ ...invitationList(1), credentialMode: 'per_survey' })
+    expect(within(screen.getByTestId('access-mode')).getByTestId('invitation-email').textContent).toContain(es.surveys.emailTexts.openPerSurvey)
+  })
+
   it('turns personal_link off to the mode the model names, never a hard-coded shared', async () => {
     const setCredentialMode = vi.fn()
     distribution(personal(2), 'company_admin', true, { linkOffMode: 'per_survey' }, { ...noop, setCredentialMode })

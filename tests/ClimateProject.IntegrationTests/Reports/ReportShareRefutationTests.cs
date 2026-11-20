@@ -1047,7 +1047,7 @@ public class ReportShareRefutationTests : IAsyncLifetime
         var root = envelope.RootElement;
         Assert.Equal(JsonValueKind.Object, root.ValueKind);
         Assert.Equal(
-            new[] { "description", "generatedAt", "reportOutput", "resultBands", "title", "type" },
+            new[] { "description", "generatedAt", "notes", "reportOutput", "resultBands", "title", "type" },
             root.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray());
 
         // The result bands, exactly: two boundaries the shipped client checks as numbers and

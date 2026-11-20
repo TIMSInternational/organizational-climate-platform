@@ -14,6 +14,7 @@ import { dimensionLabel } from '../../dimensionLabel'
 import { needsScaleLabels, statusLabel, SUGGESTED_DIMENSION_KEYS, SURVEY_QUESTION_TYPES, typeLabel } from '../../surveyVocabulary'
 import { Eyebrow, IconBox, Segmented } from '../../../shared-next/parts'
 import { Panel, PanelHeading } from './parts'
+import { WordingCorrectionAction } from './WordingCorrectionAction'
 import {
   applyAnswerLabels,
   authoredLocales,
@@ -301,6 +302,7 @@ export default function SurveyQuestionsEditorPage() {
                 </>
               )}
             </p>
+            {operator && id && detail.responseCount > 0 && authoring.status !== 'archived' ? <WordingCorrectionAction surveyId={id} authoring={authoring} onSaved={() => void reload()} /> : null}
           </div>
         </Panel>
       )}

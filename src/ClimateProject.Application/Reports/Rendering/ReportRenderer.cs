@@ -142,6 +142,13 @@ public static class ReportRenderer
 
         document.Paragraph(copy.PrivacyNotice(SurveyResultsPrivacy.MinimumRespondents));
 
+        // «Notas de TIMS»: the introduction is the page after the cover, and the body starts on
+        // the page after it. Without one the layout is exactly what it was before notes existed.
+        if (WriteNote(document, copy.NotesIntroduction, context.Notes?.Introduction))
+        {
+            document.StartPage();
+        }
+
         if (context.Document is null)
         {
             // Not an exception and not an empty page. A report row whose stored document
@@ -149,6 +156,7 @@ public static class ReportRenderer
             // produce a file that says which report it is and why it has no content.
             document.Heading(copy.Scope);
             document.Paragraph(UnreadableDocumentNote(context, copy));
+            WriteClosingNotes(document, copy, context.Notes);
             return document;
         }
 
@@ -192,8 +200,41 @@ public static class ReportRenderer
         WriteInsights(document, copy, stored.AiInsights);
         WriteBenchmarks(document, copy, stored.Benchmarks);
         WriteComparison(document, copy, stored.Comparison, context.ChromeLocale, context.Scale);
+        WriteClosingNotes(document, copy, context.Notes);
 
         return document;
+    }
+
+    /// <summary>Conclusions, then recommendations, each on a page of its own, only when set.</summary>
+    private static void WriteClosingNotes(PdfDocument document, ReportRenderCopy copy, ReportNotesText? notes)
+    {
+        WriteNote(document, copy.NotesConclusions, notes?.Conclusions);
+        WriteNote(document, copy.NotesRecommendations, notes?.Recommendations);
+    }
+
+    /// <summary>
+    /// One note on a page of its own, under its heading, a paragraph per blank-line-separated
+    /// block (<see cref="ReportNotes.Paragraphs"/>), wrapped by the writer and continued onto
+    /// further pages when long. False, and no page, when there is nothing to print. The text is
+    /// TIMS's own and is printed as written -- it carries no figure.
+    /// </summary>
+    private static bool WriteNote(PdfDocument document, string heading, string? text)
+    {
+        var paragraphs = ReportNotes.Paragraphs(text);
+        if (paragraphs.Count == 0)
+        {
+            return false;
+        }
+
+        document.StartPage();
+        document.Heading(heading);
+        foreach (var paragraph in paragraphs)
+        {
+            document.Paragraph(paragraph);
+            document.Spacer(4);
+        }
+
+        return true;
     }
 
     /// <summary>
