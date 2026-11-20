@@ -8116,6 +8116,7 @@
     "erasureDeletedSurveyParticipations": "el registro de que respondió una encuesta por su enlace: el nombre y el correo que escribió y el día, nunca lo que respondió.",
     "erasureDeletedSurveyUserTargets": "el registro de que una encuesta se dirigió a usted en particular, y no a todo su departamento.",
     "erasureDeletedEmailDeliveryEvents": "cada problema que el servicio de correo informó con un correo que se le envió (que rebotó, que se rechazó antes de enviarse o que se marcó como spam), la dirección a la que se envió y la respuesta del servidor que lo recibió.",
+    "erasureRedactedSurveyAuthorizedPeople": "listas autorizadas de un cliente que le nombran: se sobrescriben su dirección y su nombre. La fila se queda para que la lista no quede vacía, porque una lista vacía dejaría de impedir envíos a cualquier otra persona.",
     "erasureRedactedSurveyInvitations": "invitaciones a una encuesta: se sobrescriben su dirección y su token de acceso. La fila es el denominador de una tasa de respuesta que ya se ha reportado.",
     "erasureRedactedUserInvitations": "la invitación con la que llegó: se sobrescriben su dirección, su token y su contenido. Quién la envió se conserva, porque ese fue su acto y no el de usted.",
     "erasureKeepsTitle": "Lo que el borrado no elimina",

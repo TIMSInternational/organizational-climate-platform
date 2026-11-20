@@ -103,6 +103,7 @@ export const ERASURE_ANONYMISED_TABLES = ['responses', 'users'] as const
 export const ERASURE_REDACTED_TABLES = [
   'action_plans',
   'microclimate_invitations',
+  'survey_authorized_people',
   'survey_invitations',
   'user_invitations',
 ] as const
@@ -130,6 +131,7 @@ export const ANONYMISED_LABEL_PATH: Record<string, string> = {
 export const REDACTED_LABEL_PATH: Record<string, string> = {
   action_plans: 'privacy.erasureRedactedActionPlans',
   microclimate_invitations: 'privacy.erasureRedactedMicroclimateInvitations',
+  survey_authorized_people: 'privacy.erasureRedactedSurveyAuthorizedPeople',
   survey_invitations: 'privacy.erasureRedactedSurveyInvitations',
   user_invitations: 'privacy.erasureRedactedUserInvitations',
 }

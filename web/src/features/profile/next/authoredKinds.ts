@@ -14,7 +14,9 @@
  * added or removed, instead of the sentence silently going wrong.
  */
 // 21 since 3 Nov 2026: BenchmarkGroup, the reference groups the reader created.
-export const AUTHORED_REFERENCE_SECTIONS = 21
+// 22 since 19 Nov 2026: RespondentContentOverride, a company's or a survey's wording for
+// respondents the reader last wrote.
+export const AUTHORED_REFERENCE_SECTIONS = 22
 
 /** Surveys, reports and action plans: the three the row names before counting the rest. */
 export const AUTHORED_NAMED_SECTIONS = 3
