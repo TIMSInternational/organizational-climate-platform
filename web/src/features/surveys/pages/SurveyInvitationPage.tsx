@@ -9,6 +9,7 @@ import SurveyRespondForm, {
   RespondSurface,
 } from '../components/SurveyRespondForm'
 import { LinkOutcome } from '../components/LinkOutcome'
+import { useSurveyInterfaceLocale } from '../useSurveyInterfaceLocale'
 import { invitationFailureCopy } from '../linkFailure'
 import {
   SurveyLinkError,
@@ -100,6 +101,9 @@ export default function SurveyInvitationPage() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
 
   const [state, setState] = useState<InvitationState>({ status: 'loading' })
+
+  // A single-language survey answers in its language, the landing card included (gap #9).
+  useSurveyInterfaceLocale(state.status === 'landing' || state.status === 'answering' ? state.detail.language : null)
 
   // The token the respondent has already begun answering under, or null.
   //
