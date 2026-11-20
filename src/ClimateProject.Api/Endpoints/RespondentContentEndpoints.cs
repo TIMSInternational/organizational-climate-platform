@@ -191,7 +191,8 @@ public static class RespondentContentEndpoints
                     statusCode: 409);
         }
 
-        var refusal = RespondentContentValidation.Prepare(request.Values, out var writes);
+        var refusal = RespondentContentValidation.Prepare(request.Values, out var writes)
+            ?? RespondentContentValidation.RefuseLocalesNotOffered(writes, RespondentContentPermissions.RequiredLocales(survey.Language));
         if (refusal is not null)
         {
             return Refuse(refusal);
@@ -361,6 +362,7 @@ public static class RespondentContentEndpoints
                     RespondentContentRefusalReason.UnknownKey => AdminRefusals.RespondentContentUnknownKey,
                     RespondentContentRefusalReason.TooLong => AdminRefusals.RespondentContentTooLong,
                     RespondentContentRefusalReason.UnknownPlaceholder => AdminRefusals.RespondentContentUnknownPlaceholder,
+                    RespondentContentRefusalReason.LocaleNotOffered => AdminRefusals.RespondentContentLocaleNotOffered,
                     _ => AdminRefusals.RespondentContentValueNotAllowed,
                 },
                 locale = refusal.Locale,

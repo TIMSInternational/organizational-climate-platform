@@ -27,7 +27,7 @@ namespace ClimateProject.Api.Endpoints;
 /// here: the two routes below are answered by employees who administer nothing, and on
 /// an anonymous survey by visitors who are not authenticated at all.
 /// </summary>
-public static class SurveyResponseEndpoints
+public static partial class SurveyResponseEndpoints
 {
     /// <summary>
     /// Shared with Program.cs's rate limiter registration. Its own policy rather than the
@@ -129,6 +129,9 @@ public static class SurveyResponseEndpoints
         /// purpose, so no other line can get it wrong.
         /// </summary>
         public Guid? StoredUserId => IsAnonymous ? null : ActingUserId;
+
+        /// <summary>The two facts about this respondent a respond view depends on (<see cref="RespondReader"/>).</summary>
+        public RespondReader Reader => new(IsAnonymous, HasAccount: ActingUserId is not null);
     }
 
     private sealed record RespondentResolution(Respondent? Respondent, IResult? Error);
@@ -436,9 +439,6 @@ public static class SurveyResponseEndpoints
             return await NotAcceptingWithContentAsync(db, survey, resolvedLocale, cancellationToken);
         }
 
-        var fallbackFields = new List<string>();
-        var questions = await LoadQuestionDtosAsync(survey, db, locale, fallbackFields, cancellationToken);
-
         var existing = await FindExistingResponseAsync(
             survey, respondent, sessionId, ResumeSessionIdFor(survey, respondent, configuration), db, cancellationToken);
 
@@ -458,56 +458,7 @@ public static class SurveyResponseEndpoints
             ? null
             : await ToResponseStateAsync(existing, db, cancellationToken);
 
-        // The company's «Aviso de privacidad», and nothing else of the company: this view is
-        // served to anonymous link visitors too, so what it may carry is chosen here.
-        var privacyNotice = await db.Companies.AsNoTracking()
-            .Where(c => c.Id == survey.CompanyId)
-            .Select(c => new { c.Branding.PrivacyNoticeEs, c.Branding.PrivacyNoticeEn })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return Results.Ok(new SurveyRespondView(
-            survey.Id,
-            SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "title", fallbackFields),
-            SurveyContent.Resolve(survey.DescriptionEn, survey.DescriptionEs, locale, survey.Language, "description", fallbackFields),
-            survey.Type,
-            survey.Language,
-            resolvedLocale,
-            fallbackFields,
-            survey.StartDate,
-            survey.EndDate,
-            // What is stored for THIS visitor, not the survey's setting: an unauthenticated
-            // visitor to an identified survey answers anonymously, and the promise on their
-            // screen has to say so.
-            respondent.IsAnonymous,
-            survey.Settings.AllowPartialResponses,
-            survey.Settings.AutoSave,
-            survey.Settings.RandomizeQuestions,
-            survey.Settings.ShowProgress,
-            survey.Settings.TimeLimitMinutes,
-            questions,
-            AsksSelfDeclaredDemographics(survey, respondent)
-                ? ToDemographicDtos(
-                    await LoadSelfDeclaredFieldsAsync(survey.CompanyId, db, cancellationToken),
-                    locale,
-                    survey.Language,
-                    fallbackFields)
-                : [],
-            inProgress,
-            AsksParticipantIdentity(survey, respondent),
-            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
-                survey.Settings.RespondentIntroEn, survey.Settings.RespondentIntroEs,
-                locale, survey.Language, "settings.respondentIntro", fallbackFields)),
-            SurveyRespondentText.OrDefault(SurveyContent.Resolve(
-                survey.Settings.ClosingMessageEn, survey.Settings.ClosingMessageEs,
-                locale, survey.Language, "settings.closingMessage", fallbackFields)),
-            BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEs),
-            BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEn),
-            survey.Settings.EstimatedMinutes,
-            // The client's words, in the locale this payload is actually in -- never the one
-            // merely asked for, so a Spanish-only survey read with ?lang=en carries Spanish words
-            // beside its Spanish title, and never an English reader's Spanish override.
-            await RespondentContentStore.ResolveAsync(
-                db, survey, resolvedLocale, RespondentContentKinds.RespondentPayload, cancellationToken)));
+        return Results.Ok(await BuildRespondViewAsync(db, survey, lang, respondent.Reader, inProgress, cancellationToken));
     }
 
     // ------------------------------------------------------------------
@@ -619,7 +570,7 @@ public static class SurveyResponseEndpoints
         // completion -- see CaptureDemographicsAsync -- so an abandoned partial response
         // still leaves no demographic trail, which is the property that comment protects.
         List<ResolvedDemographicValue> selfDeclared = [];
-        if (AsksSelfDeclaredDemographics(survey, respondent))
+        if (AsksSelfDeclaredDemographics(survey, respondent.Reader))
         {
             var offered = await LoadSelfDeclaredFieldsAsync(survey.CompanyId, db, cancellationToken);
 
@@ -656,7 +607,7 @@ public static class SurveyResponseEndpoints
         // only after the response has committed (see RecordParticipationAsync). Required on
         // the COMPLETING post only: a partial save never carries it and writes none of it.
         ValidatedParticipant? participant = null;
-        if (AsksParticipantIdentity(survey, respondent))
+        if (AsksParticipantIdentity(survey, respondent.Reader))
         {
             if (request.IsComplete || request.Participant is not null)
             {
@@ -1223,13 +1174,13 @@ public static class SurveyResponseEndpoints
     /// </list>
     /// </para>
     /// </remarks>
-    private static bool AsksSelfDeclaredDemographics(Survey survey, Respondent respondent)
+    private static bool AsksSelfDeclaredDemographics(Survey survey, RespondReader reader)
         // No `IsAnonymous` arm since 2026-10-12: every survey has a link, nobody who opens one
         // logs in, and a link visitor to an identified survey is served anonymously -- so "has
         // no account" is the whole test, and it is the one that keeps a signed-in respondent
         // from typing their own cohort.
         => survey.Settings.SelfDeclaredDemographics
-            && respondent.ActingUserId is null;
+            && !reader.HasAccount;
 
     /// <summary>
     /// Whether THIS request is asked who is answering. <b>It never is.</b> One predicate read
@@ -1259,9 +1210,9 @@ public static class SurveyResponseEndpoints
     /// discarded rather than removed so the signature still says what the question was.
     /// </para>
     /// </remarks>
-    private static bool AsksParticipantIdentity(Survey survey, Respondent respondent)
+    private static bool AsksParticipantIdentity(Survey survey, RespondReader reader)
     {
-        _ = respondent;
+        _ = reader;
         // One predicate for the whole product, in SurveyResponsePrivacy. The admin's
         // participation view reads the same call, because it was reporting the stored
         // column while this path had stopped asking -- see that method's remarks.

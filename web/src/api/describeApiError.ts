@@ -133,6 +133,7 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   respondent_content_locked: 'errors.api.codes.respondent_content_locked',
   respondent_content_unknown_locale: 'errors.api.codes.respondent_content_unknown_locale',
   respondent_content_locale_mismatch: 'errors.api.codes.respondent_content_locale_mismatch',
+  respondent_content_locale_not_offered: 'errors.api.codes.respondent_content_locale_not_offered',
   respondent_content_unknown_key: 'errors.api.codes.respondent_content_unknown_key',
   respondent_content_too_long: 'errors.api.codes.respondent_content_too_long',
   respondent_content_unknown_placeholder: 'errors.api.codes.respondent_content_unknown_placeholder',

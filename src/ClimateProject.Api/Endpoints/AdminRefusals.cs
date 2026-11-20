@@ -99,6 +99,9 @@ internal static class AdminRefusals
 
     public const string RespondentContentUnknownLocale = "respondent_content_unknown_locale";
     public const string RespondentContentLocaleMismatch = "respondent_content_locale_mismatch";
+
+    /// <summary>At the survey level, a text set in a language the survey is not written in. 400; <c>allowed</c> names the survey's locales.</summary>
+    public const string RespondentContentLocaleNotOffered = "respondent_content_locale_not_offered";
     public const string RespondentContentUnknownKey = "respondent_content_unknown_key";
     public const string RespondentContentTooLong = "respondent_content_too_long";
     public const string RespondentContentUnknownPlaceholder = "respondent_content_unknown_placeholder";

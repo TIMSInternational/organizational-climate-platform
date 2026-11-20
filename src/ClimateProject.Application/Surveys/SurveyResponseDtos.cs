@@ -167,11 +167,18 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 /// with a default so a payload from an API that predates it reads as "not asked".
 /// </param>
 /// <param name="RespondentIntro">
-/// The survey's own anonymity-box paragraph in the resolved locale, or null for the product
-/// default (<c>SurveySettings.RespondentIntroEn</c>). Sent for every response; the screen
-/// applies it only to an anonymous one.
+/// SUPERSEDED by <see cref="Content"/>'s <c>anonymousBody</c>, and always the same value: the
+/// anonymity-box paragraph from the chain (survey column → company row) in
+/// <see cref="ResolvedLocale"/> only, or null for the product default. Kept for the screens that
+/// read it today. New code reads <c>Content</c> and must not chain this field after it -- the two
+/// can never disagree, so a fallback to it adds nothing but a second source. Never another
+/// language's paragraph, and never listed in <see cref="FallbackFields"/>. Sent for every
+/// response; the screen applies it only to an anonymous one.
 /// </param>
-/// <param name="ClosingMessage">The survey's own thank-you, or null for the product default.</param>
+/// <param name="ClosingMessage">
+/// SUPERSEDED by <see cref="Content"/>'s <c>thankYouTitle</c>, and always the same value, by the
+/// same rule as <see cref="RespondentIntro"/>; null for the product default.
+/// </param>
 /// <param name="PrivacyNoticeEs">
 /// The survey's company's «Aviso de privacidad» in Spanish, or null when it has set none. Both
 /// languages travel and the screen picks the respondent's first, the other when only that one

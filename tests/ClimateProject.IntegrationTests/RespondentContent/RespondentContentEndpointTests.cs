@@ -216,6 +216,77 @@ public class RespondentContentEndpointTests : IAsyncLifetime
         Assert.Equal("Gracias, de parte de la empresa", (await RespondViewAsync(survey.Id, "es")).Content!["thankYouTitle"]);
     }
 
+    /// <summary>
+    /// One answer per text: the old <c>respondentIntro</c> / <c>closingMessage</c> fields are the
+    /// content map's <c>anonymousBody</c> / <c>thankYouTitle</c>, from the same chain, in the
+    /// payload's locale only -- so an English reader of a two-language survey whose paragraph
+    /// exists only in Spanish gets neither the Spanish words nor a "fallback" notice for them.
+    /// </summary>
+    [Fact]
+    public async Task The_old_intro_and_thank_you_fields_are_the_contents_value_and_never_another_languages()
+    {
+        var admin = await AdminAsync(_companyA);
+        var survey = await LinkSurveyAsync(admin, _companyA, ContentLanguages.Both);
+        await OkViewAsync(await admin.PutAsJsonAsync(SurveyRoute(survey.Id), Body(
+            ("es", "anonymousBody", "Párrafo solo en español"),
+            ("es", "thankYouTitle", "Gracias solo en español"))));
+
+        var english = await RespondViewAsync(survey.Id, "en");
+        Assert.Equal("en", english.ResolvedLocale);
+        Assert.Null(english.RespondentIntro);
+        Assert.Null(english.ClosingMessage);
+        Assert.DoesNotContain("settings.respondentIntro", english.FallbackFields);
+        Assert.DoesNotContain("settings.closingMessage", english.FallbackFields);
+        Assert.False(english.Content!.ContainsKey("anonymousBody"));
+
+        // The company's English words reach both fields at once.
+        await OkViewAsync(await admin.PutAsJsonAsync(CompanyRoute(_companyA), Body(
+            ("en", "anonymousBody", "The company's paragraph"),
+            ("en", "thankYouTitle", "The company thanks you"))));
+        english = await RespondViewAsync(survey.Id, "en");
+        Assert.Equal("The company's paragraph", english.RespondentIntro);
+        Assert.Equal(english.Content!["anonymousBody"], english.RespondentIntro);
+        Assert.Equal("The company thanks you", english.ClosingMessage);
+        Assert.Equal(english.Content["thankYouTitle"], english.ClosingMessage);
+
+        var spanish = await RespondViewAsync(survey.Id, "es");
+        Assert.Equal("Párrafo solo en español", spanish.RespondentIntro);
+        Assert.Equal(spanish.Content!["anonymousBody"], spanish.RespondentIntro);
+        Assert.Equal("Gracias solo en español", spanish.ClosingMessage);
+    }
+
+    /// <summary>
+    /// The respond view is built without a respondent, a session or a write
+    /// (<c>SurveyResponseEndpoints.BuildRespondViewAsync</c>), on a survey in any status -- what a
+    /// preview of the respond flow needs -- and it is the same view the respond GET serves.
+    /// </summary>
+    [Fact]
+    public async Task The_respond_view_builds_for_a_draft_without_a_session_and_writes_nothing()
+    {
+        var admin = await AdminAsync(_companyA);
+        var live = await LinkSurveyAsync(admin, _companyA);
+        await OkViewAsync(await admin.PutAsJsonAsync(SurveyRoute(live.Id), Body(("es", "eyebrow", "Encuesta de la casa"))));
+        var draft = await SurveyTestHarness.CreateSurveyAsync(admin, SurveyTestHarness.MinimalRequest(_companyA));
+
+        var served = await RespondViewAsync(live.Id, "es");
+        var (built, draftView, before, after) = await _harness.WithDbAsync(async db =>
+        {
+            var liveSurvey = await db.Surveys.AsNoTracking().FirstAsync(s => s.Id == live.Id);
+            var draftSurvey = await db.Surveys.AsNoTracking().FirstAsync(s => s.Id == draft.Id);
+            var count = await db.Responses.CountAsync(r => r.SurveyId == live.Id || r.SurveyId == draft.Id);
+            var a = await SurveyResponseEndpoints.BuildRespondViewAsync(db, liveSurvey, "es", RespondReader.LinkVisitor, inProgress: null, CancellationToken.None);
+            var b = await SurveyResponseEndpoints.BuildRespondViewAsync(db, draftSurvey, "es", RespondReader.LinkVisitor, inProgress: null, CancellationToken.None);
+            return (a, b, count, await db.Responses.CountAsync(r => r.SurveyId == live.Id || r.SurveyId == draft.Id));
+        });
+
+        Assert.Equal(before, after);
+        Assert.Equal(SurveyStatuses.Draft, draft.Status);
+        Assert.Equal(draft.Id, draftView.Id);
+        Assert.Null(draftView.InProgress);
+        Assert.Equal(JsonSerializer.Serialize(served), JsonSerializer.Serialize(built));
+        Assert.Equal("Encuesta de la casa", built.Content!["eyebrow"]);
+    }
+
     /// <summary>A person of company A with a personal invitation to <paramref name="surveyId"/>, in <paramref name="status"/>.</summary>
     private async Task<string> SeedInvitationAsync(Guid surveyId, string status = SurveyInvitationStatuses.Pending)
     {
@@ -450,6 +521,35 @@ public class RespondentContentEndpointTests : IAsyncLifetime
             .Select(l => l.Changes)
             .ToListAsync());
         Assert.Contains(history, c => c != null && c.Contains("respondentContent", StringComparison.Ordinal) && c.Contains("settings.respondentIntro", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// An es-only survey is always served in Spanish, so an English text set on it would be read
+    /// by nobody -- and on a legacy key would block it from ever leaving draft. Refused, writing
+    /// nothing; clearing one is allowed. The company level, which has no single survey language,
+    /// takes both.
+    /// </summary>
+    [Fact]
+    public async Task A_survey_refuses_a_text_in_a_language_it_is_not_written_in()
+    {
+        var admin = await AdminAsync(_companyA);
+        var survey = await LinkSurveyAsync(admin, _companyA);
+
+        var body = await RefusalAsync(
+            await admin.PutAsJsonAsync(SurveyRoute(survey.Id), Body(("es", "eyebrow", "Clima"), ("en", "anonymousBody", "Our paragraph"))),
+            HttpStatusCode.BadRequest,
+            AdminRefusals.RespondentContentLocaleNotOffered);
+        Assert.Equal("en", body.GetProperty("locale").GetString());
+        Assert.Equal("anonymousBody", body.GetProperty("key").GetString());
+        Assert.Equal(["es"], body.GetProperty("allowed").EnumerateArray().Select(a => a.GetString()));
+        Assert.Null((await SettingsAsync(survey.Id)).RespondentIntroEn);
+        Assert.Empty(await RowsAsync(_companyA));
+
+        await OkViewAsync(await admin.PutAsJsonAsync(SurveyRoute(survey.Id), Body(("en", "anonymousBody", ""), ("es", "eyebrow", "Clima"))));
+        var view = await OkViewAsync(await admin.PutAsJsonAsync(CompanyRoute(_companyA), Body(("en", "eyebrow", "Climate"))));
+        Assert.Equal("Climate", view.CompanyValues["en"]["eyebrow"]);
+        Assert.Contains(view.Entries, e => e.Key == "anonymousBody" && e.RequiresEveryLocale);
+        Assert.Contains(view.Entries, e => e.Key == "eyebrow" && !e.RequiresEveryLocale);
     }
 
     [Fact]

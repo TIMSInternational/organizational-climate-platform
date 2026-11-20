@@ -20,6 +20,12 @@ public enum RespondentContentRefusalReason
 
     /// <summary>A display value outside the entry's set.</summary>
     ValueNotAllowed,
+
+    /// <summary>
+    /// At the survey level, a text set in a language the survey is not written in: no reader of
+    /// that survey is ever served it, so the editor would be lying.
+    /// </summary>
+    LocaleNotOffered,
 }
 
 /// <summary>The first problem found in a PUT body, naming where it is.</summary>
@@ -136,5 +142,37 @@ public static class RespondentContentValidation
 
         writes = prepared;
         return null;
+    }
+
+    /// <summary>
+    /// The survey-level rule on top of <see cref="Prepare"/>: a text may be SET only in a locale
+    /// the survey offers (<c>RespondentContentPermissions.RequiredLocales(survey.Language)</c>).
+    /// An es-only survey's payload is always resolved in Spanish, so an English value there is
+    /// read by nobody -- and for the four legacy keys it would also block the survey from leaving
+    /// draft (<c>SurveyContent.GateFields</c>). Clearing is allowed in any locale, so a value left
+    /// over from before the survey's language changed can still be removed. Display choices
+    /// (<c>*</c>) are not affected.
+    /// </summary>
+    /// <returns>The first refusal, or null.</returns>
+    public static RespondentContentRefusal? RefuseLocalesNotOffered(
+        IReadOnlyList<RespondentContentWrite> writes,
+        IReadOnlyCollection<string> offeredLocales)
+    {
+        ArgumentNullException.ThrowIfNull(writes);
+        ArgumentNullException.ThrowIfNull(offeredLocales);
+
+        var refused = writes.FirstOrDefault(w =>
+            w.Value is not null
+            && RespondentContentLocales.IsText(w.Locale)
+            && !offeredLocales.Contains(w.Locale, StringComparer.Ordinal));
+
+        return refused is null
+            ? null
+            : new RespondentContentRefusal(
+                RespondentContentRefusalReason.LocaleNotOffered,
+                $"'{refused.Entry.Key}' cannot be set in '{refused.Locale}': this survey is written in {string.Join(", ", offeredLocales)}.",
+                Locale: refused.Locale,
+                Key: refused.Entry.Key,
+                Allowed: [.. offeredLocales]);
     }
 }

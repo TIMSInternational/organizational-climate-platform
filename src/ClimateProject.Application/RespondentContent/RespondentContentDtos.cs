@@ -5,6 +5,10 @@ namespace ClimateProject.Application.RespondentContent;
 /// <param name="Values">A display entry's allowed values; empty for a text.</param>
 /// <param name="DefaultValue">A display entry's product default; null for a text.</param>
 /// <param name="LegacyColumn">Set when the survey level of this key lives in a survey column.</param>
+/// <param name="RequiresEveryLocale">
+/// At the survey level, set in one of the survey's languages means it must be set in all of them
+/// before the survey leaves draft (<see cref="RespondentContentEntry.RequiresEveryLocale"/>).
+/// </param>
 public sealed record RespondentContentEntryDto(
     string Key,
     string Kind,
@@ -13,13 +17,15 @@ public sealed record RespondentContentEntryDto(
     IReadOnlyList<string> Placeholders,
     IReadOnlyList<string> Values,
     string? DefaultValue,
-    string? LegacyColumn)
+    string? LegacyColumn,
+    bool RequiresEveryLocale = false)
 {
     public static RespondentContentEntryDto From(RespondentContentEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         return new RespondentContentEntryDto(
-            entry.Key, entry.Kind, entry.Group, entry.MaxLength, entry.Placeholders, entry.AllowedValues, entry.DefaultValue, entry.LegacyColumn);
+            entry.Key, entry.Kind, entry.Group, entry.MaxLength, entry.Placeholders, entry.AllowedValues, entry.DefaultValue, entry.LegacyColumn,
+            entry.RequiresEveryLocale);
     }
 
     public static IReadOnlyList<RespondentContentEntryDto> All { get; } =

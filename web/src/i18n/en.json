@@ -1822,6 +1822,7 @@
         "respondent_content_locked": "This survey is no longer draft, scheduled or active. Only a TIMS super administrator can change its texts for respondents.",
         "respondent_content_unknown_locale": "That language does not exist for these texts. Use Spanish, English or, for presentation, “*”.",
         "respondent_content_locale_mismatch": "That text is not stored in that language: texts go in Spanish or English, and presentation choices in “*”. Nothing was saved.",
+        "respondent_content_locale_not_offered": "This survey is not written in that language, so no respondent would read that text. Write it in the survey's language; nothing was saved.",
         "respondent_content_unknown_key": "That text cannot be edited. Nothing was saved.",
         "respondent_content_too_long": "A text is longer than its maximum. Shorten it; nothing was saved.",
         "respondent_content_unknown_placeholder": "A text uses a placeholder in braces that does not exist for it. Use only the placeholders shown; nothing was saved.",

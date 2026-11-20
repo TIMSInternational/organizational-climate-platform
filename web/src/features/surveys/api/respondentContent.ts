@@ -43,7 +43,10 @@ import { ApiError, authFetch } from '../../../api/authFetch'
 export const RESPONDENT_CONTENT_LOCALES = ['es', 'en', '*'] as const
 export type RespondentContentLocale = (typeof RESPONDENT_CONTENT_LOCALES)[number]
 
-/** The locales a TEXT is written in. */
+/**
+ * The locales a TEXT is written in. At the survey level only `requiredLocales` may be SET
+ * (`respondent_content_locale_not_offered` otherwise); clearing is allowed in either.
+ */
 export type RespondentTextLocale = Exclude<RespondentContentLocale, '*'>
 
 export type RespondentContentKind = 'screen' | 'email' | 'display'
@@ -81,6 +84,13 @@ export interface RespondentContentEntry {
   defaultValue: string | null
   /** Set when the survey level of this key lives in a survey column (`RespondentIntro`, …). */
   legacyColumn: string | null
+  /**
+   * At the survey level: once set in one of the survey's languages, it must be set in every one
+   * of them before the survey leaves draft (the publish gate, «faltan traducciones») — the four
+   * keys with a `legacyColumn`. Every other text falls back per language to the default. An
+   * editor says so beside the field. Absent from an older API: read as `false`.
+   */
+  requiresEveryLocale?: boolean
 }
 
 /** `GET` (and the `PUT`'s answer), mirroring `RespondentContentView`. */

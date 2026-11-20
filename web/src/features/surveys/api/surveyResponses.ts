@@ -135,9 +135,12 @@ export interface SurveyRespondView {
    */
   asksParticipantIdentity?: boolean
   /**
-   * The survey's own paragraph for the anonymity box, set per survey ("Textos para quien
-   * responde"). Applied to an anonymous response only. Null or absent -- an API that predates it,
-   * or a survey nobody configured -- means the product's default paragraph.
+   * **Superseded by `content.anonymousBody`, and always the same value** (the server fills both
+   * from one chain: survey → company, in `resolvedLocale` only). Kept for the screens that read
+   * it today. New code reads `effectiveText(view, locale, 'anonymousBody') ?? t('anonymousBody')`
+   * and must NOT chain `?? view.respondentIntro` after it: the field holds nothing `content` does
+   * not, and it is not guarded by the reader's language the way `effectiveText` is. Applied to an
+   * anonymous response only. Null or absent means the product's default paragraph.
    */
   respondentIntro?: string | null
   /**
@@ -147,7 +150,11 @@ export interface SurveyRespondView {
    */
   privacyNoticeEs?: string | null
   privacyNoticeEn?: string | null
-  /** The survey's own thank-you after a completed submit. Null or absent: the default thanks. */
+  /**
+   * **Superseded by `content.thankYouTitle`, and always the same value**, by the same rule as
+   * `respondentIntro`: read `effectiveText(view, locale, 'thankYouTitle')`, never chain this after
+   * it. Null or absent: the default thanks.
+   */
   closingMessage?: string | null
   /**
    * The duration the survey states, in minutes (`settings.estimatedMinutes`). Null or absent --

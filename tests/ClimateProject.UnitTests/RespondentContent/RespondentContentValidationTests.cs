@@ -6,7 +6,7 @@ namespace ClimateProject.UnitTests.RespondentContent;
 
 public class RespondentContentValidationTests
 {
-    private static Dictionary<string, Dictionary<string, string?>> Body(params (string Locale, string Key, string? Value)[] values)
+    internal static Dictionary<string, Dictionary<string, string?>> Body(params (string Locale, string Key, string? Value)[] values)
     {
         var body = new Dictionary<string, Dictionary<string, string?>>(StringComparer.Ordinal);
         foreach (var (locale, key, value) in values)
@@ -136,4 +136,40 @@ public class RespondentContentPermissionsTests
     [InlineData(null, new[] { "es", "en" })]
     public void The_required_locales_follow_the_language(string? language, string[] expected)
         => Assert.Equal(expected, RespondentContentPermissions.RequiredLocales(language));
+
+    /// <summary>
+    /// A survey-level text may be SET only in a language the survey offers; clearing one is
+    /// allowed anywhere, and a display choice is not a language at all.
+    /// </summary>
+    [Fact]
+    public void A_text_is_set_only_in_a_language_the_survey_offers_and_cleared_in_any()
+    {
+        string[] spanishOnly = ["es"];
+        Assert.Null(RespondentContentValidation.Prepare(
+            RespondentContentValidationTests.Body(("es", "anonymousBody", "Párrafo"), ("en", "eyebrow", ""), ("*", "display.textAlign", "start")), out var allowed));
+        Assert.Null(RespondentContentValidation.RefuseLocalesNotOffered(allowed, spanishOnly));
+
+        Assert.Null(RespondentContentValidation.Prepare(RespondentContentValidationTests.Body(("es", "eyebrow", "Clima"), ("en", "thankYouTitle", "Thanks")), out var refusedWrites));
+        var refusal = RespondentContentValidation.RefuseLocalesNotOffered(refusedWrites, spanishOnly);
+        Assert.NotNull(refusal);
+        Assert.Equal(RespondentContentRefusalReason.LocaleNotOffered, refusal.Reason);
+        Assert.Equal("en", refusal.Locale);
+        Assert.Equal("thankYouTitle", refusal.Key);
+        Assert.Equal(spanishOnly, refusal.Allowed);
+
+        Assert.Null(RespondentContentValidation.RefuseLocalesNotOffered(refusedWrites, ["es", "en"]));
+    }
+
+    /// <summary>
+    /// The four keys whose survey level is a publish-gate column are marked, and only they: the
+    /// editor has to say that one of them set in one language must be set in all of the survey's.
+    /// </summary>
+    [Fact]
+    public void Exactly_the_legacy_keys_require_every_locale()
+    {
+        var marked = RespondentContentEntryDto.All.Where(e => e.RequiresEveryLocale).Select(e => e.Key).Order(StringComparer.Ordinal);
+        Assert.Equal(
+            ["anonymousBody", "email.personalLink.message", "email.personalLink.subject", "thankYouTitle"],
+            marked);
+    }
 }

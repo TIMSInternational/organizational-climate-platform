@@ -101,6 +101,15 @@ public sealed record RespondentContentEntry(
 
     public bool IsDisplay => Kind == RespondentContentKinds.Display;
 
+    /// <summary>
+    /// At the SURVEY level, once this text is set in one of the survey's languages it must be set
+    /// in every one of them before the survey leaves draft: the four legacy keys are publish-gate
+    /// fields (<c>SurveyContent.GateFields</c>, «faltan traducciones»), as they were before the
+    /// registry. Every other text, and every company-level value, is per locale with the product
+    /// default where a locale has none. An editor marks these.
+    /// </summary>
+    public bool RequiresEveryLocale => LegacyColumn is not null;
+
     /// <summary>Whether a value for this entry may be stored under <paramref name="locale"/>.</summary>
     public bool TakesLocale(string? locale)
         => IsDisplay ? locale == RespondentContentLocales.Any : RespondentContentLocales.IsText(locale);
