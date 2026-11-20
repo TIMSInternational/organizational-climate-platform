@@ -1,5 +1,7 @@
 import { ChevronDown, Lock, ShieldCheck } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
+import type { RespondentContentSource } from '../api/respondentContent'
+import { clientText } from '../clientText'
 
 /**
  * The anonymity promise, stated precisely and in both directions.
@@ -67,6 +69,7 @@ export function AnonymityNotice({
   collapsible = false,
   recordsParticipation = false,
   intro = null,
+  content = null,
 }: {
   anonymous: boolean
   /**
@@ -78,6 +81,14 @@ export function AnonymityNotice({
    * and Home from `GET /dashboard/employee`'s pending survey, both through `effectiveText`.
    */
   intro?: string | null
+  /**
+   * The payload that carries the client's words (the respond view, the invitation landing, a
+   * Home survey): its `anonymousChip`, `anonymousBody` and `participationBody` replace the
+   * catalogue's, through `clientText` (`docs/decisions/editable-respondent-content.md`). An
+   * explicit `intro` still wins over `anonymousBody`. The identified variants are not in the
+   * registry and always read the catalogue.
+   */
+  content?: RespondentContentSource | null
   /**
    * The respondent is asked their name and email (`asksParticipantIdentity`). The anonymous
    * body stays true word for word — the response row still holds no name, account, IP or
@@ -96,7 +107,8 @@ export function AnonymityNotice({
    */
   collapsible?: boolean
 }) {
-  const { t } = useTranslation('surveyRespond')
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(content, locale, catalogue)
 
   const frame = 'rounded-xl border border-line-panel bg-surface-card'
   const box = `${frame} px-4 py-3.5`

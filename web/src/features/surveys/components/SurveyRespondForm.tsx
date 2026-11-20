@@ -41,6 +41,8 @@ import { formatDayMonth, respondDuration } from '../respondEstimate'
 import { respondFailureKey, respondFailureKind } from '../respondFailure'
 import { AuthoredParagraphs } from '../../../components/layout'
 import { AnonymityNotice } from './AnonymityNotice'
+import { effectiveText, textAlignOf, type RespondentContentSource } from '../api/respondentContent'
+import { clientText, respondAlignClass } from '../clientText'
 import { PrivacyNoticeLink } from './PrivacyNoticeLink'
 import RespondDemographicField from './RespondDemographicField'
 import RespondParticipantFields from './RespondParticipantFields'
@@ -979,7 +981,7 @@ export default function SurveyRespondForm({
           endDate={view?.endDate ?? null}
           locale={locale}
           publicEntry={publicEntry}
-          closingMessage={view?.closingMessage?.trim() ? view.closingMessage : null}
+          source={view}
         />
       </RespondSurface>
     )
@@ -988,7 +990,7 @@ export default function SurveyRespondForm({
   if (view && view.inProgress?.isComplete) {
     return (
       <RespondSurface>
-        <AlreadyCompleted />
+        <AlreadyCompleted source={view} />
       </RespondSurface>
     )
   }
@@ -1021,6 +1023,7 @@ export default function SurveyRespondForm({
           on their own device.
         */}
         <AnsweredOnThisDevice
+          source={view}
           recordsParticipation={view.asksParticipantIdentity === true}
           onShared={publicEntry ? () => setAnsweredHere(false) : undefined}
         />
@@ -1032,6 +1035,11 @@ export default function SurveyRespondForm({
 
   // The start page in front of this form already made the promise: draw no second block.
   const promiseAtEntry = promiseMadeAtEntry(entryPromise, view)
+  // The client's words for the registry's screen keys where the survey or its company wrote
+  // some, the catalogue's elsewhere; and how its paragraphs are aligned
+  // (docs/decisions/editable-respondent-content.md).
+  const client = clientText(view, locale, t)
+  const align = textAlignOf(view.content)
 
   /*
    * The demographic prelude: a respondent with NO account answering the company's own
@@ -1096,7 +1104,7 @@ export default function SurveyRespondForm({
             None at all when the start page in front of this screen made it
             (`promiseAtEntry`): it was read there, one tap ago. */}
         {promiseAtEntry ? null : (
-          <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} intro={view.respondentIntro} />
+          <AnonymityNotice anonymous={view.anonymous} recordsParticipation={view.asksParticipantIdentity === true} content={view} />
         )}
         {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
         <PrivacyNoticeLink view={view} />
@@ -1110,7 +1118,7 @@ export default function SurveyRespondForm({
         <header data-slot="respond-progress" className={RESPOND_HEAD}>
           <div className="flex min-w-0 flex-1 items-baseline justify-between gap-2">
             <h1 className="m-0 min-w-0 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
-              {t('demographics.eyebrow')}
+              {client.t('demographics.eyebrow')}
             </h1>
           </div>
         </header>
@@ -1119,7 +1127,7 @@ export default function SurveyRespondForm({
             field it would push the field itself down the phone, which is the same
             reasoning the author's description follows on the question pages. */}
         {demographicStep === 0 ? (
-          <p className="m-0 text-respond text-fg-secondary">{t('demographics.intro')}</p>
+          <p className="m-0 text-respond text-fg-secondary">{client.t('demographics.intro')}</p>
         ) : null}
 
         <div className="flex flex-col gap-4">
@@ -1159,7 +1167,7 @@ export default function SurveyRespondForm({
             >
               {/* "Empezar la encuesta" only when the survey really starts next: when the
                   identity screen follows, this button leads to it, not to question 1. */}
-              {isLastField && view.asksParticipantIdentity !== true ? t('demographics.start') : t('next.next')}
+              {isLastField && view.asksParticipantIdentity !== true ? client.t('demographics.start') : t('next.next')}
               <ArrowRight aria-hidden="true" />
             </Button>
           </div>
@@ -1197,7 +1205,7 @@ export default function SurveyRespondForm({
             and the promise about what happens to it is the consent -- unless the start
             page already made it (`promiseAtEntry`). */}
         {promiseAtEntry ? null : (
-          <AnonymityNotice anonymous={view.anonymous} recordsParticipation intro={view.respondentIntro} />
+          <AnonymityNotice anonymous={view.anonymous} recordsParticipation content={view} />
         )}
         {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
         <PrivacyNoticeLink view={view} />
@@ -1210,12 +1218,12 @@ export default function SurveyRespondForm({
 
         <header data-slot="respond-progress" className={RESPOND_HEAD}>
           <h1 className="m-0 min-w-0 flex-1 font-sans text-2xs font-semibold uppercase leading-snug tracking-eyebrow text-fg-secondary">
-            {t('identity.eyebrow')}
+            {client.t('identity.eyebrow')}
           </h1>
         </header>
 
         <p data-slot="identity-intro" className="m-0 text-respond text-fg-secondary">
-          {t('identity.intro')}
+          {client.t('identity.intro')}
         </p>
 
         <form
@@ -1227,6 +1235,7 @@ export default function SurveyRespondForm({
           }}
         >
           <RespondParticipantFields
+            content={view}
             name={participantName}
             email={participantEmail}
             problem={identityProblem}
@@ -1251,7 +1260,7 @@ export default function SurveyRespondForm({
               }}
             />
             <Button type="submit" variant="primary" size="lg" className="flex-1" disabled={busy !== 'idle'}>
-              {t('demographics.start')}
+              {client.t('demographics.start')}
               <ArrowRight aria-hidden="true" />
             </Button>
           </div>
@@ -1296,7 +1305,7 @@ export default function SurveyRespondForm({
           (`promiseAtEntry`, PROCOMER 2026-11-18): «Anónima» is shown there only, and
           the first question page opens on the survey's own welcome text. */}
       {promiseAtEntry ? null : (
-        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} intro={view.respondentIntro} />
+        <AnonymityNotice anonymous={view.anonymous} recordsParticipation={asksIdentity} collapsible={index > 0} content={view} />
       )}
       {/* The company's privacy notice, beside the promise and before any question; nothing at all when none is set. */}
       <PrivacyNoticeLink view={view} />
@@ -1352,7 +1361,7 @@ export default function SurveyRespondForm({
         // a justified line from opening wide gaps on a phone; it hyphenates in the reader's
         // language because `TranslationProvider` sets `<html lang>` to the locale. The
         // author's paragraphs are kept (`AuthoredParagraphs`).
-        <AuthoredParagraphs slot="survey-intro" text={view.description} className="text-justify hyphens-auto text-respond text-fg-secondary" />
+        <AuthoredParagraphs slot="survey-intro" text={view.description} className={`${respondAlignClass(align)} text-respond text-fg-secondary`} />
       ) : null}
 
       {remainingMs !== null && remainingMs > 0 ? (
@@ -1391,6 +1400,7 @@ export default function SurveyRespondForm({
             disabled={busy !== 'idle'}
             onChange={(next) => updateAnswer(current.id, next)}
             onAnnounce={announce}
+            align={align}
           />
         ) : null}
 
@@ -1503,14 +1513,14 @@ export default function SurveyRespondForm({
         data-slot="respond-footer"
         className="mt-auto flex flex-col gap-1 text-respond-sm text-fg-secondary"
       >
-        <span>{t('next.closesOn', { date: formatDayMonth(view.endDate, locale) })}</span>
+        <span>{client.t('next.closesOn', { date: formatDayMonth(view.endDate, locale) })}</span>
         {remainingMs !== null && remainingMs > 0 ? (
           <span data-slot="respond-time-left" className="tabular-nums">
             {t('timeLimitRemaining', { time: formatDuration(remainingMs) })}
           </span>
         ) : (
           <span>
-            {duration.underAMinute ? t('next.underAMinute') : t('next.aboutMinutes', { minutes: duration.minutes })}
+            {duration.underAMinute ? client.t('next.underAMinute') : client.t('next.aboutMinutes', { minutes: duration.minutes })}
           </span>
         )}
       </footer>
@@ -1722,7 +1732,10 @@ function LoadFailure({
   error: SurveyRespondError | null
   publicEntry: boolean
 }) {
-  const { t } = useTranslation('surveyRespond')
+  // The closed survey's 400 carries the client's own card (`RespondentCardRefusal`); every
+  // other refusal carries nothing and reads the catalogue.
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(error, locale, catalogue)
 
   const body = (): { title: string; description: string; signIn: boolean } => {
     switch (error?.status) {
@@ -1768,8 +1781,9 @@ function LoadFailure({
   )
 }
 
-function AlreadyCompleted() {
-  const { t } = useTranslation('surveyRespond')
+function AlreadyCompleted({ source }: { source: RespondentContentSource | null }) {
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(source, locale, catalogue)
 
   return (
     <Alert variant="default" role="status">
@@ -1804,9 +1818,12 @@ function AlreadyCompleted() {
  * deliberately has no such control.
  */
 function AnsweredOnThisDevice({
+  source,
   onShared,
   recordsParticipation = false,
 }: {
+  /** The respond view: its `answeredOnThisDeviceTitle`. The bodies state what is kept and stay the catalogue's. */
+  source: RespondentContentSource | null
   onShared?: () => void
   /**
    * The survey asked who is answering. The plain body says the platform does not keep who
@@ -1815,7 +1832,8 @@ function AnsweredOnThisDevice({
    */
   recordsParticipation?: boolean
 }) {
-  const { t } = useTranslation('surveyRespond')
+  const { t: catalogue, locale } = useTranslation('surveyRespond')
+  const { t } = clientText(source, locale, catalogue)
 
   return (
     <Alert variant="default" role="status">
@@ -1907,17 +1925,23 @@ function Submitted({
   endDate,
   locale,
   publicEntry,
-  closingMessage,
+  source,
 }: {
   result: SurveySubmissionResult
   /** `SurveyRespondView.endDate`, or null if the view never loaded. */
   endDate: string | null
   locale: string
   publicEntry: boolean
-  /** `SurveyRespondView.closingMessage`: the survey's own thanks, or null for the default. */
-  closingMessage: string | null
+  /**
+   * The respond view, or null if it never loaded: the survey's or its company's thanks
+   * (`thankYouTitle`, the closing message) and the receipt's and «Qué pasa ahora»'s words.
+   */
+  source: RespondentContentSource | null
 }) {
-  const { t } = useTranslation('surveyRespond')
+  const { t: catalogue } = useTranslation('surveyRespond')
+  const { t } = clientText(source, locale, catalogue)
+  // A client's own thanks is set as a message, not as the default's one-line title.
+  const closingMessage = effectiveText(source, locale, 'thankYouTitle')
 
   const closesOn = endDate === null ? null : formatDate(endDate, locale, 'long')
 

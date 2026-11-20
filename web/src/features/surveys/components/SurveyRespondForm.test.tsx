@@ -1783,7 +1783,8 @@ describe('SurveyRespondForm — the promise made on a start page', () => {
 
   /** The card has no respond view, so it cannot draw the survey's own paragraph. */
   it('still draws the survey\'s own intro after an invitation card, which could only draw the default', async () => {
-    respondWith(view({ anonymous: true, respondentIntro: 'Texto propio de la encuesta' }))
+    // The server fills `content.anonymousBody` with the same value as `respondentIntro` (one chain).
+    respondWith(view({ anonymous: true, respondentIntro: 'Texto propio de la encuesta', content: { anonymousBody: 'Texto propio de la encuesta' } }))
     renderForm({ publicEntry: true, entryPromise: { invitation: true } })
     await screen.findByText('¿Qué tan satisfecho estás?')
 
@@ -2236,7 +2237,14 @@ describe('SurveyRespondForm — Eagle corrections', () => {
   }
 
   it('thanks the respondent in the survey’s own words, with no second line, and keeps the receipt', async () => {
-    await submitOne(view({ questions: [question()], closingMessage: 'Eagle le agradece su participación en la presente encuesta.' }), { publicEntry: true })
+    await submitOne(
+      view({
+        questions: [question()],
+        closingMessage: 'Eagle le agradece su participación en la presente encuesta.',
+        content: { thankYouTitle: 'Eagle le agradece su participación en la presente encuesta.' },
+      }),
+      { publicEntry: true },
+    )
 
     const thanks = await screen.findByText('Eagle le agradece su participación en la presente encuesta.')
     const block = thanks.closest('[role="status"]') as HTMLElement
@@ -2258,7 +2266,7 @@ describe('SurveyRespondForm — Eagle corrections', () => {
   const EAGLE_INTRO = 'Estimado colaborador (a) es muy importante contar con su retroalimentación y conocer aspectos, los cuales nos colaboran a mejorar el clima organizacional de la empresa: sus respuestas se manejarán de forma anónima a través de un proveedor externo.'
 
   it('puts the survey’s own intro in the anonymity box, in place of the default paragraph', async () => {
-    respondWith(view({ anonymous: true, respondentIntro: EAGLE_INTRO }))
+    respondWith(view({ anonymous: true, respondentIntro: EAGLE_INTRO, content: { anonymousBody: EAGLE_INTRO } }))
     renderForm({ publicEntry: true })
 
     const notice = (await screen.findByText(EAGLE_INTRO)).closest('[data-slot="anonymity-notice"]') as HTMLElement
@@ -2277,7 +2285,7 @@ describe('SurveyRespondForm — Eagle corrections', () => {
   // An author's prose must never hide that names are kept: on an identified response the
   // disclosure stays, whatever the survey's intro says.
   it('never lets the intro replace the disclosure on an identified response', async () => {
-    respondWith(view({ anonymous: false, respondentIntro: EAGLE_INTRO }))
+    respondWith(view({ anonymous: false, respondentIntro: EAGLE_INTRO, content: { anonymousBody: EAGLE_INTRO } }))
     renderForm()
 
     expect(await screen.findByText(copy.es('surveyRespond.identifiedBody'))).toBeTruthy()
