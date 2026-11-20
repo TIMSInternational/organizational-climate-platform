@@ -57,12 +57,19 @@ export class ApiError extends Error {
    * `describeApiError`, which says a known code in the reader's language.
    */
   readonly code?: string
+  /**
+   * The parsed body, when the refusal names more than a code -- e.g. the people a
+   * `survey_recipient_not_authorized` send would have reached (`notAuthorizedOf`). Never shown
+   * as is: a screen reads the fields it knows.
+   */
+  readonly body?: unknown
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, body?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     if (code !== undefined) this.code = code
+    if (body !== undefined && body !== null) this.body = body
   }
 }
 
@@ -129,7 +136,7 @@ export async function authFetch(
     }
     const body = await response.json().catch(() => null)
     const code = body && typeof body.code === 'string' ? body.code : undefined
-    throw new ApiError(response.status, (body && body.message) || `Request failed: ${response.status}`, code)
+    throw new ApiError(response.status, (body && body.message) || `Request failed: ${response.status}`, code, body)
   }
   return response
 }

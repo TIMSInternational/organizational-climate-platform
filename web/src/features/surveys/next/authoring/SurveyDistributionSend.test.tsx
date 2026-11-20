@@ -251,6 +251,24 @@ describe('Distribución — a personal link refused for somebody outside the aud
     expect(distributionApi.createSurveyInvitations).toHaveBeenCalledTimes(1)
   })
 
+  it('names the people a send would reach who are not on the client’s authorized list, and offers no resume', async () => {
+    open(survey(), personal())
+    vi.mocked(distributionApi.createSurveyInvitations).mockRejectedValueOnce(
+      new ApiError(409, 'English, never shown', 'survey_recipient_not_authorized', {
+        code: 'survey_recipient_not_authorized',
+        notAuthorized: [{ userId: 'u9', email: 'bea@cliente.com', name: 'Bea Solís' }],
+      }),
+    )
+    await pressSend(/Enviar enlaces/)
+    const alert = (await screen.findByRole('alert')).textContent ?? ''
+    expect(alert).toContain('Bea Solís (bea@cliente.com)')
+    expect(alert).toContain('lista autorizada del cliente')
+    expect(alert).not.toContain('English')
+    expect(screen.queryByTestId('send-outcome')).toBeNull()
+    expect(screen.queryByRole('button', { name: es.surveys.next.distribution.link.resume })).toBeNull()
+    expect(distributionApi.createSurveyInvitations).toHaveBeenCalledTimes(1)
+  })
+
   it('any other failure still stops with the resumable outcome, as before', async () => {
     open(survey(), personal())
     vi.mocked(distributionApi.createSurveyInvitations).mockRejectedValueOnce(new Error('boom'))
