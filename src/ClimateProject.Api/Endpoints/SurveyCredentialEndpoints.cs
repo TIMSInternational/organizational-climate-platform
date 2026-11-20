@@ -420,6 +420,12 @@ public static class SurveyCredentialEndpoints
 
         await AttributeToSurveyCompanyAsync(audit, currentUser, survey.CompanyId, db, cancellationToken);
 
+        // «Lista autorizada del cliente»: a key -- mailed or handed over -- only for somebody on it.
+        if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, [userId], cancellationToken) is { } notAuthorized)
+        {
+            return notAuthorized;
+        }
+
         // No audience chosen: a key -- mailed or handed over -- would admit somebody to a survey
         // aimed at nobody (Survey.AudienceNotChosen).
         if (survey.AudienceNotChosen)
@@ -649,6 +655,12 @@ public static class SurveyCredentialEndpoints
         }
 
         await AttributeToSurveyCompanyAsync(audit, principal.GetCurrentUser(), survey.CompanyId, db, cancellationToken);
+
+        // «Lista autorizada del cliente»: a reminder only to somebody on it.
+        if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, [userId], cancellationToken) is { } notAuthorized)
+        {
+            return notAuthorized;
+        }
 
         if (survey.AudienceNotChosen)
         {

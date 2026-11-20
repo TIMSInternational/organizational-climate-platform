@@ -63,6 +63,31 @@ internal static class AdminRefusals
     public const string SurveyRemindersOff = "survey_reminders_off";
     public const string SurveyNotCollecting = "survey_not_collecting";
 
+    // «Lista autorizada del cliente», ruled 2026-11-19 (docs/decisions/editable-respondent-content.md,
+    // ruling 3; SurveyAuthorizedPeopleEndpoints, SurveyAuthorizedListGuard).
+
+    /// <summary>
+    /// A send, resend, reissue or reminder names somebody whose address is not on the survey's
+    /// authorized list. 409, before anything is minted, written or mailed; <c>notAuthorized</c>
+    /// names each of them (user id, email, name). The whole send is refused, never trimmed.
+    /// </summary>
+    public const string SurveyRecipientNotAuthorized = "survey_recipient_not_authorized";
+
+    /// <summary>An archived survey's authorized list cannot be changed, by anybody. 409.</summary>
+    public const string SurveyAuthorizedListArchived = "survey_authorized_list_archived";
+
+    /// <summary>A company admin past «active»: only a super admin changes a closed survey's list. 409.</summary>
+    public const string SurveyAuthorizedListLocked = "survey_authorized_list_locked";
+
+    /// <summary>The one address to add is not an email address. 400.</summary>
+    public const string SurveyAuthorizedEmailInvalid = "survey_authorized_email_invalid";
+
+    /// <summary>The one address to add is on the list already. 409.</summary>
+    public const string SurveyAuthorizedEmailDuplicate = "survey_authorized_email_duplicate";
+
+    /// <summary>A pasted list that is empty or holds an entry that is not an address; nothing was written. 400; <c>invalid</c> names them.</summary>
+    public const string SurveyAuthorizedListInvalid = "survey_authorized_list_invalid";
+
     // Microclimates (admin)
     public const string MicroclimateWindowOutOfOrder = "microclimate_window_out_of_order";
     public const string MicroclimateClosedWindow = "microclimate_closed_window";
