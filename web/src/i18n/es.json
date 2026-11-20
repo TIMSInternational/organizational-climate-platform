@@ -5624,6 +5624,40 @@
           "other": "Versión"
         }
       }
+    },
+    "emailTexts": {
+      "mailLabel": "Correo",
+      "mail": {
+        "personalLink": "Enlace personal",
+        "credentials": "Usuario y contraseña",
+        "reminder": "Recordatorio"
+      },
+      "about": {
+        "personalLink": "El correo que lleva a cada persona su propio enlace. Debajo de su mensaje van siempre el botón con el enlace, el mismo enlace escrito y la fecha de cierre de la encuesta. No lleva usuario ni contraseña.",
+        "credentials": "El correo con el usuario y la contraseña de cada persona. El asunto y el mensaje que escriba reemplazan solo el título y el primer párrafo: el usuario, la contraseña, el botón para entrar y la línea que nombra la encuesta y su fecha de cierre van siempre.",
+        "reminder": "El recordatorio sin contraseña que se envía desde la fila de una persona que no ha terminado. El asunto y el mensaje que escriba reemplazan solo el título y el primer párrafo: la línea que nombra la encuesta, el usuario y el botón para entrar van siempre."
+      },
+      "placeholders": "Puede escribir {survey} para el nombre de la encuesta y {company} para el de la empresa.",
+      "subject": "Asunto",
+      "message": "Mensaje",
+      "inheritsDefault": "Si queda vacío, se usa el texto predeterminado (vea la vista previa). Deje una línea en blanco entre párrafos.",
+      "inheritsCompany": "Si queda vacío, se usa el de la empresa: «{text}»",
+      "everyLocale": "Si escribe este correo en un idioma, escríbalo también en el otro antes de publicar la encuesta.",
+      "lockedSurvey": "Con su cuenta ya no se pueden cambiar estos correos: después del cierre solo TIMS puede hacerlo, y una encuesta archivada no se cambia.",
+      "lockedCompany": "Su cuenta no puede cambiar los correos de esta empresa.",
+      "saved": "Se guardaron los correos.",
+      "previewTitle": "Vista previa",
+      "previewSaved": "Así se recibe con lo guardado. El usuario, la contraseña y el enlace son de ejemplo.",
+      "previewUnsaved": "Hay cambios sin guardar: la vista previa muestra lo guardado hasta que guarde.",
+      "previewFailed": "No se pudo cargar la vista previa.",
+      "previewSubject": "Asunto:",
+      "previewFrame": "Vista previa del correo",
+      "surveyHelp": "Los correos que envía esta encuesta. Un campo vacío usa el texto de la empresa o, si la empresa no escribió uno, el predeterminado. Lo que permite entrar (usuario, contraseña, enlace y botón) lo pone siempre la plataforma.",
+      "companyTitle": "Correos",
+      "companyMeta": "Para todas las encuestas",
+      "companyHelp": "Las palabras de los correos de las encuestas de esta empresa. Cada encuesta las usa mientras no escriba las suyas. Un campo vacío usa el texto predeterminado.",
+      "loadFailed": "No se pudieron cargar los correos.",
+      "openPerSurvey": "El asunto y el mensaje del correo con el usuario y la contraseña, y los del recordatorio."
     }
   },
   "users": {

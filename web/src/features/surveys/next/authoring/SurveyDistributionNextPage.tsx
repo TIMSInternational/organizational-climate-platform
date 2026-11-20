@@ -477,10 +477,10 @@ export function DistributionView({
               else if (linkOffMode !== null) actions.setCredentialMode(linkOffMode)
             }}
           />
-          {personalLink ? (
+          {personalLink || perSurvey ? (
             <div className="flex flex-col gap-2 border-t border-line-default pt-4" data-testid="invitation-email">
               <p className="m-0 text-base font-medium text-fg-primary">{copy('link.email')}</p>
-              <p className="m-0 text-sm text-fg-secondary">{copy('link.emailOpen')}</p>
+              <p className="m-0 text-sm text-fg-secondary">{personalLink ? copy('link.emailOpen') : t('surveys.emailTexts.openPerSurvey')}</p>
               <div>
                 <Button type="button" variant="outline" disabled={!actionable} onClick={() => { setEmailSaved(null); setEmailOpen(true) }}>
                   {t('common.edit')}
@@ -770,7 +770,7 @@ export function DistributionView({
       </Dialog>
 
       <RespondentTextsDialog surveyId={survey.id} open={textsOpen} onOpenChange={setTextsOpen} onSaved={setTextsSaved} />
-      <InvitationEmailDialog surveyId={survey.id} open={emailOpen} onOpenChange={setEmailOpen} onSaved={setEmailSaved} />
+      <InvitationEmailDialog surveyId={survey.id} open={emailOpen} onOpenChange={setEmailOpen} onSaved={setEmailSaved} initialMail={personalLink ? 'personalLink' : 'credentials'} />
 
       <ConfirmationDialog
         open={resendTarget !== null}

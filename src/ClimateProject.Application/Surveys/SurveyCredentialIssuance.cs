@@ -2,6 +2,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Domain.Entities;
 
@@ -17,11 +18,18 @@ public sealed record SurveyCredentialCompany(
 
 /// <summary>
 /// Everything about ONE survey's credentials email that does not depend on the person: the
-/// company's language, its brand, the survey's title in that language, and the day it closes
-/// in the company's zone.
+/// company's language, its brand, the survey's title in that language, the day it closes
+/// in the company's zone, and the survey's (or its company's) own words for the two mails
+/// a per-survey key travels in.
 /// </summary>
+/// <param name="CredentialsText">
+/// <c>email.credentials.*</c> from the chain (survey → company → today's copy, ruled 2026-11-19);
+/// <see cref="SurveyEmailText.None"/> when the caller passed no content, which is today's copy.
+/// </param>
+/// <param name="ReminderText"><c>email.reminder.*</c> from the same read, for the no-password reminder.</param>
 public sealed record SurveyCredentialMail(
-    string? CompanyLanguage, EmailBrand Brand, string? SurveyTitle, string UsernamePrefix, DateOnly SurveyClosesOn);
+    string? CompanyLanguage, EmailBrand Brand, string? SurveyTitle, string UsernamePrefix, DateOnly SurveyClosesOn,
+    SurveyEmailText? CredentialsText = null, SurveyEmailText? ReminderText = null);
 
 /// <summary>
 /// Minting and mailing a per-survey key (<see cref="SurveyCredential"/>), shared by the two
@@ -45,7 +53,13 @@ public sealed record SurveyCredentialMail(
 public static class SurveyCredentialIssuance
 {
     /// <summary>The person-independent half of the email, resolved once per request.</summary>
-    public static SurveyCredentialMail MailFor(Survey survey, SurveyCredentialCompany? company)
+    /// <param name="content">
+    /// The survey's and its company's respondent content (<c>RespondentContentStore.LoadAsync</c>,
+    /// one read), so a company's own <c>email.credentials.*</c> / <c>email.reminder.*</c> reach a
+    /// survey that wrote none -- as <c>SurveyPersonalLinks.MailFor</c> does for its mail. Null is
+    /// today's copy.
+    /// </param>
+    public static SurveyCredentialMail MailFor(Survey survey, SurveyCredentialCompany? company, RespondentContentSources? content = null)
     {
         ArgumentNullException.ThrowIfNull(survey);
 
@@ -59,7 +73,9 @@ public static class SurveyCredentialIssuance
             // instant, and a close at or after 18:00 in Costa Rica is the next day in UTC --
             // the respondent screens' R2 defect (audit 2026-10-22), which this mail must not
             // reintroduce. A blank or unknown zone resolves to UTC, as every scheduler here does.
-            DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(survey.EndDate, SchedulingTimeZone.Resolve(company?.Timezone))));
+            DateOnly.FromDateTime(SchedulingTimeZone.ToLocal(survey.EndDate, SchedulingTimeZone.Resolve(company?.Timezone))),
+            content is null ? null : SurveyEmailText.Credentials(content),
+            content is null ? null : SurveyEmailText.Reminder(content));
     }
 
     /// <summary>
@@ -110,6 +126,7 @@ public static class SurveyCredentialIssuance
         ArgumentNullException.ThrowIfNull(mail);
         return sender.SendAsync(
             toEmail, recipientName, username, password, mail.CompanyLanguage,
-            mail.Brand, CredentialsEmailPurpose.Invitation, mail.SurveyTitle, mail.SurveyClosesOn, cancellationToken);
+            mail.Brand, CredentialsEmailPurpose.Invitation, mail.SurveyTitle, mail.SurveyClosesOn, mail.CredentialsText,
+            cancellationToken);
     }
 }

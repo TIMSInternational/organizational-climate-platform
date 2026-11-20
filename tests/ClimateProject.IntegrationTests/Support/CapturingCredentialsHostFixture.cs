@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using ClimateProject.Application.Email;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Surveys;
 using Microsoft.AspNetCore.Hosting;
@@ -26,7 +27,9 @@ public sealed record SentCredentials(
     /// <summary>The company as the mail will name it, for the same reason.</summary>
     string? CompanyName = null,
     /// <summary>The day the named survey closes, in the company's zone, as the mail will print it.</summary>
-    DateOnly? SurveyClosesOn = null);
+    DateOnly? SurveyClosesOn = null,
+    /// <summary>The client's own subject and paragraph the route resolved from the chain, or null.</summary>
+    SurveyEmailText? Text = null);
 
 /// <summary>
 /// A host whose <see cref="ICredentialsEmailSender"/> records instead of sending.
@@ -46,7 +49,7 @@ public sealed record SentCredentials(
 /// </summary>
 public sealed record SentReminder(
     string ToEmail, string Username, string? Language, string? RecipientName,
-    string? SurveyName = null, string? CompanyName = null);
+    string? SurveyName = null, string? CompanyName = null, SurveyEmailText? Text = null);
 
 /// <summary>
 /// What the product handed to the personal-link invitation, for one person: the token their link
@@ -110,7 +113,7 @@ internal sealed class CapturingSurveyReminderSender(ConcurrentQueue<SentReminder
 {
     public Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string? companyLanguage,
-        EmailBrand? brand, string? surveyName, CancellationToken cancellationToken)
+        EmailBrand? brand, string? surveyName, SurveyEmailText? text, CancellationToken cancellationToken)
     {
         if (failFor.Contains(toEmail))
         {
@@ -118,7 +121,7 @@ internal sealed class CapturingSurveyReminderSender(ConcurrentQueue<SentReminder
         }
 
         reminders.Enqueue(new SentReminder(
-            toEmail, username, companyLanguage, recipientName, surveyName, brand?.CompanyName));
+            toEmail, username, companyLanguage, recipientName, surveyName, brand?.CompanyName, text));
         return Task.FromResult(EmailSendOutcome.Success());
     }
 }
@@ -129,7 +132,7 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
     public Task<EmailSendOutcome> SendAsync(
         string toEmail, string? recipientName, string username, string password, string? companyLanguage,
         EmailBrand? brand, CredentialsEmailPurpose purpose, string? surveyName, DateOnly? surveyClosesOn,
-        CancellationToken cancellationToken)
+        SurveyEmailText? text, CancellationToken cancellationToken)
     {
         if (failFor.Contains(toEmail))
         {
@@ -138,7 +141,7 @@ internal sealed class CapturingCredentialsSender(ConcurrentQueue<SentCredentials
 
         sent.Enqueue(new SentCredentials(
             toEmail, username, password, companyLanguage, purpose, recipientName, surveyName, brand?.CompanyName,
-            surveyClosesOn));
+            surveyClosesOn, text));
         return Task.FromResult(EmailSendOutcome.Success());
     }
 }
