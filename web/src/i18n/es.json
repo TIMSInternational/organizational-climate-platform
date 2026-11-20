@@ -5332,6 +5332,8 @@
         "outcomeInactive": "Cuenta desactivada",
         "outcomeNotFound": "No se encontró la cuenta",
         "outcomeSendFailed": "El correo no salió",
+        "outcomeNotAuthorized": "No está en la lista autorizada del cliente. No se envió nada a este grupo; agréguelo a la lista primero o déjelo fuera.",
+        "outcomeNotAuthorizedBatch": "No se envió: alguien del mismo grupo no está en la lista autorizada del cliente.",
         "details": "Ver demográficos de {name}",
         "detailsHide": "Ocultar demográficos de {name}",
         "noDemographics": "Esta persona no trae demográficos cargados.",

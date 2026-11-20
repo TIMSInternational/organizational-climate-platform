@@ -153,6 +153,25 @@ public static class MassInviteEndpoints
         }
 
         var currentUser = principal.GetCurrentUser();
+
+        // Sent from a survey's roster: «Lista autorizada del cliente» applies (ruled 2026-11-19,
+        // ruling 3). Checked before the first password is re-hashed, and the whole batch is
+        // refused, naming everyone in it who is not on the list -- the 28 Oct shape, where the
+        // audience held people the client never named (SurveyAuthorizedListGuard).
+        if (request.SurveyId is { } surveyId)
+        {
+            var survey = await db.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Id == surveyId, cancellationToken);
+            if (survey is null || !SurveyEndpoints.CanAdminister(currentUser, survey.CompanyId))
+            {
+                return Results.Json(new { message = "Survey not found" }, statusCode: 404);
+            }
+
+            if (await SurveyAuthorizedListGuard.RefuseOutsidersAsync(db, survey, requested, cancellationToken) is { } notAuthorized)
+            {
+                return notAuthorized;
+            }
+        }
+
         var users = await db.Users
             .Where(u => requested.Contains(u.Id))
             .ToListAsync(cancellationToken);
@@ -240,7 +259,12 @@ public static class MassInviteEndpoints
 public sealed record CredentialsResendResult(bool Delivered, string? FailureReason);
 
 /// <param name="UserIds">Who to send to. Duplicates are collapsed; order is not significant.</param>
-public sealed record ResendCredentialsBatchRequest(IReadOnlyList<Guid>? UserIds);
+/// <param name="SurveyId">
+/// The survey whose roster the send comes from, when it comes from one. With it, the survey's
+/// «Lista autorizada del cliente» is enforced before anything is minted: one person off the list
+/// refuses the whole batch with 409 <c>survey_recipient_not_authorized</c>.
+/// </param>
+public sealed record ResendCredentialsBatchRequest(IReadOnlyList<Guid>? UserIds, Guid? SurveyId = null);
 
 /// <param name="Code">
 /// Machine-readable, and null when the send succeeded: <c>not_found</c>, <c>not_mass_invite</c>,

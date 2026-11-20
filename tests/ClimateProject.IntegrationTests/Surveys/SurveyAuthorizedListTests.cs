@@ -379,6 +379,58 @@ public class SurveyAuthorizedListTests(PostgresContainerFixture postgres, Captur
         Assert.DoesNotContain(_factory.Reminders, r => r.ToEmail == ana.Email || r.ToEmail == bea.Email);
     }
 
+    /// <summary>
+    /// The shared-mode roster's «Enviar datos de acceso» (<c>POST /admin/users/credentials</c> with
+    /// the survey's id): one person off the list refuses the batch WHOLE, naming her, before any
+    /// password is re-hashed -- nobody's old password dies, no session ends, nobody is mailed. With
+    /// her added to the list, both are sent.
+    /// </summary>
+    [Fact]
+    public async Task A_roster_credentials_resend_with_one_outsider_rehashes_nothing_and_mails_nobody()
+    {
+        var admin = await ClientAsync();
+        var survey = await ActiveSurveyAsync(admin, CredentialModes.Shared);
+        var ana = await SeedPersonAsync("Ana Pérez");
+        var dani = await SeedPersonAsync("Dani Rojas");
+        var before = await WithDbAsync(async db =>
+        {
+            foreach (var user in await db.Users.Where(u => u.Id == ana.Id || u.Id == dani.Id).ToListAsync())
+            {
+                user.Username = $"u{Guid.NewGuid():N}"[..12];
+                user.PasswordHash = $"hash-{user.Id:N}";
+            }
+
+            await db.SaveChangesAsync();
+            return await db.Users.AsNoTracking()
+                .Where(u => u.Id == ana.Id || u.Id == dani.Id)
+                .ToDictionaryAsync(u => u.Id, u => (u.PasswordHash, u.SecurityStamp));
+        });
+        await AddAsync(admin, survey.Id, ana.Email);
+
+        await AssertNotAuthorizedAsync(
+            await admin.PostAsJsonAsync("/admin/users/credentials", new ResendCredentialsBatchRequest([ana.Id, dani.Id], survey.Id)),
+            dani);
+
+        var after = await WithDbAsync(db => db.Users.AsNoTracking()
+            .Where(u => u.Id == ana.Id || u.Id == dani.Id)
+            .ToDictionaryAsync(u => u.Id, u => (u.PasswordHash, u.SecurityStamp)));
+        Assert.Equal(before[ana.Id], after[ana.Id]);
+        Assert.Equal(before[dani.Id], after[dani.Id]);
+        Assert.False(AnyMailTo(ana.Email, dani.Email));
+
+        // Another company's admin cannot use a survey id to reach this list, or learn it exists.
+        var stranger = await ClientAsync(companyId: _otherCompanyId);
+        var foreign = await stranger.PostAsJsonAsync("/admin/users/credentials", new ResendCredentialsBatchRequest([ana.Id], survey.Id));
+        Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+
+        await AddAsync(admin, survey.Id, dani.Email);
+        var sent = await admin.PostAsJsonAsync("/admin/users/credentials", new ResendCredentialsBatchRequest([ana.Id, dani.Id], survey.Id));
+        Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
+        Assert.Equal(2, (await sent.Content.ReadFromJsonAsync<CredentialsResendBatchResult>())!.Sent);
+        Assert.Single(_factory.Sent, m => m.ToEmail == ana.Email);
+        Assert.Single(_factory.Sent, m => m.ToEmail == dani.Email);
+    }
+
     // ------------------------------------------------------------------ the list's routes
 
     [Fact]

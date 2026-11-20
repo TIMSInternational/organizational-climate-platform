@@ -10,6 +10,7 @@ import SurveyRespondForm, { RespondSurface } from '../components/SurveyRespondFo
 import { PublicRespondEntryView } from '../next/entry/PublicRespondEntryView'
 import { mintPreviewSeed, type RespondPreviewSeam } from '../respondPreview'
 import type { EntryPromise } from '../respondPromise'
+import { useSurveyInterfaceLocale } from '../useSurveyInterfaceLocale'
 
 /** The start page draws `AnonymityNotice` from the same view the form reads, as on `/s/:token`. */
 const ENTRY_PROMISE: EntryPromise = 'respondView'
@@ -89,6 +90,14 @@ export default function RespondPreviewPage() {
   }, [])
 
   const loaded = start.status === 'ready' ? start.preview : null
+
+  // A one-language survey is answered in its language, start page included, as on `/s/:token`
+  // and `/survey-invitations/:token`: without it an operator whose browser is in the other
+  // language saw the default texts where the respondent sees the client's (`effectiveText` draws
+  // the client's words only in the payload's `resolvedLocale`). A stored choice still wins and
+  // nothing is persisted (`adoptContentLocale`), so this is the respondent's frame, not a change
+  // to the operator's own language.
+  useSurveyInterfaceLocale(loaded?.view.language)
 
   return (
     <RespondShell

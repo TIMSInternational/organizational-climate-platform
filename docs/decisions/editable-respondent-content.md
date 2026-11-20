@@ -82,7 +82,10 @@ The contract every lane builds on. Grep the symbols; this list is a map, not the
   namespace (`demographics.intro`); email keys are `email.<mail>.<part>`, display keys
   `display.<name>`. `RespondentContentRegistryTests` reads `web/src/i18n/{es,en}.json` and fails
   on a screen key missing from either or a placeholder its defaults do not use. Deliberately
-  absent: the identified wording and the device notes that state what is recorded.
+  absent: the identified wording and the device notes that state what is recorded, and the two
+  «Qué pasa ahora» storage claims (`happensPooledTitle`, `happensAttributedTitle`) — taken out
+  in review on 2026-11-19, because an override could tell an identified survey's respondents
+  that their answers are pooled.
 - **Chain** — `RespondentContentResolver.Resolve` (Application, pure): survey row → survey
   legacy column → company row; per locale, never another locale's words; display keys from `*`.
   `RespondentContentStore` (Infrastructure) loads and resolves:

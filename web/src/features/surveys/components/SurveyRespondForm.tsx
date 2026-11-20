@@ -1049,7 +1049,7 @@ export default function SurveyRespondForm({
   if (!view) return null
 
   // The start page in front of this form already made the promise: draw no second block.
-  const promiseAtEntry = promiseMadeAtEntry(entryPromise, view)
+  const promiseAtEntry = promiseMadeAtEntry(entryPromise, view, locale)
   // The client's words for the registry's screen keys where the survey or its company wrote
   // some, the catalogue's elsewhere; and how its paragraphs are aligned
   // (docs/decisions/editable-respondent-content.md).
@@ -1955,6 +1955,8 @@ function Submitted({
 }) {
   const { t: catalogue } = useTranslation('surveyRespond')
   const { t } = clientText(source, locale, catalogue)
+  // The storage claims read the catalogue only (named `t` so keysExist still checks the keys).
+  const storage = { t: catalogue }
   // A client's own thanks is set as a message, not as the default's one-line title.
   const closingMessage = effectiveText(source, locale, 'thankYouTitle')
 
@@ -2073,7 +2075,10 @@ function Submitted({
               unconditionally until that export shipped. */}
           <WhatHappensRow
             icon={<Lock aria-hidden="true" className="size-icon" />}
-            title={result.isAnonymous ? t('happensPooledTitle') : t('happensAttributedTitle')}
+            // From the catalogue ALWAYS, never the client's words: each states how the answers
+            // are kept, which changes by ruling, not by preference -- out of the registry
+            // (RespondentContentRegistry, "What is deliberately NOT here").
+            title={result.isAnonymous ? storage.t('happensPooledTitle') : storage.t('happensAttributedTitle')}
           />
           {/* Dropped rather than guessed at when the payload never loaded — a date
               is the one part of this the page cannot approximate. */}

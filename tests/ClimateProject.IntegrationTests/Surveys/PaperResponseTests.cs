@@ -158,6 +158,15 @@ public class PaperResponseTests : IAsyncLifetime
         });
 
         Assert.Equal(SurveyParticipantStatuses.Completed, await RosterStatusAsync(survey.Id, betoId));
+
+        // Identified: the response carries Beto's id anyway, so the audit row names him.
+        await _harness.WithDbAsync(async db =>
+        {
+            var audit = await db.AuditLogs.AsNoTracking().SingleAsync(a => a.ResourceId == $"{survey.Id}/{betoId}");
+            Assert.Equal("surveys.paper-responses.create", audit.Action);
+            Assert.Contains(betoId.ToString(), audit.Details!);
+            return 0;
+        });
     }
 
     [Fact]
@@ -197,12 +206,13 @@ public class PaperResponseTests : IAsyncLifetime
     // ------------------------------------------------------------------
 
     [Fact]
-    public async Task On_an_anonymous_survey_the_response_carries_no_user_and_the_audit_row_names_no_response()
+    public async Task On_an_anonymous_survey_the_response_carries_no_user_and_the_audit_row_names_neither_response_nor_person()
     {
         var survey = await ActiveSurveyAsync(anonymous: true);
         var (_, carlaId) = await _harness.IdentifiedClientAsync(Roles.Employee, _companyId, _departmentId);
         var carlaEmail = (await AccountAsync(carlaId)).Email;
         var op = await OperatorAsync();
+        var entering = DateTimeOffset.UtcNow;
 
         var paper = await EnterAsync(op, survey.Id, carlaId, Answers(survey));
 
@@ -218,7 +228,17 @@ public class PaperResponseTests : IAsyncLifetime
             Assert.True(await db.SurveyParticipations.AsNoTracking()
                 .AnyAsync(p => p.SurveyId == survey.Id && p.Email == carlaEmail.ToLowerInvariant()));
 
-            var audit = await db.AuditLogs.AsNoTracking().SingleAsync(a => a.ResourceId == $"{survey.Id}/{carlaId}");
+            // The row is written in the same request as the response, so its timestamp matches
+            // the response's StartTime and CompletionTime to the second. It must therefore not
+            // name Carla anywhere: not in the resource id, not in the recorded path.
+            var audit = await db.AuditLogs.AsNoTracking().SingleAsync(a => a.ResourceId == survey.Id.ToString()
+                && a.Action == "surveys.paper-responses.create");
+            Assert.DoesNotContain(carlaId.ToString(), audit.ResourceId!);
+            Assert.DoesNotContain(carlaId.ToString(), audit.Details!);
+            var companyRows = await db.AuditLogs.AsNoTracking().Where(a => a.CompanyId == _companyId && a.Timestamp >= entering).ToListAsync();
+            Assert.DoesNotContain(companyRows, a =>
+                (a.ResourceId ?? string.Empty).Contains(carlaId.ToString(), StringComparison.Ordinal)
+                || (a.Details ?? string.Empty).Contains(carlaId.ToString(), StringComparison.Ordinal));
             Assert.True(audit.Success);
             Assert.Equal(_companyId, audit.CompanyId);
             Assert.NotNull(audit.UserId);

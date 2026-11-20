@@ -79,9 +79,10 @@ public static class PaperResponseEndpoints
     /// this person's completed response.
     /// </summary>
     /// <remarks>
-    /// The audit row names the operator, the survey and the person (the route carries both ids)
-    /// and never the response: on an anonymous survey the response id is the one value that
-    /// would join the person to their answers, so it is neither returned nor recorded.
+    /// The audit row names the operator and the survey, and never the response: on an anonymous
+    /// survey the response id would join the person to their answers, so it is neither returned
+    /// nor recorded. On an anonymous survey it does not name the person either, because its
+    /// timestamp matches the response's to the second; on an identified one it does.
     /// </remarks>
     private static async Task<IResult> EnterAsync(
         Guid surveyId,
@@ -103,8 +104,20 @@ public static class PaperResponseEndpoints
         }
 
         // Which survey and which roster person, as the credential routes name a person's key.
-        // Never the response: see the remarks.
-        audit.SetResourceId($"{surveyId}/{userId}");
+        // Never the response: see the remarks. On an ANONYMOUS survey not the person either --
+        // neither in the resource id nor in the recorded path: the response is written in this
+        // request, so this row's timestamp matches its StartTime and CompletionTime to the
+        // second, and a row naming the person would join them to their answers by the clock
+        // (the join SurveyParticipation keeps to a calendar day to prevent).
+        if (survey?.Settings.Anonymous ?? true)
+        {
+            audit.SetResourceId(surveyId.ToString());
+            audit.RedactPath($"/surveys/{surveyId}/paper-responses");
+        }
+        else
+        {
+            audit.SetResourceId($"{surveyId}/{userId}");
+        }
 
         if (refusal is not null)
         {

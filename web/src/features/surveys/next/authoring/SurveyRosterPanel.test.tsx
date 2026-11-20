@@ -8,6 +8,7 @@ import { tokenFor } from '../../../../test/jwtFixture'
 import es from '../../../../i18n/es.json'
 import type { SurveyParticipationView, SurveyRosterRow } from '../../api/surveys'
 import { formatParticipationDay } from './participationDay'
+import { publishAuthorizedList, type AuthorizedListView } from '../../api/authorizedList'
 
 const T = es.surveys.next.roster
 const COMPANY = '11111111-1111-1111-1111-111111111111'
@@ -628,12 +629,83 @@ describe('SurveyRosterPanel', () => {
 
     await waitFor(() => expect(sent).toHaveLength(1))
     expect((sent[0].body as { userIds: string[] }).userIds.toSorted()).toEqual(['ana', 'hugo'])
+    // Sent as THIS survey's roster, so the server enforces its «Lista autorizada del cliente».
+    expect((sent[0].body as { surveyId?: string }).surveyId).toBe(SURVEY)
 
     // A failed send is a 200 with a per-person outcome. Reporting "2 sent" here is the defect
     // this summary exists to prevent.
     expect(
       await screen.findByText(T.sentSome.replace('{sent}', '1').replace('{requested}', '2').replace('{failed}', '1')),
     ).toBeTruthy()
+  })
+
+  /**
+   * «Lista autorizada del cliente» (ruling 3, 2026-11-19): somebody off the list cannot be picked
+   * for a resend, by hand or by «seleccionar todo» -- the 28 Oct shape, where the audience held
+   * people the client never named.
+   */
+  describe('with an authorized list', () => {
+    function listOf(...emails: string[]): AuthorizedListView {
+      return {
+        surveyId: SURVEY,
+        count: emails.length,
+        editable: true,
+        lockReason: null,
+        people: emails.map((email, index) => ({
+          id: `p${index}`, email, displayName: null, addedAt: '2026-11-19T00:00:00Z', addedBy: null, addedByName: null,
+        })),
+      }
+    }
+
+    afterEach(() => publishAuthorizedList(SURVEY, null))
+
+    it('does not let an outsider be selected, and «seleccionar todo» leaves them out', async () => {
+      const payload = view()
+      const { mock, sent } = fetchWith(payload)
+      vi.stubGlobal('fetch', mock)
+      publishAuthorizedList(SURVEY, listOf('hugo@esph.test', 'marta@esph.test'))
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Marta Villalobos')
+
+      expect((within(rowOf('ana')).getByRole('checkbox') as HTMLButtonElement).disabled).toBe(true)
+      await user.click(screen.getByRole('checkbox', { name: T.selectAll }))
+      await user.click(screen.getByRole('button', { name: T.send }))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.send }))
+
+      await waitFor(() => expect(sent).toHaveLength(1))
+      expect((sent[0].body as { userIds: string[] }).userIds.toSorted()).toEqual(['hugo', 'marta'])
+    })
+
+    it('names an outsider the server refused as off the list, and the rest of the group as not sent', async () => {
+      const payload = view()
+      const { mock: base, sent } = fetchWith(payload)
+      const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith('/admin/users/credentials')) {
+          sent.push({ url: String(input), body: JSON.parse(String(init?.body)) })
+          return Promise.resolve(new Response(JSON.stringify({
+            message: 'not on the list',
+            code: 'survey_recipient_not_authorized',
+            notAuthorized: [{ userId: 'ana', email: 'ana@esph.test', name: 'Ana Lucía Mora' }],
+          }), { status: 409, headers: { 'Content-Type': 'application/json' } }))
+        }
+        return base(input, init)
+      })
+      vi.stubGlobal('fetch', mock)
+      const user = userEvent.setup()
+      renderPanel(payload)
+      await screen.findByText('Marta Villalobos')
+
+      await user.click(within(rowOf('hugo')).getByRole('checkbox'))
+      await user.click(within(rowOf('ana')).getByRole('checkbox'))
+      await user.click(screen.getByRole('button', { name: T.send }))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: T.send }))
+
+      // Each outcome line is «address — reason».
+      expect((await screen.findByText(T.outcomeNotAuthorized, { exact: false })).textContent).toContain('ana@esph.test')
+      expect(screen.getByText(T.outcomeNotAuthorizedBatch, { exact: false })).toBeTruthy()
+      expect(screen.getByText(T.sendFailed)).toBeTruthy()
+    })
   })
 
   it('sends nothing when the reminder is not confirmed', async () => {

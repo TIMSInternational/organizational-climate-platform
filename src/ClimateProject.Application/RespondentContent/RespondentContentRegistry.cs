@@ -138,7 +138,11 @@ public sealed record RespondentContentEntry(
 /// and <c>participationBody</c>, the participation clause). In particular the identified
 /// variants -- <c>identifiedChip</c>, <c>identifiedTitle</c>, <c>identifiedBody</c> -- and
 /// <c>answeredOnThisDeviceBody</c>/<c>answeredOnThisDeviceBodyRecorded</c>: an author's prose
-/// must not be able to hide that names are kept (<c>SurveySettings.RespondentIntroEn</c>). Also
+/// must not be able to hide that names are kept (<c>SurveySettings.RespondentIntroEn</c>). Nor
+/// the two «Qué pasa ahora» claims about how the answers are kept, <c>happensPooledTitle</c>
+/// («se agrupan de inmediato») and <c>happensAttributedTitle</c> («las procesa un equipo
+/// externo»): an override of either could tell an identified survey's respondents their answers
+/// are pooled. Also
 /// out: errors, autosave and validation messages, accessible-only labels, and the
 /// privacy-floor and storage guarantees, which change by ruling, not by preference.</para>
 ///
@@ -241,8 +245,6 @@ public static class RespondentContentRegistry
             LegacyColumn: RespondentContentLegacyColumns.ClosingMessage),
         Screen("receiptReading", "thanks", LabelMaxLength),
         Screen("whatHappensNowTitle", "thanks", TitleMaxLength),
-        Screen("happensPooledTitle", "thanks", SentenceMaxLength),
-        Screen("happensAttributedTitle", "thanks", SentenceMaxLength),
         Screen("happensClosesTitle", "thanks", SentenceMaxLength, "date"),
         Screen("happensResultsTitle", "thanks", SentenceMaxLength),
 

@@ -98,6 +98,7 @@ function serve(
     resolve?: () => Response
     steps?: () => Response
     submission?: Partial<typeof SUBMISSION>
+    view?: SurveyRespondView
   } = {},
 ): void {
   vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
@@ -115,7 +116,7 @@ function serve(
         new Response(JSON.stringify({ ...SUBMISSION, ...options.submission }), { status: 201 }),
       )
     }
-    return Promise.resolve(new Response(JSON.stringify(respondView()), { status: 200 }))
+    return Promise.resolve(new Response(JSON.stringify(options.view ?? respondView()), { status: 200 }))
   })
 }
 
@@ -514,6 +515,29 @@ describe('SurveyInvitationPage', () => {
     expect(container.querySelector('header [data-slot="chip"]')).toBeNull()
     expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(0)
     expect(screen.queryByText('Esta encuesta es anónima')).toBeNull()
+  })
+
+  /**
+   * The client's own paragraph (here the company's, reaching the survey through the chain) is on
+   * the landing card and in the respond view alike. Drawn once, on the card: the form must not
+   * repeat it over question 1 (PROCOMER, 2026-11-18).
+   */
+  it('draws the client\'s own anonymity paragraph on the card only, not again over question 1', async () => {
+    const paragraph = 'Sus respuestas llegan solo a TIMS, nunca a la empresa.'
+    serve({
+      resolve: () => new Response(JSON.stringify(invitation({ content: { anonymousBody: paragraph } })), { status: 200 }),
+      view: { ...respondView(), respondentIntro: paragraph, content: { anonymousBody: paragraph } },
+    })
+    const { container } = renderPage()
+
+    expect(await screen.findByText(paragraph)).toBeTruthy()
+    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Empezar a responder' }))
+    await screen.findByRole('radio', { name: 'Bien' })
+
+    expect(container.querySelectorAll('[data-slot="anonymity-notice"]')).toHaveLength(0)
+    expect(screen.queryByText(paragraph)).toBeNull()
   })
 
   /**

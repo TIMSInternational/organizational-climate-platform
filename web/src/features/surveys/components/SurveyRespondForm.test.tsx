@@ -1321,6 +1321,18 @@ describe('SurveyRespondForm confirmation', () => {
   })
 
   /**
+   * The two storage claims are not the client's to word: they say how the answers are kept,
+   * which changes by ruling. Even a payload that carried an override is not drawn
+   * (RespondentContentRegistry no longer lists either key).
+   */
+  it('states how the answers are kept in the catalogue\'s words, never a client\'s', async () => {
+    await submitOnce({}, {}, { anonymous: false, content: { happensAttributedTitle: 'Sus respuestas se agrupan de inmediato' } })
+
+    expect(screen.getByText('Sus respuestas las procesa un equipo externo')).toBeTruthy()
+    expect(screen.queryByText('Sus respuestas se agrupan de inmediato')).toBeNull()
+  })
+
+  /**
    * Headings only (PROCOMER, 2026-11-18). The page used to close on a note -- "Puede cerrar
    * esta pestaña. No podemos volver a mostrarle sus respuestas…" -- and open with a line under
    * the thanks; both went, for every respondent.
@@ -1775,17 +1787,33 @@ describe('SurveyRespondForm — the promise made on a start page', () => {
 
   it('draws none after an invitation card that said the same thing', async () => {
     respondWith(view({ anonymous: true }))
-    renderForm({ publicEntry: true, entryPromise: { invitation: true } })
+    renderForm({ publicEntry: true, entryPromise: { invitation: true, locale: 'es', anonymousBody: null, anonymousChip: null } })
     await screen.findByText('¿Qué tan satisfecho estás?')
 
     expect(notices()).toHaveLength(0)
   })
 
-  /** The card has no respond view, so it cannot draw the survey's own paragraph. */
-  it('still draws the survey\'s own intro after an invitation card, which could only draw the default', async () => {
+  /**
+   * Since 2026-11-19 the card draws the client's own paragraph (survey → company chain) from the
+   * invitation detail, and the form reads the same chain: the same words, once (PROCOMER 18 Nov).
+   */
+  it('draws none after an invitation card that drew the client\'s own paragraph', async () => {
     // The server fills `content.anonymousBody` with the same value as `respondentIntro` (one chain).
     respondWith(view({ anonymous: true, respondentIntro: 'Texto propio de la encuesta', content: { anonymousBody: 'Texto propio de la encuesta' } }))
-    renderForm({ publicEntry: true, entryPromise: { invitation: true } })
+    renderForm({
+      publicEntry: true,
+      entryPromise: { invitation: true, locale: 'es', anonymousBody: 'Texto propio de la encuesta', anonymousChip: null },
+    })
+    await screen.findByText('¿Qué tan satisfecho estás?')
+
+    expect(notices()).toHaveLength(0)
+    expect(screen.queryByText('Texto propio de la encuesta')).toBeNull()
+  })
+
+  /** Words the card did not draw -- changed between the landing and «Comenzar» -- are drawn. */
+  it('still draws the client\'s paragraph when the card drew other words', async () => {
+    respondWith(view({ anonymous: true, respondentIntro: 'Texto propio de la encuesta', content: { anonymousBody: 'Texto propio de la encuesta' } }))
+    renderForm({ publicEntry: true, entryPromise: { invitation: true, locale: 'es', anonymousBody: null, anonymousChip: null } })
     await screen.findByText('¿Qué tan satisfecho estás?')
 
     expect(notices()).toHaveLength(1)
@@ -1798,7 +1826,7 @@ describe('SurveyRespondForm — the promise made on a start page', () => {
    */
   it('still draws the block when the response\'s anonymity differs from what the card said', async () => {
     respondWith(view({ anonymous: true }))
-    renderForm({ publicEntry: true, entryPromise: { invitation: false } })
+    renderForm({ publicEntry: true, entryPromise: { invitation: false, locale: 'es', anonymousBody: null, anonymousChip: null } })
     await screen.findByText('¿Qué tan satisfecho estás?')
 
     expect(notices()).toHaveLength(1)

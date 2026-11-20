@@ -39,6 +39,20 @@ public sealed class AuditEntry
     /// <summary>The row this request acted on, if the handler knows it.</summary>
     public string? ResourceId { get; private set; }
 
+    /// <summary>
+    /// The path to record in <c>details</c> in place of the request's own, when the request's
+    /// path names something the row must not keep. Null means "the request path".
+    /// </summary>
+    public string? RedactedPath { get; private set; }
+
+    /// <summary>
+    /// Records <paramref name="path"/> in <c>details</c> instead of the request's path. For a
+    /// route whose path carries an id that, beside this row's exact timestamp, would join a
+    /// person to something kept apart from them -- an operator's paper entry on an anonymous
+    /// survey (<c>PaperResponseEndpoints</c>). It changes what is recorded, never whether.
+    /// </summary>
+    public void RedactPath(string path) => RedactedPath = path;
+
     /// <summary>The acting user, if the handler already resolved one.</summary>
     public Guid? ActorUserId { get; private set; }
 

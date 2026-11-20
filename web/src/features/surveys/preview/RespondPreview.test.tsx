@@ -238,4 +238,39 @@ describe('RespondPreviewPage', () => {
     }
     await waitFor(() => expect(submitSurveyResponse).not.toHaveBeenCalled())
   }, 15000)
+
+  /**
+   * A Spanish-only survey opened by an operator whose browser is in English and who never chose a
+   * language: the real link adopts Spanish (`useSurveyInterfaceLocale`), so the preview must too,
+   * or its start page draws the English default where the respondent reads the client's words.
+   */
+  it('adopts a one-language survey\'s language on the start page, as the real link does', async () => {
+    window.localStorage.clear()
+    const languages = vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en-US'])
+    vi.mocked(fetch).mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          // The server answers a Spanish-only survey in Spanish whatever `lang` asked for.
+          JSON.stringify({ view: view(), companyName: 'Empresa', companyLogoUrl: null, status: 'draft' }),
+          { status: 200 },
+        ),
+      ),
+    )
+
+    render(
+      <TranslationProvider>
+        <MemoryRouter initialEntries={['/surveys/s1/preview']}>
+          <Routes>
+            <Route path="/surveys/:id/preview" element={<RespondPreviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TranslationProvider>,
+    )
+
+    expect(await screen.findByText('Párrafo de anonimato de la empresa')).toBeTruthy()
+    expect(screen.getByRole('button', { name: es('surveyRespond.next.entryStart') })).toBeTruthy()
+    // Adopted, never persisted: the operator's own language is untouched.
+    expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBeNull()
+    languages.mockRestore()
+  }, 15000)
 })

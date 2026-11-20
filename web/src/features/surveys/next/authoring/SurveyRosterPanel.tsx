@@ -44,6 +44,7 @@ import { getSurveyRosterCsv, surveyRosterCsvFileName } from './rosterExport'
 import { downloadBlobFile } from '../../../../lib/downloadBlobFile'
 import { ResponseExclusionDialog } from './ResponseExclusionDialog'
 import { OutsideAuthorizedListMark } from './AuthorizedListPanel'
+import { notAuthorizedOf, useOutsideAuthorizedList, useOutsideAuthorizedListTest } from '../../api/authorizedList'
 import { PaperResponseAction } from './PaperResponseAction'
 
 type Filter = 'all' | SurveyParticipantStatus
@@ -223,6 +224,8 @@ const OUTCOME_KEY: Record<string, string> = {
   inactive: 'outcomeInactive',
   not_found: 'outcomeNotFound',
   send_failed: 'outcomeSendFailed',
+  not_authorized: 'outcomeNotAuthorized',
+  not_authorized_batch: 'outcomeNotAuthorizedBatch',
 }
 
 /**
@@ -298,6 +301,7 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
   const superAdmin = readViewerClaims().role === 'super_admin'
 
   const roster = state.status === 'ready' ? state.view.roster : NO_ROWS
+  const outsideList = useOutsideAuthorizedListTest()
 
   /**
    * One key per person per survey. Such a person has no account username, so the account
@@ -365,7 +369,12 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
 
   // Only the people a resend can actually reach: an account that signs in by email has no
   // generated details, so offering to send it some would be an action that cannot succeed.
-  const sendable = perSurvey || personalLink ? [] : visible.filter((row) => row.username !== null)
+  //
+  // Nor anybody off «Lista autorizada del cliente» (ruling 3, 2026-11-19): the server refuses a
+  // batch that names one, so «seleccionar todo» must not pick them up.
+  const sendable = perSurvey || personalLink
+    ? []
+    : visible.filter((row) => row.username !== null && !outsideList(row.email))
   const chosen = [...selected].filter((id) => roster.some((row) => row.userId === id))
   const allShownChosen = sendable.length > 0 && sendable.every((row) => selected.has(row.userId))
 
@@ -416,9 +425,27 @@ export default function SurveyRosterPanel({ state }: { state: ParticipationState
     let done = 0
     for (const chunk of chunks) {
       try {
-        const result = await resendCredentialsBatch(baseUrl, chunk)
+        const result = await resendCredentialsBatch(baseUrl, chunk, state.status === 'ready' ? state.view.surveyId : undefined)
         outcomes.push(...result.outcomes)
-      } catch {
+      } catch (error) {
+        // «Lista autorizada del cliente»: the server refused this chunk whole and minted nothing.
+        // Its outsiders are named as such; everybody else in it was simply not sent.
+        const outsiders = notAuthorizedOf(error)
+        if (outsiders !== null) {
+          const named = new Set(outsiders.map((person) => person.userId))
+          outcomes.push(
+            ...chunk.map((userId) => ({
+              userId,
+              email: outsiders.find((person) => person.userId === userId)?.email ?? null,
+              delivered: false,
+              failureReason: null,
+              code: named.has(userId) ? 'not_authorized' : 'not_authorized_batch',
+            })),
+          )
+          done += chunk.length
+          setSend({ phase: 'sending', done, total: ids.length })
+          continue
+        }
         // A chunk that never reached the server is still every one of its people failing, and
         // saying so beats a summary that quietly counts fewer than were asked for.
         outcomes.push(
@@ -1227,6 +1254,8 @@ function RosterRows({
   onToggle: () => void
   onToggleDetails: () => void
 }) {
+  // Off «Lista autorizada del cliente»: not selectable for a resend, which the server would refuse.
+  const outsideList = useOutsideAuthorizedList(row.email)
   const label = (demographic: { labelEs: string | null; labelEn: string | null; field: string }) =>
     (locale === 'es' ? demographic.labelEs : demographic.labelEn) ?? demographic.field
 
@@ -1277,7 +1306,7 @@ function RosterRows({
               checked={selected}
               // An account that signs in by email has no generated details, so there is nothing
               // a resend could send it.
-              disabled={row.username === null || !accountResend}
+              disabled={row.username === null || !accountResend || outsideList}
               aria-label={copy('selectRow', { name: row.name })}
               onCheckedChange={onToggle}
             />

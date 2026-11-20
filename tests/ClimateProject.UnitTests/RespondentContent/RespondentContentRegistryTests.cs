@@ -139,6 +139,10 @@ public class RespondentContentRegistryTests
     [InlineData("identifiedBody")]
     [InlineData("answeredOnThisDeviceBody")]
     [InlineData("answeredOnThisDeviceBodyRecorded")]
+    // «Qué pasa ahora»: «se agrupan de inmediato» / «las procesa un equipo externo» state how the
+    // answers are kept; overridden at company level, an identified survey would claim pooling.
+    [InlineData("happensPooledTitle")]
+    [InlineData("happensAttributedTitle")]
     public void The_wording_that_states_what_is_recorded_is_not_overridable(string key)
         => Assert.False(RespondentContentRegistry.TryGet(key, out _));
 

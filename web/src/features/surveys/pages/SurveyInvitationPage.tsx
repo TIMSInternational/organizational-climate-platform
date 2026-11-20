@@ -13,6 +13,7 @@ import { useSurveyInterfaceLocale } from '../useSurveyInterfaceLocale'
 import { invitationFailureCopy } from '../linkFailure'
 import { textAlignOf } from '../api/respondentContent'
 import { clientText } from '../clientText'
+import { invitationPromise } from '../respondPromise'
 import {
   SurveyLinkError,
   getSurveyInvitation,
@@ -214,7 +215,7 @@ export default function SurveyInvitationPage() {
           surveyId={state.detail.surveyId}
           publicEntry
           onSubmitted={reportCompleted}
-          entryPromise={{ invitation: state.detail.anonymity.anonymous }}
+          entryPromise={invitationPromise(state.detail, locale)}
         />
       ) : (
         <RespondSurface>

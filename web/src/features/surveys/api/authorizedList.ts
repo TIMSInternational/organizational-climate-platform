@@ -211,6 +211,16 @@ function subscribe(listener: () => void): () => void {
  * Whether `email` is outside the client's list on the survey the page has open: `false` when
  * there is no list (no list, nobody is outside it) or it has not been read.
  */
+/**
+ * The same question as `useOutsideAuthorizedList`, for a whole roster at once: a predicate that
+ * says whether an address is outside the list. Always false while there is no list.
+ */
+export function useOutsideAuthorizedListTest(): (email: string) => boolean {
+  const current = useSyncExternalStore(subscribe, () => snapshot, () => null)
+  if (current === null || current.emails.size === 0) return () => false
+  return (email) => !current.emails.has(normaliseEmail(email))
+}
+
 export function useOutsideAuthorizedList(email: string): boolean {
   const current = useSyncExternalStore(subscribe, () => snapshot, () => null)
   if (current === null || current.emails.size === 0) return false

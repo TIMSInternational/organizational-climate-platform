@@ -5332,6 +5332,8 @@
         "outcomeInactive": "Account deactivated",
         "outcomeNotFound": "Account not found",
         "outcomeSendFailed": "The email did not go out",
+        "outcomeNotAuthorized": "Not on the client's authorized list. Nothing was sent to this group; add them to the list first, or leave them out.",
+        "outcomeNotAuthorizedBatch": "Not sent: someone in the same group is not on the client's authorized list.",
         "details": "Show {name}'s demographics",
         "detailsHide": "Hide {name}'s demographics",
         "noDemographics": "This person has no demographics loaded.",

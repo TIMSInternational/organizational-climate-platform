@@ -32,7 +32,9 @@ export function singleLanguageOf(language: string | null | undefined): Locale | 
  * re-read in the adopted locale, its `resolvedLocale` then equals the interface locale, which is
  * the condition `effectiveText` needs to show the client's own words.
  *
- * Never call it on an administrator's screen: there the reader's language is the reader's.
+ * Never call it on an administrator's screen: there the reader's language is the reader's. The one
+ * exception is «Ver como quien responde» (`RespondPreviewPage`), which is the respondent's frame
+ * drawn for an operator, and must show what the respondent sees.
  */
 export function useSurveyInterfaceLocale(language: string | null | undefined): void {
   const { locale, adoptContentLocale } = useTranslation()
