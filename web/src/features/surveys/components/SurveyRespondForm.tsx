@@ -61,6 +61,7 @@ import { hasAnswered, markAnswered } from '../respondReceipt'
 import { promiseMadeAtEntry, type EntryPromise } from '../respondPromise'
 import { clearSessionId, ensureSessionId } from '../respondSession'
 import { useRespondLock } from '../useRespondLock'
+import { previewSubmission, type RespondPreviewSeam } from '../respondPreview'
 import {
   SurveyRespondError,
   getSurveyRespondView,
@@ -117,6 +118,14 @@ export interface SurveyRespondFormProps {
    * where the form remains the first place the promise is made. See `respondPromise.ts`.
    */
   entryPromise?: EntryPromise
+  /**
+   * «Ver como quien responde»: the same screens, saving nothing (`respondPreview.ts`). The view
+   * comes from `preview.load`, the shuffle is seeded by `preview.seed`, and the session, the
+   * lock, the answered-on-this-device flag, the autosave, the submit and `onSubmitted` are not
+   * used -- the thank-you is drawn from `previewSubmission`. Pass `publicEntry` with it: a
+   * preview is what a visitor to the survey's link sees.
+   */
+  preview?: RespondPreviewSeam
 }
 
 type LoadState =
@@ -213,6 +222,7 @@ export default function SurveyRespondForm({
   publicEntry = false,
   onSubmitted,
   entryPromise,
+  preview,
 }: SurveyRespondFormProps) {
   const { t, locale, adoptContentLocale } = useTranslation('surveyRespond')
   const { t: tRoot } = useTranslation()
@@ -293,7 +303,9 @@ export default function SurveyRespondForm({
   // The session id is minted before the first read, because it is both the resume
   // key on the way in and the idempotency key on the way out. Deriving it later
   // would mean the GET could not find a response the POST would then duplicate.
-  const sessionId = useMemo(() => ensureSessionId(surveyId), [surveyId])
+  // A preview has no session: its seed stands in for the shuffle, and nothing is stored.
+  const previewSeed = preview?.seed
+  const sessionId = useMemo(() => previewSeed ?? ensureSessionId(surveyId), [surveyId, previewSeed])
 
   // Whether this browser remembers answering this survey, read ONCE on mount rather than
   // on every render. The submission itself writes the flag, and re-reading it would swap
@@ -301,14 +313,14 @@ export default function SurveyRespondForm({
   // finished. Held in state so the shared-device escape below can clear it for THIS
   // render without touching storage -- see the `publicEntry` branch for why that escape
   // exists on the public path and nowhere else.
-  const [answeredHere, setAnsweredHere] = useState(() => hasAnswered(surveyId))
+  const [answeredHere, setAnsweredHere] = useState(() => preview === undefined && hasAnswered(surveyId))
 
   // One open assessment at a time. Two tabs share one session id — `respondSession`
   // stores it per survey in `localStorage` — so both would hydrate and autosave into
   // the same in-progress response and the last writer would win, silently. The lock
   // is browser-local and is not a one-response-per-person guarantee; `respondLock`
   // records precisely what it does and does not promise.
-  const lock = useRespondLock(surveyId)
+  const lock = useRespondLock(preview === undefined ? surveyId : null)
 
   // Answers are hydrated from the server exactly once. The read is re-issued when the
   // respondent switches language — the question TEXT has to come back translated —
@@ -338,7 +350,7 @@ export default function SurveyRespondForm({
     let cancelled = false
     setState({ status: 'loading' })
 
-    getSurveyRespondView(baseUrl, surveyId, { lang: locale, sessionId })
+    ;(preview ? preview.load(locale) : getSurveyRespondView(baseUrl, surveyId, { lang: locale, sessionId }))
       .then((view) => {
         if (cancelled) return
         if (!hydrated.current) {
@@ -370,7 +382,7 @@ export default function SurveyRespondForm({
     return () => {
       cancelled = true
     }
-  }, [baseUrl, surveyId, locale, sessionId, lock])
+  }, [baseUrl, surveyId, locale, sessionId, lock, preview])
 
   const view = state.status === 'ready' ? state.view : null
   const timeLimitMinutes = view?.timeLimitMinutes ?? null
@@ -543,6 +555,7 @@ export default function SurveyRespondForm({
     async (options: { keepalive?: boolean } = {}): Promise<void> => {
       const current = latest.current
       const currentView = current.view
+      if (preview !== undefined) return
       if (!respondAutosaveAllowed(currentView) || currentView === null) return
       if (finished.current) return
       if (busyRef.current !== 'idle') return
@@ -613,11 +626,13 @@ export default function SurveyRespondForm({
         setSaveState((previous) => ({ status: 'error', savedAt: previous.savedAt, message }))
       }
     },
-    [announce, baseUrl, enqueue, publicEntry, recordServerAnswers, sessionId, t],
+    [announce, baseUrl, enqueue, preview, publicEntry, recordServerAnswers, sessionId, t],
   )
 
   async function send(isComplete: boolean): Promise<void> {
     if (!view) return
+    // A preview keeps nothing, so there is no partial save to make.
+    if (preview !== undefined && !isComplete) return
     setSubmitError(null)
     setBusy(isComplete ? 'submitting' : 'saving')
     if (!isComplete) setSaveState(markSaving)
@@ -627,7 +642,7 @@ export default function SurveyRespondForm({
       // and presses Save Progress has asked for the erasure at least as plainly as one
       // who waited for the debounce.
       const cleared = clearedQuestionIds(serverAnswered.current, questions, answers)
-      const submission = await enqueue(() =>
+      const submission = preview !== undefined ? previewSubmission(view, inputs, preview.seed) : await enqueue(() =>
         submitSurveyResponse(baseUrl, view.id, {
           answers: inputs,
           ...(cleared.length > 0 ? { clearedQuestionIds: cleared } : {}),
@@ -685,7 +700,7 @@ export default function SurveyRespondForm({
         finished.current = true
         // Nothing left to resume, and on a shared browser the id must not outlive
         // the response it belongs to.
-        clearSessionId(view.id)
+        if (preview === undefined) clearSessionId(view.id)
         // The resume credential goes; a flag saying "answered" stays. Dropping the id is
         // what stops the next person at a shared browser reading these answers back (the
         // respond GET returns them, free text included), and it is also what makes the
@@ -693,12 +708,12 @@ export default function SurveyRespondForm({
         // nothing anywhere would stop the same person answering again. See
         // `respondReceipt.ts` for why the flag is browser-local and why it is not, and
         // must not be described as, a one-response-per-person guarantee.
-        markAnswered(view.id)
+        if (preview === undefined) markAnswered(view.id)
         setResult(submission)
         // After the state updates, never before: whatever the caller does with this
         // must not be able to stand between the respondent and their confirmation.
         // `alreadySubmitted` is excluded for the reason written on the prop.
-        if (!submission.alreadySubmitted) onSubmitted?.()
+        if (!submission.alreadySubmitted && preview === undefined) onSubmitted?.()
       } else {
         setSaveState(
           inputs.length === 0
@@ -794,7 +809,7 @@ export default function SurveyRespondForm({
    * that cancels itself out from costing a write.
    */
   useEffect(() => {
-    if (!respondAutosaveAllowed(view) || finished.current) return
+    if (preview !== undefined || !respondAutosaveAllowed(view) || finished.current) return
 
     const inputs = toAnswerInputs(questions, answers)
     const cleared = clearedQuestionIds(serverAnswered.current, questions, answers)
@@ -817,7 +832,7 @@ export default function SurveyRespondForm({
     return () => window.clearTimeout(handle)
     // `savesLanded` is a dependency and not a value: see its declaration. Without it an
     // erasure made while a save was in flight is never reconsidered.
-  }, [answers, autosave, questions, savesLanded, view])
+  }, [answers, autosave, preview, questions, savesLanded, view])
 
   /**
    * The save that beats the debounce window, on the three ways out of a page.
@@ -833,7 +848,7 @@ export default function SurveyRespondForm({
    * `keepalive` is what makes the request outlive the document that started it.
    */
   useEffect(() => {
-    if (!respondAutosaveAllowed(view)) return
+    if (preview !== undefined || !respondAutosaveAllowed(view)) return
 
     const flush = () => void autosave({ keepalive: true })
     const onVisibility = () => {
@@ -846,7 +861,7 @@ export default function SurveyRespondForm({
       window.removeEventListener('pagehide', flush)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [autosave, view])
+  }, [autosave, preview, view])
 
   /**
    * The last attempt, on the way out of the component.
