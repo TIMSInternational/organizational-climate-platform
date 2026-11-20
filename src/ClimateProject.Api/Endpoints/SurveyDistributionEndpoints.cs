@@ -6,6 +6,7 @@ using ClimateProject.Application.Auth;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.Notifications;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
@@ -1385,6 +1386,7 @@ public static class SurveyDistributionEndpoints
         var fallbackFields = new List<string>();
         var title = SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "surveyTitle", fallbackFields);
         var description = SurveyContent.Resolve(survey.DescriptionEn, survey.DescriptionEs, locale, survey.Language, "surveyDescription", fallbackFields);
+        var resolvedLocale = ResolvedLocaleOf(survey, locale);
 
         return Results.Ok(new SurveyInvitationTokenDetail(
             invitation.Id,
@@ -1392,13 +1394,17 @@ public static class SurveyDistributionEndpoints
             title,
             description,
             survey.Language,
-            ResolvedLocaleOf(survey, locale),
+            resolvedLocale,
             fallbackFields,
             invitation.Status,
             survey.StartDate,
             survey.EndDate,
             invitation.ExpiresAt,
-            AnonymityOf(survey, locale)));
+            AnonymityOf(survey, locale),
+            // The respond view's map, from the same resolver: the landing is the first screen of
+            // the same flow and must read the same words.
+            await RespondentContentStore.ResolveAsync(
+                db, survey, resolvedLocale, RespondentContentKinds.RespondentPayload, cancellationToken)));
     }
 
     /// <summary>

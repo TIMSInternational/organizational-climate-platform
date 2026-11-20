@@ -86,4 +86,21 @@ internal static class AdminRefusals
     public const string CompanyHasResponses = "company_has_responses";
     public const string CompanyHoldsSuperAdmins = "company_holds_super_admins";
     public const string CompanyPeopleReferenced = "company_people_referenced";
+
+    // What a client reads, ruled 2026-11-19 (docs/decisions/editable-respondent-content.md).
+    // The PUT's refusals carry `key`, `locale`, `placeholder`, `maxLength` and `allowed` beside
+    // the code, so a screen can point at the field; the code's sentence says what kind of problem.
+
+    /// <summary>An archived survey's respondent texts cannot be changed, by anybody. 409.</summary>
+    public const string RespondentContentArchived = "respondent_content_archived";
+
+    /// <summary>A company admin past «active»: only a super admin edits a closed survey's texts. 409.</summary>
+    public const string RespondentContentLocked = "respondent_content_locked";
+
+    public const string RespondentContentUnknownLocale = "respondent_content_unknown_locale";
+    public const string RespondentContentLocaleMismatch = "respondent_content_locale_mismatch";
+    public const string RespondentContentUnknownKey = "respondent_content_unknown_key";
+    public const string RespondentContentTooLong = "respondent_content_too_long";
+    public const string RespondentContentUnknownPlaceholder = "respondent_content_unknown_placeholder";
+    public const string RespondentContentValueNotAllowed = "respondent_content_value_not_allowed";
 }

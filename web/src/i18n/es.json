@@ -1817,7 +1817,15 @@
         "credential_mode_in_use": "La forma de acceso ya no se puede cambiar: esta encuesta ya envió enlaces o códigos con la forma actual y hay personas que los tienen.",
         "personal_link_not_sent": "No se pudo enviar el enlace nuevo por correo. Se conservó el anterior, que sigue funcionando.",
         "personal_link_recipient_inactive": "La cuenta de esta persona ya no está activa en la empresa, así que un enlace no le abriría la encuesta.",
-        "personal_link_not_in_audience": "Hay personas en este envío que no están en la audiencia de la encuesta, así que su enlace no les abriría la encuesta. No se envió nada. Agréguelas primero con «Editar audiencia» o déjelas fuera del envío."
+        "personal_link_not_in_audience": "Hay personas en este envío que no están en la audiencia de la encuesta, así que su enlace no les abriría la encuesta. No se envió nada. Agréguelas primero con «Editar audiencia» o déjelas fuera del envío.",
+        "respondent_content_archived": "Esta encuesta está archivada, así que sus textos para quien responde ya no se pueden cambiar.",
+        "respondent_content_locked": "Esta encuesta ya no está en borrador, programada ni activa. Solo un superadministrador de TIMS puede cambiar sus textos para quien responde.",
+        "respondent_content_unknown_locale": "Ese idioma no existe para estos textos. Use español, inglés o, para la presentación, «*».",
+        "respondent_content_locale_mismatch": "Ese texto no se guarda en ese idioma: los textos van en español o inglés, y las opciones de presentación en «*». No se guardó nada.",
+        "respondent_content_unknown_key": "Ese texto no se puede editar. No se guardó nada.",
+        "respondent_content_too_long": "Un texto supera la longitud máxima permitida. Acórtelo; no se guardó nada.",
+        "respondent_content_unknown_placeholder": "Un texto usa un marcador entre llaves que no existe para él. Use solo los marcadores indicados; no se guardó nada.",
+        "respondent_content_value_not_allowed": "Esa opción de presentación no es válida. Elija una de las ofrecidas; no se guardó nada."
       }
     }
   },
@@ -5539,6 +5547,7 @@
           "targetAudienceCount": "Audiencia declarada",
           "departmentIds": "Departamentos",
           "userIds": "Personas específicas",
+          "respondentContent": "Textos para quien responde",
           "other": "Otro campo"
         },
         "setting": {
@@ -8792,6 +8801,7 @@
       "admin__companies__licenses__update": "Modificó las licencias de la empresa",
       "admin__companies__logo__update": "Subió el logotipo de la empresa",
       "admin__companies__settings__update": "Modificó la configuración de la empresa",
+      "admin__companies__respondent-content__update": "Modificó los textos para quien responde de la empresa",
       "admin__companies__update": "Modificó los datos de la empresa",
       "admin__companies__delete": "Eliminó una empresa sin respuestas",
       "admin__demographic-fields__create": "Creó un campo demográfico",
@@ -8910,6 +8920,7 @@
       "surveys__create": "Creó una encuesta",
       "surveys__credentials__delete": "Retiró el código de acceso de una persona",
       "surveys__reopen__create": "Reabrió una encuesta cerrada",
+      "surveys__respondent-content__update": "Modificó los textos para quien responde de una encuesta",
       "surveys__response-exclusions__create": "Excluyó una respuesta de los resultados",
       "surveys__response-exclusions__restore__create": "Volvió a incluir una respuesta en los resultados",
       "surveys__credentials__reissue__create": "Reenvió el código de acceso de una persona",

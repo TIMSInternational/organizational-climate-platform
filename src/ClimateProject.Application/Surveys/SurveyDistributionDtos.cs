@@ -142,6 +142,11 @@ public sealed record SurveyInvitationListResponse(
 /// and nothing that would turn a leaked token into a disclosure. In particular it does not
 /// echo the invitee's email address back.
 /// </summary>
+/// <param name="Content">
+/// The client's own words for the landing and the respond screens, in <see cref="ResolvedLocale"/>:
+/// the same map, from the same resolver, as <c>SurveyRespondView.Content</c> -- effective
+/// overrides only, plus the display choices. Null from an API that predates it.
+/// </param>
 public sealed record SurveyInvitationTokenDetail(
     Guid InvitationId,
     Guid SurveyId,
@@ -154,7 +159,8 @@ public sealed record SurveyInvitationTokenDetail(
     DateTimeOffset SurveyStartDate,
     DateTimeOffset SurveyEndDate,
     DateTimeOffset ExpiresAt,
-    SurveyAnonymityGuaranteeDto Anonymity);
+    SurveyAnonymityGuaranteeDto Anonymity,
+    IReadOnlyDictionary<string, string>? Content = null);
 
 /// <summary>
 /// The outcome of recording a state transition.

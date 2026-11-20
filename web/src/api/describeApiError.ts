@@ -127,6 +127,16 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   company_has_responses: 'errors.api.codes.company_has_responses',
   company_holds_super_admins: 'errors.api.codes.company_holds_super_admins',
   company_people_referenced: 'errors.api.codes.company_people_referenced',
+  // What a client reads, ruled 2026-11-19: the respondent-content routes. The body also names
+  // `key`, `locale`, `placeholder`, `maxLength` and `allowed`, for a screen that points at the field.
+  respondent_content_archived: 'errors.api.codes.respondent_content_archived',
+  respondent_content_locked: 'errors.api.codes.respondent_content_locked',
+  respondent_content_unknown_locale: 'errors.api.codes.respondent_content_unknown_locale',
+  respondent_content_locale_mismatch: 'errors.api.codes.respondent_content_locale_mismatch',
+  respondent_content_unknown_key: 'errors.api.codes.respondent_content_unknown_key',
+  respondent_content_too_long: 'errors.api.codes.respondent_content_too_long',
+  respondent_content_unknown_placeholder: 'errors.api.codes.respondent_content_unknown_placeholder',
+  respondent_content_value_not_allowed: 'errors.api.codes.respondent_content_value_not_allowed',
 }
 
 /** Every `code` with a sentence here — for the test that sweeps the API's list against it. */

@@ -183,6 +183,10 @@ public static class CompanyDeletionEndpoints
         await db.Database.ExecuteSqlAsync($"DELETE FROM notifications WHERE company_id = {id}", cancellationToken);
         await db.Database.ExecuteSqlAsync($"DELETE FROM survey_drafts WHERE company_id = {id}", cancellationToken);
         await db.Database.ExecuteSqlAsync($"DELETE FROM survey_participations WHERE company_id = {id}", cancellationToken);
+        // The company's own respondent wording (the survey rows went with the surveys above, and
+        // the client's authorized lists with them). Both keys cascade, so this is the explicit
+        // statement of what the cascade would do anyway, kept in the list with everything else.
+        await db.Database.ExecuteSqlAsync($"DELETE FROM respondent_content_overrides WHERE company_id = {id}", cancellationToken);
         await db.Database.ExecuteSqlAsync($"DELETE FROM ai_insights WHERE company_id = {id}", cancellationToken);
         await db.Database.ExecuteSqlAsync($"DELETE FROM analytics_insights WHERE company_id = {id}", cancellationToken);
         await db.Database.ExecuteSqlAsync($"DELETE FROM company_logos WHERE company_id = {id}", cancellationToken);

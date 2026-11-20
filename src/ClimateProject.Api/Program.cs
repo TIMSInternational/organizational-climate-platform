@@ -749,6 +749,7 @@ app.MapTrackingInternalEndpoints();
 app.MapSurveyEndpoints();
 app.MapSurveyResponseEndpoints();
 app.MapSurveyDistributionEndpoints();
+app.MapRespondentContentEndpoints();
 app.MapSurveyParticipationEndpoints();
 app.MapSurveyCredentialEndpoints();
 app.MapSurveyResponseExclusionEndpoints();

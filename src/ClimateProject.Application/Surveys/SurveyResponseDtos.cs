@@ -184,6 +184,14 @@ public sealed record SurveyRespondDemographicOption(string Value, string? Label)
 /// screen calculates it from the question count. Shown as «La duración aproximada es de N
 /// minutos»; never a limit -- that is <see cref="TimeLimitMinutes"/>.
 /// </param>
+/// <param name="Content">
+/// The client's own words for this survey's screens, in <see cref="ResolvedLocale"/>: key →
+/// text, the EFFECTIVE overrides only (survey → survey column → company), plus the display
+/// choices (<c>display.textAlign</c>). A key that is absent is the product default -- the screen
+/// renders <c>content[key] ?? t(key)</c>. Keys and the chain:
+/// <c>RespondentContentRegistry</c> / <c>RespondentContentResolver</c>. Never another locale's
+/// words, and never an email's. Null from an API that predates it.
+/// </param>
 public sealed record SurveyRespondView(
     Guid Id,
     string? Title,
@@ -208,7 +216,8 @@ public sealed record SurveyRespondView(
     string? ClosingMessage = null,
     string? PrivacyNoticeEs = null,
     string? PrivacyNoticeEn = null,
-    int? EstimatedMinutes = null);
+    int? EstimatedMinutes = null,
+    IReadOnlyDictionary<string, string>? Content = null);
 
 /// <param name="AlreadySubmitted">
 /// True when this call found a response that was already complete and therefore changed

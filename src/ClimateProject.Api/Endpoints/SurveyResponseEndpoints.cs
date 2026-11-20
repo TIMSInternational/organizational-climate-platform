@@ -7,6 +7,7 @@ using ClimateProject.Api.Infrastructure;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.Localization;
 using ClimateProject.Application.OrgStructure;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Application.Scheduling;
 using ClimateProject.Application.Surveys;
 using ClimateProject.Domain.Entities;
@@ -498,7 +499,12 @@ public static class SurveyResponseEndpoints
                 locale, survey.Language, "settings.closingMessage", fallbackFields)),
             BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEs),
             BrandingValidation.NormalisePrivacyNotice(privacyNotice?.PrivacyNoticeEn),
-            survey.Settings.EstimatedMinutes));
+            survey.Settings.EstimatedMinutes,
+            // The client's words, in the locale this payload is actually in -- never the one
+            // merely asked for, so a Spanish-only survey read with ?lang=en carries Spanish words
+            // beside its Spanish title, and never an English reader's Spanish override.
+            await RespondentContentStore.ResolveAsync(
+                db, survey, resolvedLocale, RespondentContentKinds.RespondentPayload, cancellationToken)));
     }
 
     // ------------------------------------------------------------------

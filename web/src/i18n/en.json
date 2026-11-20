@@ -1817,7 +1817,15 @@
         "credential_mode_in_use": "How people get in can no longer be changed: this survey has already sent links or codes under the current mode, and people are holding them.",
         "personal_link_not_sent": "The new link could not be emailed. The previous one was kept and still works.",
         "personal_link_recipient_inactive": "This person's account is no longer active in the company, so a link would not open the survey for them.",
-        "personal_link_not_in_audience": "Some people in this send are not in the survey's audience, so their link would not open the survey for them. Nothing was sent. Add them first with “Edit audience”, or leave them out of the send."
+        "personal_link_not_in_audience": "Some people in this send are not in the survey's audience, so their link would not open the survey for them. Nothing was sent. Add them first with “Edit audience”, or leave them out of the send.",
+        "respondent_content_archived": "This survey is archived, so its texts for respondents can no longer be changed.",
+        "respondent_content_locked": "This survey is no longer draft, scheduled or active. Only a TIMS super administrator can change its texts for respondents.",
+        "respondent_content_unknown_locale": "That language does not exist for these texts. Use Spanish, English or, for presentation, “*”.",
+        "respondent_content_locale_mismatch": "That text is not stored in that language: texts go in Spanish or English, and presentation choices in “*”. Nothing was saved.",
+        "respondent_content_unknown_key": "That text cannot be edited. Nothing was saved.",
+        "respondent_content_too_long": "A text is longer than its maximum. Shorten it; nothing was saved.",
+        "respondent_content_unknown_placeholder": "A text uses a placeholder in braces that does not exist for it. Use only the placeholders shown; nothing was saved.",
+        "respondent_content_value_not_allowed": "That presentation choice is not valid. Pick one of those offered; nothing was saved."
       }
     }
   },
@@ -5539,6 +5547,7 @@
           "targetAudienceCount": "Stated audience",
           "departmentIds": "Departments",
           "userIds": "Specific people",
+          "respondentContent": "Texts for respondents",
           "other": "Other field"
         },
         "setting": {
@@ -8792,6 +8801,7 @@
       "admin__companies__licenses__update": "Updated the company's licences",
       "admin__companies__logo__update": "Uploaded the company logo",
       "admin__companies__settings__update": "Updated the company settings",
+      "admin__companies__respondent-content__update": "Updated the company's texts for respondents",
       "admin__companies__update": "Updated the company",
       "admin__companies__delete": "Deleted a company that had no responses",
       "admin__demographic-fields__create": "Created a demographic field",
@@ -8910,6 +8920,7 @@
       "surveys__create": "Created a survey",
       "surveys__credentials__delete": "Withdrew a person's access code",
       "surveys__reopen__create": "Reopened a closed survey",
+      "surveys__respondent-content__update": "Updated a survey's texts for respondents",
       "surveys__response-exclusions__create": "Excluded a response from the results",
       "surveys__response-exclusions__restore__create": "Put a response back into the results",
       "surveys__credentials__reissue__create": "Reissued a person's access code",

@@ -62,9 +62,11 @@ type TopLevel = (typeof TOP_LEVEL)[number]
 /**
  * Paths the audit trail records that no version diff can emit: `PUT /surveys/{id}` adds
  * `userIds` to its `updated` entry when the survey's named people change
- * (`SurveyEndpoints.cs`), and a version snapshot stores no user targets. Labelled, never valued.
+ * (`SurveyEndpoints.cs`), and a version snapshot stores no user targets. `respondentContent` is
+ * `PUT /surveys/{id}/respondent-content` changing the survey's own respondent texts kept outside
+ * the settings (`RespondentContentEndpoints.cs`). Labelled, never valued.
  */
-const AUDIT_ONLY = ['userIds', 'audienceNotChosen'] as const
+const AUDIT_ONLY = ['userIds', 'audienceNotChosen', 'respondentContent'] as const
 type AuditOnly = (typeof AUDIT_ONLY)[number]
 
 export type ParsedPath =
