@@ -72,3 +72,34 @@ verbatim text, and the default duration rule. They are guarantees, not preferenc
 - «Notas de TIMS» (introduction, conclusions, recommendations) on a report.
 - Text alignment of the respondent screens (`display.textAlign`: `justify` | `start`) is a
   registry entry, default `justify` (PROCOMER, 2026-11-19).
+
+## Where it lives (foundation, 2026-11-19)
+
+The contract every lane builds on. Grep the symbols; this list is a map, not the source.
+
+- **Registry** — `src/ClimateProject.Application/RespondentContent/RespondentContentRegistry.cs`.
+  A screen key is its catalogue path inside `useTranslation('surveyRespond')`, without the
+  namespace (`demographics.intro`); email keys are `email.<mail>.<part>`, display keys
+  `display.<name>`. `RespondentContentRegistryTests` reads `web/src/i18n/{es,en}.json` and fails
+  on a screen key missing from either or a placeholder its defaults do not use. Deliberately
+  absent: the identified wording and the device notes that state what is recorded.
+- **Chain** — `RespondentContentResolver.Resolve` (Application, pure): survey row → survey
+  legacy column → company row; per locale, never another locale's words; display keys from `*`.
+  `RespondentContentStore` (Infrastructure) loads and resolves:
+  `RespondentContentStore.ResolveAsync(db, survey, locale, kinds, ct)`, or `LoadAsync` once and
+  `Resolve` per locale for a two-language email.
+- **Payloads** — `SurveyRespondView.Content` and `SurveyInvitationTokenDetail.Content`: the
+  effective screen + display overrides in the payload's `resolvedLocale`; absent key = product
+  default. Web: `effectiveText(view.content, key, params) ?? t(key, params)` and
+  `textAlignOf(view.content)` from `web/src/features/surveys/api/respondentContent.ts`.
+- **Routes** — `GET/PUT /admin/companies/{companyId}/respondent-content`,
+  `GET/PUT /surveys/{surveyId}/respondent-content` (`RespondentContentEndpoints.cs`). A survey PUT
+  on a key with a legacy column writes the column. Refusals carry a `respondent_content_*` code
+  and name `key`, `locale`, `placeholder`, `maxLength`, `allowed`.
+- **«Duplicar»** copies the survey's own rows on both paths (with and without the audience),
+  as `CopySettings` copies the legacy texts: they are words, not people. The client's
+  authorized list is not copied by the foundation.
+- **Schema** — migration `EditableRespondentContent`: `respondent_content_overrides`,
+  `survey_authorized_people` (entity only; the guard is a lane's), `reports.notes_*` (columns
+  only). Company deletion removes the company's rows explicitly; survey rows and authorized
+  people cascade with their survey.
