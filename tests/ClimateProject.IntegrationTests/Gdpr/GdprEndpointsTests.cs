@@ -243,6 +243,17 @@ public class GdprEndpointsTests : IAsyncLifetime
             UpdatedAt = now,
         });
 
+        // The client's authorized list names the subject by address (2026-11-19).
+        db.SurveyAuthorizedPeople.Add(new SurveyAuthorizedPerson
+        {
+            Id = Guid.NewGuid(),
+            SurveyId = survey.Id,
+            Email = SurveyAuthorizedPerson.NormaliseEmail(subjectEmail),
+            DisplayName = "Subject Person",
+            AddedBy = authorId,
+            AddedAt = now,
+        });
+
         var microclimate = new Microclimate
         {
             Id = Guid.NewGuid(),
@@ -1139,6 +1150,7 @@ public class GdprEndpointsTests : IAsyncLifetime
         Assert.Equal(1, Section(export, "DemographicSnapshotEntry").GetProperty("recordCount").GetInt32());
         Assert.Equal(1, Section(export, "SurveyInvitation").GetProperty("recordCount").GetInt32());
         Assert.Equal(1, Section(export, "MicroclimateInvitation").GetProperty("recordCount").GetInt32());
+        Assert.Equal(1, Section(export, "SurveyAuthorizedPerson").GetProperty("recordCount").GetInt32());
     }
 
     [Fact]
@@ -1357,6 +1369,11 @@ public class GdprEndpointsTests : IAsyncLifetime
         Assert.Equal(SubjectErasure.RedactedValue,
             (await db.MicroclimateInvitations.SingleAsync(i => i.UserId == subjectId)).Email);
         Assert.Equal(0, await db.UserInvitations.CountAsync(i => i.Email == subjectEmail));
+        // The authorized-list row stays, so the client's list is never emptied by an erasure, but
+        // it names nobody any more.
+        var listed = await db.SurveyAuthorizedPeople.SingleAsync(p => p.SurveyId == seeded.SurveyId);
+        Assert.StartsWith("erased-", listed.Email, StringComparison.Ordinal);
+        Assert.Null(listed.DisplayName);
 
         // Retained: the audit trail, intact and still attributable.
         var audit = await db.AuditLogs.SingleAsync(a => a.UserId == subjectId && a.Action == "login");

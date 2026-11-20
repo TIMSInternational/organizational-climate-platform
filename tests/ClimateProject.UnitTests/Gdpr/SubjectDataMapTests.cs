@@ -293,7 +293,12 @@ public class SubjectDataMapTests
         // sign-in factor (user_id, cascade). Both credentials -- the reason this census exists --
         // and both declared in the map as Subject, exported with the key material redacted and
         // deleted on erasure.
-        Assert.Equal(35, nonOwnedReferrers.Count);
+        // 37 since 2026-11-19 (migration EditableRespondentContent): respondent_content_overrides
+        // records who last wrote a client's wording (updated_by, Actor, retained) and
+        // survey_authorized_people names a person on a client's authorized list by email, with the
+        // administrator who added them (added_by). Declared Subject, exported in full and redacted
+        // on erasure -- never deleted, since an emptied list turns the send guard off.
+        Assert.Equal(37, nonOwnedReferrers.Count);
 
         var restricting = user.GetReferencingForeignKeys()
             .Where(fk => !fk.DeclaringEntityType.IsOwned() && fk.DeleteBehavior == DeleteBehavior.Restrict)

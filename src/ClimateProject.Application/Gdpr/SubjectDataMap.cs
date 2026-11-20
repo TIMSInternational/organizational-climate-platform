@@ -400,6 +400,12 @@ public static class SubjectDataMap
             + "behind SET NULL, so an erasure that did delete the account would sever the "
             + "attribution without destroying a link its holders still hold."),
 
+        Actor("RespondentContentOverride", "respondent_content_overrides", "UpdatedBy",
+            "Who last wrote a company's or a survey's own wording for respondents (ruled 2026-11-19, "
+            + "docs/decisions/editable-respondent-content.md). The value is the client's text, not a fact about the "
+            + "person who typed it; the attribution is part of the wording's history and survives erasure, as on "
+            + "survey_versions."),
+
         new("Response", "responses", SubjectLink.Subject, ["UserId"],
             ExportTreatment.FullRecord, ErasureTreatment.Anonymised,
             BasisContract,
@@ -438,6 +444,19 @@ public static class SubjectDataMap
 
         NotPersonal("SurveyDepartmentTarget", "survey_department_targets",
             "Which departments a survey targets. Departments, not people."),
+
+        new("SurveyAuthorizedPerson", "survey_authorized_people", SubjectLink.Subject, ["Email", "AddedBy"],
+            ExportTreatment.FullRecord, ErasureTreatment.Redacted,
+            BasisContract,
+            "Deleted with its survey (cascade); redacted on erasure.",
+            "An address on a survey's «Lista autorizada del cliente» (ruled 2026-11-19): the client named this "
+            + "person as somebody the survey may be sent to. Two people can be on the row, as on user_invitations: "
+            + "the person named, by email alone (the list is the client's spreadsheet, keyed by address on "
+            + "purpose), and the administrator who added it (added_by). The export matches on the lower-cased "
+            + "address, inside the caller's tenant through the survey. Erasure overwrites the address with a "
+            + "value that matches nobody and clears the name, and does NOT delete the row: deleting the last "
+            + "address would empty the list, and an empty list switches the send guard off for everyone else. "
+            + "added_by is retained as attribution of an administrator's act on the company's behalf."),
 
         new("SurveyUserTarget", "survey_user_targets", SubjectLink.Subject, ["UserId"],
             ExportTreatment.FullRecord, ErasureTreatment.Deleted,
