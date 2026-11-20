@@ -154,6 +154,14 @@ export interface SurveyRespondView {
    * questions. Read through `respondDuration`, never directly.
    */
   estimatedMinutes?: number | null
+  /**
+   * The client's own words for this survey's screens, in `resolvedLocale`: `key → text`, the
+   * EFFECTIVE overrides only (survey → company), plus the display choices
+   * (`display.textAlign`). A key that is absent is the catalogue default, so read it through
+   * `effectiveText(view.content, key) ?? t(key)` (`./respondentContent`). Null or absent from an
+   * API that predates it.
+   */
+  content?: Record<string, string> | null
 }
 
 /** Who is answering, as typed. Sent on the completing post only, never on a partial save. */

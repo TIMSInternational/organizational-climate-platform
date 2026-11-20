@@ -80,6 +80,11 @@ export interface SurveyInvitationTokenDetail {
   surveyEndDate: string
   expiresAt: string
   anonymity: SurveyAnonymityGuarantee
+  /**
+   * The same map, from the same resolver, as `SurveyRespondView.content`: the client's own
+   * words in `resolvedLocale`, plus the display choices. Null or absent from an older API.
+   */
+  content?: Record<string, string> | null
 }
 
 /**
