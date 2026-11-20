@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using ClimateProject.Application.Email;
 using ClimateProject.Application.Localization;
+using ClimateProject.Application.RespondentContent;
 using ClimateProject.Domain.Entities;
 
 namespace ClimateProject.Application.Surveys;
@@ -23,6 +24,24 @@ public sealed record PersonalLinkText(string? SubjectEs, string? SubjectEn, stri
             settings.InvitationCustomSubjectEn,
             settings.InvitationCustomMessageEs,
             settings.InvitationCustomMessageEn);
+    }
+
+    /// <summary>
+    /// The words from the chain (ruled 2026-11-19, <c>docs/decisions/editable-respondent-content.md</c>):
+    /// per language, the survey's column, else the company's <c>email.personalLink.*</c>, else blank
+    /// -- the composer's default. Never another language's words.
+    /// </summary>
+    public static PersonalLinkText From(RespondentContentSources sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        string[] email = [RespondentContentKinds.Email];
+        var es = RespondentContentResolver.Resolve(sources, RespondentContentLocales.Spanish, email);
+        var en = RespondentContentResolver.Resolve(sources, RespondentContentLocales.English, email);
+        return new PersonalLinkText(
+            es.GetValueOrDefault(RespondentContentRegistry.EmailPersonalLinkSubject),
+            en.GetValueOrDefault(RespondentContentRegistry.EmailPersonalLinkSubject),
+            es.GetValueOrDefault(RespondentContentRegistry.EmailPersonalLinkMessage),
+            en.GetValueOrDefault(RespondentContentRegistry.EmailPersonalLinkMessage));
     }
 }
 
@@ -136,9 +155,16 @@ public static class PersonalLinkEmailComposer
         var company = Clean(mail.Brand.CompanyName);
         var closes = string.Format(CultureInfo.InvariantCulture, copy.ClosesOn, EmailDays.Long(mail.SurveyClosesOn, spanish));
 
-        var subject = Clean(spanish ? mail.Text.SubjectEs : mail.Text.SubjectEn)
+        // `{survey}` and `{company}` -- the two the registry allows an email override -- are filled
+        // here, before EmailBranding escapes the result; any other `{name}` stays as written.
+        var placeholders = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["survey"] = survey ?? string.Empty,
+            ["company"] = company ?? string.Empty,
+        };
+        var subject = Clean(RespondentContentPlaceholders.Fill(spanish ? mail.Text.SubjectEs : mail.Text.SubjectEn, placeholders))
                       ?? DefaultSubject(copy, survey, company);
-        var message = Clean(spanish ? mail.Text.MessageEs : mail.Text.MessageEn)
+        var message = Clean(RespondentContentPlaceholders.Fill(spanish ? mail.Text.MessageEs : mail.Text.MessageEn, placeholders))
                       ?? (survey is null
                           ? string.Format(CultureInfo.InvariantCulture, copy.DefaultMessage, closes)
                           : string.Format(CultureInfo.InvariantCulture, copy.DefaultSurveyMessage, survey, closes));
@@ -275,7 +301,12 @@ public interface IPersonalLinkEmailSender
 /// </summary>
 public static class SurveyPersonalLinks
 {
-    public static SurveyPersonalLinkMail MailFor(Survey survey, SurveyCredentialCompany? company)
+    /// <param name="content">
+    /// The survey's and its company's respondent content (<c>RespondentContentStore.LoadAsync</c>),
+    /// so a company's own <c>email.personalLink.*</c> reaches a survey that wrote none. Null reads
+    /// the survey's columns alone.
+    /// </param>
+    public static SurveyPersonalLinkMail MailFor(Survey survey, SurveyCredentialCompany? company, RespondentContentSources? content = null)
     {
         ArgumentNullException.ThrowIfNull(survey);
 
@@ -288,6 +319,6 @@ public static class SurveyPersonalLinks
             // `SurveyCredentialIssuance.MailFor` gives, which this mail must not reintroduce.
             DateOnly.FromDateTime(Scheduling.SchedulingTimeZone.ToLocal(
                 survey.EndDate, Scheduling.SchedulingTimeZone.Resolve(company?.Timezone))),
-            PersonalLinkText.From(survey.Settings));
+            content is null ? PersonalLinkText.From(survey.Settings) : PersonalLinkText.From(content));
     }
 }

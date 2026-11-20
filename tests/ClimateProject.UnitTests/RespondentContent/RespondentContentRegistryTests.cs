@@ -170,6 +170,31 @@ public class RespondentContentRegistryTests
     public void Placeholders_are_read_as_translate_ts_interpolates_them(string text, string[] expected)
         => Assert.Equal(expected, RespondentContentPlaceholders.In(text));
 
+    /// <summary>
+    /// The server's one filler, read the way the web's <c>interpolateContent</c> fills: a known
+    /// name is replaced, an unknown one and a non-ASCII one stay visible, and a filled value is
+    /// never re-read as a placeholder.
+    /// </summary>
+    [Theory]
+    [InlineData("Su encuesta de {company}", "Su encuesta de Acme")]
+    [InlineData("{survey} — {company} — {survey}", "Clima 2026 — Acme — Clima 2026")]
+    [InlineData("Hola {nombre}, {ñ} y { company }", "Hola {nombre}, {ñ} y { company }")]
+    [InlineData("sin marcadores", "sin marcadores")]
+    [InlineData("", "")]
+    public void Fill_replaces_the_names_it_is_given_and_leaves_every_other_visible(string text, string expected)
+        => Assert.Equal(expected, RespondentContentPlaceholders.Fill(text, new Dictionary<string, string>
+        {
+            ["survey"] = "Clima 2026",
+            ["company"] = "Acme",
+        }));
+
+    [Fact]
+    public void Fill_never_rereads_a_value_and_keeps_null_null()
+    {
+        Assert.Equal("{survey}", RespondentContentPlaceholders.Fill("{company}", new Dictionary<string, string> { ["company"] = "{survey}", ["survey"] = "X" }));
+        Assert.Null(RespondentContentPlaceholders.Fill(null, new Dictionary<string, string>()));
+    }
+
     private static string? Lookup(JsonDocument catalogue, string key)
     {
         var node = catalogue.RootElement.GetProperty(Namespace);

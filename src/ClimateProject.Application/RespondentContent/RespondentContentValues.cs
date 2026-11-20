@@ -20,6 +20,29 @@ public static partial class RespondentContentPlaceholders
         => string.IsNullOrEmpty(text)
             ? []
             : [.. Pattern().Matches(text).Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// <paramref name="text"/> with each <c>{name}</c> that <paramref name="values"/> names replaced
+    /// by its value, and every other <c>{name}</c> left exactly as written -- the server twin of the
+    /// web's <c>interpolateContent</c> (<c>respondentContent.ts</c>), with the same ASCII pattern.
+    /// THE one filler for an override's placeholders on the server: the personal-link email uses it
+    /// today, and the credentials and reminder emails and any preview of them must use it rather
+    /// than a second one.
+    /// </summary>
+    /// <remarks>
+    /// Plain text in, plain text out: it escapes nothing, so a caller fills FIRST and then hands
+    /// the result to whatever renders it (<c>EmailBranding</c> escapes for HTML,
+    /// <c>EmailMessage.ToHeaderValue</c> for a subject). A value is inserted once and never
+    /// re-read, so a company named <c>{survey}</c> stays that name.
+    /// </remarks>
+    /// <returns>Null for a null <paramref name="text"/>.</returns>
+    public static string? Fill(string? text, IReadOnlyDictionary<string, string> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return string.IsNullOrEmpty(text)
+            ? text
+            : Pattern().Replace(text, m => values.TryGetValue(m.Groups[1].Value, out var value) ? value : m.Value);
+    }
 }
 
 /// <summary>

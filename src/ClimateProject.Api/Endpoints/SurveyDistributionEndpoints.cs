@@ -734,7 +734,11 @@ public static class SurveyDistributionEndpoints
         var linkNotSentEmails = new List<string>();
         if (personalLink && recipients.Count > 0)
         {
-            var mail = SurveyPersonalLinks.MailFor(survey, await MailCompanyAsync(db, survey.CompanyId, cancellationToken));
+            var mail = SurveyPersonalLinks.MailFor(
+                survey,
+                await MailCompanyAsync(db, survey.CompanyId, cancellationToken),
+                // The chain, so a company's own invitation words reach a survey that wrote none.
+                await RespondentContentStore.LoadAsync(db, survey, cancellationToken));
             var batchIds = recipients.Select(r => r.Id).ToList();
             var invitationsByUser = await db.SurveyInvitations
                 .Where(i => i.SurveyId == surveyId && batchIds.Contains(i.UserId))
@@ -1144,7 +1148,11 @@ public static class SurveyDistributionEndpoints
         invitation.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
-        var mail = SurveyPersonalLinks.MailFor(survey, await MailCompanyAsync(db, survey.CompanyId, cancellationToken));
+        var mail = SurveyPersonalLinks.MailFor(
+            survey,
+            await MailCompanyAsync(db, survey.CompanyId, cancellationToken),
+            // The chain, so a company's own invitation words reach a survey that wrote none.
+            await RespondentContentStore.LoadAsync(db, survey, cancellationToken));
         var outcome = await linkSender.SendAsync(recipient.Email, invitation.InvitationToken, mail, cancellationToken);
 
         if (!outcome.Delivered)
