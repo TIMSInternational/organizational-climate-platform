@@ -5624,6 +5624,40 @@
           "other": "Version"
         }
       }
+    },
+    "emailTexts": {
+      "mailLabel": "Email",
+      "mail": {
+        "personalLink": "Personal link",
+        "credentials": "Username and password",
+        "reminder": "Reminder"
+      },
+      "about": {
+        "personalLink": "The email that brings each person their own link. Under your message there is always the button with the link, the same link written out and the survey's closing date. It carries no username or password.",
+        "credentials": "The email with each person's username and password. The subject and message you write replace only the heading and the first paragraph: the username, the password, the sign-in button and the line naming the survey and its closing date are always there.",
+        "reminder": "The password-free reminder sent from the row of somebody who has not finished. The subject and message you write replace only the heading and the first paragraph: the line naming the survey, the username and the sign-in button are always there."
+      },
+      "placeholders": "You can write {survey} for the survey's name and {company} for the company's.",
+      "subject": "Subject",
+      "message": "Message",
+      "inheritsDefault": "If left empty, the default text is used (see the preview). Leave a blank line between paragraphs.",
+      "inheritsCompany": "If left empty, the company's is used: “{text}”",
+      "everyLocale": "If you write this email in one language, write it in the other as well before the survey is published.",
+      "lockedSurvey": "Your account can no longer change these emails: after the survey closes only TIMS can, and an archived survey does not change.",
+      "lockedCompany": "Your account cannot change this company's emails.",
+      "saved": "The emails were saved.",
+      "previewTitle": "Preview",
+      "previewSaved": "This is how it arrives with what is saved. The username, password and link are samples.",
+      "previewUnsaved": "There are unsaved changes: the preview shows what is saved until you save.",
+      "previewFailed": "The preview could not be loaded.",
+      "previewSubject": "Subject:",
+      "previewFrame": "Email preview",
+      "surveyHelp": "The emails this survey sends. An empty field uses the company's text or, if the company wrote none, the default. What lets a person in (username, password, link and button) is always added by the platform.",
+      "companyTitle": "Emails",
+      "companyMeta": "For every survey",
+      "companyHelp": "The words of this company's survey emails. Every survey uses them until it writes its own. An empty field uses the default text.",
+      "loadFailed": "The emails could not be loaded.",
+      "openPerSurvey": "The subject and message of the username-and-password email, and of the reminder."
     }
   },
   "users": {
