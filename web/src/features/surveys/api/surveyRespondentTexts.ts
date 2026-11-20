@@ -121,3 +121,17 @@ export async function saveSurveyRespondentTexts(
     }),
   })
 }
+
+/**
+ * The stated duration alone, in a `PUT /surveys/{id}` whose `settings` carries nothing else
+ * (`ApplySettings` touches only the fields sent). Since 2026-11-19 `RespondentTextsDialog` saves
+ * the texts through `PUT /surveys/{id}/respondent-content`, which writes the anonymity paragraph
+ * and the thank-you to the same survey columns `saveSurveyRespondentTexts` writes. `null` is sent
+ * as `0`, the API's "calculate it again".
+ */
+export async function saveSurveyEstimatedMinutes(baseUrl: string, surveyId: string, estimatedMinutes: number | null): Promise<void> {
+  await authFetch(`${baseUrl}/surveys/${surveyId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ settings: { estimatedMinutes: estimatedMinutes ?? 0 } }),
+  })
+}
