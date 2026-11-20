@@ -1820,6 +1820,7 @@
         "personal_link_not_in_audience": "Hay personas en este envío que no están en la audiencia de la encuesta, así que su enlace no les abriría la encuesta. No se envió nada. Agréguelas primero con «Editar audiencia» o déjelas fuera del envío.",
         "respondent_content_archived": "Esta encuesta está archivada, así que sus textos para quien responde ya no se pueden cambiar.",
         "respondent_content_locked": "Esta encuesta ya no está en borrador, programada ni activa. Solo un superadministrador de TIMS puede cambiar sus textos para quien responde.",
+        "respond_preview_archived": "Esta encuesta está archivada, así que ya no se puede ver como quien responde.",
         "respondent_content_unknown_locale": "Ese idioma no existe para estos textos. Use español, inglés o, para la presentación, «*».",
         "respondent_content_locale_mismatch": "Ese texto no se guarda en ese idioma: los textos van en español o inglés, y las opciones de presentación en «*». No se guardó nada.",
         "respondent_content_locale_not_offered": "Esta encuesta no está escrita en ese idioma, así que nadie leería ese texto. Escríbalo en el idioma de la encuesta; no se guardó nada.",

@@ -1820,6 +1820,7 @@
         "personal_link_not_in_audience": "Some people in this send are not in the survey's audience, so their link would not open the survey for them. Nothing was sent. Add them first with “Edit audience”, or leave them out of the send.",
         "respondent_content_archived": "This survey is archived, so its texts for respondents can no longer be changed.",
         "respondent_content_locked": "This survey is no longer draft, scheduled or active. Only a TIMS super administrator can change its texts for respondents.",
+        "respond_preview_archived": "This survey is archived, so it can no longer be previewed as a respondent.",
         "respondent_content_unknown_locale": "That language does not exist for these texts. Use Spanish, English or, for presentation, “*”.",
         "respondent_content_locale_mismatch": "That text is not stored in that language: texts go in Spanish or English, and presentation choices in “*”. Nothing was saved.",
         "respondent_content_locale_not_offered": "This survey is not written in that language, so no respondent would read that text. Write it in the survey's language; nothing was saved.",
