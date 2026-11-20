@@ -46,6 +46,9 @@ public static class RespondentContentEndpoints
         var surveys = app.MapGroup("/surveys").RequireAuthorization();
         surveys.MapGet("/{surveyId:guid}/respondent-content", GetSurveyAsync);
         surveys.MapPut("/{surveyId:guid}/respondent-content", PutSurveyAsync);
+
+        // Lane L2: the three survey mails as they would be received, from the saved words.
+        app.MapRespondentEmailPreviewEndpoints();
     }
 
     // ------------------------------------------------------------------
