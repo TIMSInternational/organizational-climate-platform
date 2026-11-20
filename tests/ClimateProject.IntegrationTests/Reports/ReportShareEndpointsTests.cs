@@ -400,7 +400,9 @@ public class ReportShareEndpointsTests : IAsyncLifetime
         Assert.Equal(
             // `resultBands` admitted deliberately: two boundaries and three names, the scale the
             // page colours by — see `A_share_link_carries_the_companys_result_bands_read_when_it_is_opened`.
-            new[] { "description", "generatedAt", "reportOutput", "resultBands", "title", "type" },
+            // `notes` admitted deliberately (ruled 2026-11-19): «Notas de TIMS», TIMS's own words
+            // printed with the report -- see `ReportNotesEndpointTests`.
+            new[] { "description", "generatedAt", "notes", "reportOutput", "resultBands", "title", "type" },
             properties);
 
         // Belt and braces against the identifiers appearing anywhere at all, including nested

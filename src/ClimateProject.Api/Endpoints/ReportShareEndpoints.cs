@@ -7,6 +7,7 @@ using ClimateProject.Application.Auditing;
 using ClimateProject.Application.Auth;
 using ClimateProject.Application.OrgStructure;
 using ClimateProject.Application.Reports;
+using ClimateProject.Application.Reports.Rendering;
 using ClimateProject.Domain.Entities;
 using ClimateProject.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -356,7 +357,11 @@ public static class ReportShareEndpoints
             match.Report.Type,
             match.Report.GenerationCompletedAt,
             PublicReportProjection.ToPublicJson(match.Report.ReportOutput),
-            ResultBandsDto.From(bandSettings)));
+            ResultBandsDto.From(bandSettings),
+            // «Notas de TIMS», in the language the report's own PDF prints them in.
+            ReportNotes.For(
+                match.Report,
+                ReportRenderContext.LanguageOf(ReportDocumentReader.Parse(match.Report.ReportOutput)))));
     }
 
     /// <summary>
