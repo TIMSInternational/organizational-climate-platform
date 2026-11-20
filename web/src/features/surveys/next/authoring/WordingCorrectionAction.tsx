@@ -55,14 +55,15 @@ export function WordingCorrectionAction({
   /** Called when the dialog closes after a save, so the editor reloads the new words. */
   onSaved: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, locale: readerLocale } = useTranslation()
   const copy = (key: string, vars?: Record<string, string | number>) => t(`surveys.next.authoring.wording.${key}`, vars)
   const baseUrl = import.meta.env.VITE_API_BASE_URL as string
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<AuthoringQuestion[]>([])
   const [phase, setPhase] = useState<Phase>({ phase: 'editing' })
   const [problem, setProblem] = useState<string | null>(null)
-  const locales = authoring.locales
+  // The reader's language first, as the editor orders them.
+  const locales = [...authoring.locales].sort((x, y) => (x === readerLocale ? -1 : y === readerLocale ? 1 : 0))
 
   function start() {
     setDraft(structuredClone(authoring.questions))
