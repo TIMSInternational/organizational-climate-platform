@@ -80,6 +80,12 @@ function view(overrides: Partial<SurveyRespondView> = {}): SurveyRespondView {
     demographics: [],
     inProgress: null,
     closingMessage: 'Gracias de parte de la empresa',
+    // The server sends the effective texts beside the legacy fields (survey → company →
+    // default), and the screens read `content`: a preview shows the client's own words.
+    content: {
+      thankYouTitle: 'Gracias de parte de la empresa',
+      anonymousBody: 'Párrafo de anonimato de la empresa',
+    },
     ...overrides,
   }
 }
@@ -210,6 +216,7 @@ describe('RespondPreviewPage', () => {
     const banner = es('surveys.next.respondPreview.banner')
     expect(await screen.findByText(banner)).toBeTruthy()
     expect(await screen.findByText('Clima 2026')).toBeTruthy()
+    expect(screen.getByText('Párrafo de anonimato de la empresa')).toBeTruthy()
 
     await userEvent.click(screen.getByRole('button', { name: es('surveyRespond.next.entryStart') }))
     expect(screen.getByText(banner)).toBeTruthy()
