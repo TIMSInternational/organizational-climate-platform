@@ -1373,20 +1373,29 @@ public static class SurveyDistributionEndpoints
             return error;
         }
 
+        var locale = SurveyContent.ResolveRequestLocale(lang, survey!.Language);
+        var resolvedLocale = ResolvedLocaleOf(survey, locale);
+
         // Distinct from expired and from revoked, and deliberately not a 200: the client has
-        // to render "you already answered this" rather than an answerable survey.
+        // to render "you already answered this" rather than an answerable survey. The card is
+        // drawn from THIS body, so it carries the client's words for it (`alreadyCompletedTitle`,
+        // `alreadyCompletedBody`): the holder of a live token is the invitee, the one person the
+        // landing would otherwise have shown the survey to.
         if (invitation!.Status == SurveyInvitationStatuses.Completed)
         {
             return Results.Json(
-                new { message = "This invitation has already been used.", reason = "already_completed" },
+                new RespondentCardRefusal(
+                    "This invitation has already been used.",
+                    "already_completed",
+                    resolvedLocale,
+                    await RespondentContentStore.ResolveAsync(
+                        db, survey, resolvedLocale, RespondentContentKinds.RespondentPayload, cancellationToken)),
                 statusCode: 409);
         }
 
-        var locale = SurveyContent.ResolveRequestLocale(lang, survey!.Language);
         var fallbackFields = new List<string>();
         var title = SurveyContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language, "surveyTitle", fallbackFields);
         var description = SurveyContent.Resolve(survey.DescriptionEn, survey.DescriptionEs, locale, survey.Language, "surveyDescription", fallbackFields);
-        var resolvedLocale = ResolvedLocaleOf(survey, locale);
 
         return Results.Ok(new SurveyInvitationTokenDetail(
             invitation.Id,

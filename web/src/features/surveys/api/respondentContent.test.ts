@@ -5,6 +5,7 @@ import {
   getCompanyRespondentContent,
   getSurveyRespondentContent,
   interpolateContent,
+  respondentContentOf,
   saveCompanyRespondentContent,
   saveSurveyRespondentContent,
   textAlignOf,
@@ -174,24 +175,54 @@ describe('effectiveText', () => {
     'demographics.intro': 'Sus datos comparan grupos.',
     blank: '   ',
   }
+  const spanish = { content, resolvedLocale: 'es' }
 
   it('is the override, placeholders filled the way t() fills them', () => {
-    expect(effectiveText(content, 'next.entryPace', { count: 57, minutes: 20 })).toBe('57 preguntas, unos 20 minutos')
-    expect(effectiveText(content, 'demographics.intro')).toBe('Sus datos comparan grupos.')
+    expect(effectiveText(spanish, 'es', 'next.entryPace', { count: 57, minutes: 20 })).toBe('57 preguntas, unos 20 minutos')
+    expect(effectiveText(spanish, 'es', 'demographics.intro')).toBe('Sus datos comparan grupos.')
   })
 
   it('is null for the product default: an absent key, a blank value, no content at all', () => {
-    expect(effectiveText(content, 'closedTitle')).toBeNull()
-    expect(effectiveText(content, 'blank')).toBeNull()
-    expect(effectiveText(null, 'closedTitle')).toBeNull()
-    expect(effectiveText(undefined, 'closedTitle')).toBeNull()
+    expect(effectiveText(spanish, 'es', 'closedTitle')).toBeNull()
+    expect(effectiveText(spanish, 'es', 'blank')).toBeNull()
+    expect(effectiveText({ content: null, resolvedLocale: 'es' }, 'es', 'closedTitle')).toBeNull()
+    expect(effectiveText(null, 'es', 'closedTitle')).toBeNull()
+    expect(effectiveText(undefined, 'es', 'closedTitle')).toBeNull()
     // Never a prototype member mistaken for a text.
-    expect(effectiveText({}, 'toString')).toBeNull()
+    expect(effectiveText({ content: {}, resolvedLocale: 'es' }, 'es', 'toString')).toBeNull()
+  })
+
+  /**
+   * "An override written in Spanish is never shown to an English reader": an es-only survey
+   * resolves its content in Spanish whatever was asked, and a visitor who chose English reads
+   * English chrome — so the default, in English, not the client's Spanish sentence.
+   */
+  it('is null when the reader is not in the language the words were resolved in', () => {
+    expect(effectiveText(spanish, 'en', 'demographics.intro')).toBeNull()
+    expect(effectiveText({ content: { closedTitle: 'Closed for now' }, resolvedLocale: 'en' }, 'es', 'closedTitle')).toBeNull()
+    // An older API that names no locale: nothing is assumed.
+    expect(effectiveText({ content }, 'es', 'demographics.intro')).toBeNull()
   })
 
   it('leaves a placeholder it was given no value for visible, like t()', () => {
     expect(interpolateContent('{count} de {total}', { count: 3 })).toBe('3 de {total}')
     expect(interpolateContent('sin marcadores')).toBe('sin marcadores')
+  })
+})
+
+describe('respondentContentOf', () => {
+  it('reads the words and their locale off a refusal body, keeping only strings', () => {
+    expect(respondentContentOf({ message: 'x', resolvedLocale: 'es', content: { closedTitle: 'Cerrada', n: 1, o: {} } })).toEqual({
+      content: { closedTitle: 'Cerrada' },
+      resolvedLocale: 'es',
+    })
+  })
+
+  it('is nulls for a body that carries none, or is not an object', () => {
+    expect(respondentContentOf({ message: 'x' })).toEqual({ content: null, resolvedLocale: null })
+    expect(respondentContentOf({ content: ['a'], resolvedLocale: 3 })).toEqual({ content: null, resolvedLocale: null })
+    expect(respondentContentOf(null)).toEqual({ content: null, resolvedLocale: null })
+    expect(respondentContentOf('text')).toEqual({ content: null, resolvedLocale: null })
   })
 })
 

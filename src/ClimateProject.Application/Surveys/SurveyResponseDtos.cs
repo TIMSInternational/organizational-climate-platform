@@ -219,6 +219,31 @@ public sealed record SurveyRespondView(
     int? EstimatedMinutes = null,
     IReadOnlyDictionary<string, string>? Content = null);
 
+/// <summary>
+/// The body of a refusal that a respondent screen draws as one of the registry's cards
+/// (<c>RespondentContentRegistry</c>, group <c>cards</c>), so the card can read the client's
+/// words although no view was loaded: <c>GET /surveys/{id}/respond</c>'s 400 on a closed survey
+/// («Encuesta cerrada»: <c>closedTitle</c>, <c>closedBody</c>) and
+/// <c>GET /survey-invitations/{token}</c>'s 409 <c>already_completed</c> (<c>alreadyCompletedTitle</c>,
+/// <c>alreadyCompletedBody</c>).
+/// </summary>
+/// <remarks>
+/// Only on a refusal whose reader the route has already identified as entitled to the survey --
+/// a signed-in member of its audience, the holder of its personal invitation. Never on a
+/// fail-closed answer (the respond GET's 401 to a link visitor, a dead token's 404/410), which
+/// must not tell an unknown holder whose survey or which company it is; that is why the
+/// unavailable card's words are not in the registry at all.
+/// </remarks>
+/// <param name="Message">Fixed English for logs; a screen never prints it.</param>
+/// <param name="Reason">The machine-readable reason the route already used (<c>already_completed</c>), or null.</param>
+/// <param name="ResolvedLocale">The locale <paramref name="Content"/> is in, by the same rule as <c>SurveyRespondView.ResolvedLocale</c>.</param>
+/// <param name="Content">The same map, from the same resolver, as <c>SurveyRespondView.Content</c>.</param>
+public sealed record RespondentCardRefusal(
+    string Message,
+    string? Reason,
+    string ResolvedLocale,
+    IReadOnlyDictionary<string, string> Content);
+
 /// <param name="AlreadySubmitted">
 /// True when this call found a response that was already complete and therefore changed
 /// nothing. It is what makes a retried submit safe: the caller gets 200 and the same

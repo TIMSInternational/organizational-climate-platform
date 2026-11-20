@@ -142,6 +142,18 @@ public class RespondentContentRegistryTests
     public void The_wording_that_states_what_is_recorded_is_not_overridable(string key)
         => Assert.False(RespondentContentRegistry.TryGet(key, out _));
 
+    /// <summary>
+    /// The unavailable card is drawn only from the respond GET's 401, which stays fail-closed: an
+    /// id with no live link learns nothing from a direct request, not even whose survey it is
+    /// (<c>SurveyResponseEndpoints.ResolveRespondentAsync</c>). A body that carried a company's
+    /// words would say exactly that, and a key no payload carries would be an editor that lies.
+    /// </summary>
+    [Theory]
+    [InlineData("unavailableTitle")]
+    [InlineData("next.entryLinkUnavailableBody")]
+    public void The_unavailable_card_drawn_from_a_fail_closed_refusal_is_not_overridable(string key)
+        => Assert.False(RespondentContentRegistry.TryGet(key, out _));
+
     [Fact]
     public void The_text_alignment_is_justified_or_start_and_justified_by_default()
     {

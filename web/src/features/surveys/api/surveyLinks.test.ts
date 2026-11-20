@@ -143,6 +143,30 @@ describe('SurveyLinkError', () => {
     expect((error as SurveyLinkError).message).toBe('This invitation has been revoked.')
   })
 
+  /**
+   * The landing draws «ya respondida» from this 409 with nothing else loaded, so the client's
+   * words for that card ride on it; a dead token's answer carries none.
+   */
+  it('keeps the client words an already-completed invitation carries', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      ok(
+        {
+          message: 'This invitation has already been used.',
+          reason: 'already_completed',
+          resolvedLocale: 'es',
+          content: { alreadyCompletedTitle: 'Gracias, ya respondió' },
+        },
+        409,
+      ),
+    )
+
+    const error = (await getSurveyInvitation(BASE, TOKEN).catch((thrown: unknown) => thrown)) as SurveyLinkError
+
+    expect(error.reason).toBe('already_completed')
+    expect(error.resolvedLocale).toBe('es')
+    expect(error.content).toEqual({ alreadyCompletedTitle: 'Gracias, ya respondió' })
+  })
+
   it('reports a null reason for a response that carries none', async () => {
     vi.mocked(fetch).mockResolvedValue(ok({ message: 'This link is not valid.' }, 404))
 
@@ -150,6 +174,8 @@ describe('SurveyLinkError', () => {
 
     expect((error as SurveyLinkError).reason).toBeNull()
     expect((error as SurveyLinkError).status).toBe(404)
+    expect((error as SurveyLinkError).content).toBeNull()
+    expect((error as SurveyLinkError).resolvedLocale).toBeNull()
   })
 
   /**

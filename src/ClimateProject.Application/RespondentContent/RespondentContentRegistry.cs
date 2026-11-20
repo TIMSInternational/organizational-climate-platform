@@ -237,14 +237,17 @@ public static class RespondentContentRegistry
         Screen("happensClosesTitle", "thanks", SentenceMaxLength, "date"),
         Screen("happensResultsTitle", "thanks", SentenceMaxLength),
 
-        // The closed, already-answered and unavailable cards.
+        // The closed and already-answered cards. Where no view is loaded they are drawn from a
+        // refusal that carries the same map (`RespondentCardRefusal`): the respond GET's 400 on a
+        // closed survey, the personal-link landing's 409 `already_completed`. The UNAVAILABLE
+        // card (`unavailableTitle`, `next.entryLinkUnavailableBody`) is deliberately not here: it
+        // is drawn only from the respond GET's fail-closed 401, which tells a holder of a dead
+        // link nothing -- not even whose survey it was -- so no client's words can reach it.
         Screen("closedTitle", "cards", TitleMaxLength),
         Screen("closedBody", "cards", ParagraphMaxLength),
         Screen("alreadyCompletedTitle", "cards", TitleMaxLength),
         Screen("alreadyCompletedBody", "cards", ParagraphMaxLength),
         Screen("answeredOnThisDeviceTitle", "cards", TitleMaxLength),
-        Screen("unavailableTitle", "cards", TitleMaxLength),
-        Screen("next.entryLinkUnavailableBody", "cards", ParagraphMaxLength),
 
         // The three survey emails. The personal-link pair already had survey columns.
         new(EmailPersonalLinkSubject, RespondentContentKinds.Email, "email.personalLink", EmailSubjectMaxLength, EmailPlaceholders,

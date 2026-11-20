@@ -216,6 +216,122 @@ public class RespondentContentEndpointTests : IAsyncLifetime
         Assert.Equal("Gracias, de parte de la empresa", (await RespondViewAsync(survey.Id, "es")).Content!["thankYouTitle"]);
     }
 
+    /// <summary>A person of company A with a personal invitation to <paramref name="surveyId"/>, in <paramref name="status"/>.</summary>
+    private async Task<string> SeedInvitationAsync(Guid surveyId, string status = SurveyInvitationStatuses.Pending)
+    {
+        var token = SurveyAccessTokens.Mint();
+        await _harness.WithDbAsync(async db =>
+        {
+            var person = new User
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = _companyA,
+                Email = $"{Guid.NewGuid():N}@invitee.test",
+                Name = "Invitada",
+                Role = Roles.Employee,
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(person);
+            db.SurveyInvitations.Add(new SurveyInvitation
+            {
+                Id = Guid.NewGuid(),
+                SurveyId = surveyId,
+                UserId = person.Id,
+                CompanyId = _companyA,
+                Email = person.Email,
+                InvitationToken = token,
+                Status = status,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(14),
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        });
+
+        return token;
+    }
+
+    /// <summary>
+    /// The «Encuesta cerrada» card is drawn from the respond GET's 400, with no view loaded: the
+    /// 400 a signed-in member of the audience gets carries the effective words for it, survey
+    /// over company, in the payload's locale.
+    /// </summary>
+    [Fact]
+    public async Task A_closed_surveys_refusal_carries_the_words_its_card_reads()
+    {
+        var admin = await AdminAsync(_companyA);
+        var survey = await LinkSurveyAsync(admin, _companyA);
+        await OkViewAsync(await admin.PutAsJsonAsync(CompanyRoute(_companyA), Body(
+            ("es", "closedTitle", "La encuesta de la empresa cerró"),
+            ("es", "closedBody", "Gracias por su interés."))));
+        await OkViewAsync(await admin.PutAsJsonAsync(SurveyRoute(survey.Id), Body(
+            ("es", "closedTitle", "Esta encuesta cerró el viernes"),
+            ("*", "display.textAlign", "start"))));
+        await _harness.ForceStatusAsync(survey.Id, SurveyStatuses.Closed);
+
+        var employee = await _harness.ClientAsync(Roles.Employee, _companyA);
+        var http = await employee.GetAsync($"/surveys/{survey.Id}/respond?lang=en");
+        var raw = await http.Content.ReadAsStringAsync();
+        Assert.True(http.StatusCode == HttpStatusCode.BadRequest, $"Expected 400, got {(int)http.StatusCode}: {raw}");
+        var body = JsonSerializer.Deserialize<RespondentCardRefusal>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        // An es-only survey asked for in English is in Spanish, and says so.
+        Assert.Equal("es", body.ResolvedLocale);
+        Assert.Equal("Esta encuesta cerró el viernes", body.Content["closedTitle"]);
+        Assert.Equal("Gracias por su interés.", body.Content["closedBody"]);
+        Assert.Equal("start", body.Content["display.textAlign"]);
+        Assert.Equal("This survey is not currently accepting responses", body.Message);
+    }
+
+    /// <summary>
+    /// The 401 a visitor with no account gets on the same closed survey stays fail-closed: no
+    /// words, no locale -- nothing that says whose survey the id was.
+    /// </summary>
+    [Fact]
+    public async Task A_link_visitor_on_a_closed_survey_gets_a_refusal_that_carries_nothing()
+    {
+        var admin = await AdminAsync(_companyA);
+        var survey = await LinkSurveyAsync(admin, _companyA);
+        await OkViewAsync(await admin.PutAsJsonAsync(CompanyRoute(_companyA), Body(("es", "closedTitle", "La encuesta de la empresa cerró"))));
+        await _harness.ForceStatusAsync(survey.Id, SurveyStatuses.Closed);
+
+        var http = await _factory.CreateClient().GetAsync($"/surveys/{survey.Id}/respond?lang=es");
+        var raw = await http.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, http.StatusCode);
+        var body = JsonDocument.Parse(raw).RootElement;
+        Assert.False(body.TryGetProperty("content", out _), raw);
+        Assert.False(body.TryGetProperty("resolvedLocale", out _), raw);
+        Assert.DoesNotContain("cerró", raw, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The personal-link landing draws «ya respondida» from its 409 `already_completed`, with
+    /// nothing else loaded: the 409 carries the words for it.
+    /// </summary>
+    [Fact]
+    public async Task A_completed_invitations_refusal_carries_the_words_its_card_reads()
+    {
+        var admin = await AdminAsync(_companyA);
+        var survey = await LinkSurveyAsync(admin, _companyA);
+        await OkViewAsync(await admin.PutAsJsonAsync(CompanyRoute(_companyA), Body(
+            ("es", "alreadyCompletedTitle", "Ya respondió, gracias"),
+            ("es", "alreadyCompletedBody", "Sus respuestas ya están registradas."))));
+        var token = await SeedInvitationAsync(survey.Id, SurveyInvitationStatuses.Completed);
+
+        var http = await _factory.CreateClient().GetAsync($"/survey-invitations/{token}?lang=es");
+        var raw = await http.Content.ReadAsStringAsync();
+        Assert.True(http.StatusCode == HttpStatusCode.Conflict, $"Expected 409, got {(int)http.StatusCode}: {raw}");
+        var body = JsonSerializer.Deserialize<RespondentCardRefusal>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        Assert.Equal("already_completed", body.Reason);
+        Assert.Equal("es", body.ResolvedLocale);
+        Assert.Equal("Ya respondió, gracias", body.Content["alreadyCompletedTitle"]);
+        Assert.Equal("Sus respuestas ya están registradas.", body.Content["alreadyCompletedBody"]);
+    }
+
     [Fact]
     public async Task The_personal_link_landing_carries_the_same_content()
     {

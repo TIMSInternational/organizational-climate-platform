@@ -419,12 +419,23 @@ public static class SurveyResponseEndpoints
         }
 
         var respondent = resolution.Respondent!;
+        var locale = SurveyContent.ResolveRequestLocale(lang, survey.Language);
+
+        // ResolvedLocale names the language the payload is ACTUALLY in, not the one asked
+        // for -- a Spanish-only survey opened with ?lang=en comes back in Spanish and says
+        // so. Reporting 'en' there is the silent substitution #195 exists to prevent, and
+        // it shipped once already on this domain.
+        var resolvedLocale = ResolvedLocaleOf(survey, locale);
+
         if (!SurveyStatuses.AcceptsResponses(survey.Status))
         {
-            return NotAccepting();
+            // The «Encuesta cerrada» card is drawn from THIS body, so it carries the client's
+            // words for it. Reached only by a respondent the route has already admitted -- a
+            // signed-in member of the audience: a link visitor and a personal link on a closed
+            // survey get the fail-closed 401 inside ResolveRespondentAsync, which carries nothing.
+            return await NotAcceptingWithContentAsync(db, survey, resolvedLocale, cancellationToken);
         }
 
-        var locale = SurveyContent.ResolveRequestLocale(lang, survey.Language);
         var fallbackFields = new List<string>();
         var questions = await LoadQuestionDtosAsync(survey, db, locale, fallbackFields, cancellationToken);
 
@@ -446,14 +457,6 @@ public static class SurveyResponseEndpoints
         var inProgress = existing is null || !resumes
             ? null
             : await ToResponseStateAsync(existing, db, cancellationToken);
-
-        // ResolvedLocale names the language the payload is ACTUALLY in, not the one asked
-        // for -- a Spanish-only survey opened with ?lang=en comes back in Spanish and says
-        // so. Reporting 'en' there is the silent substitution #195 exists to prevent, and
-        // it shipped once already on this domain.
-        var resolvedLocale = LocalizedContent
-            .Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language)
-            .ResolvedLocale ?? locale;
 
         // The company's «Aviso de privacidad», and nothing else of the company: this view is
         // served to anonymous link visitors too, so what it may carry is chosen here.
@@ -1712,8 +1715,36 @@ public static class SurveyResponseEndpoints
     private static IResult NotFound()
         => Results.Json(new { message = "Survey not found" }, statusCode: 404);
 
+    private const string NotAcceptingMessage = "This survey is not currently accepting responses";
+
     private static IResult NotAccepting()
-        => Results.Json(new { message = "This survey is not currently accepting responses" }, statusCode: 400);
+        => Results.Json(new { message = NotAcceptingMessage }, statusCode: 400);
+
+    /// <summary>
+    /// The GET's 400 for a closed survey, carrying what the «Encuesta cerrada» card needs to
+    /// read the client's words (<c>closedTitle</c>, <c>closedBody</c>) -- the card is drawn from
+    /// this body, and no view is loaded beside it. Same message as <see cref="NotAccepting"/>.
+    /// </summary>
+    private static async Task<IResult> NotAcceptingWithContentAsync(
+        ClimateProjectDbContext db,
+        Survey survey,
+        string resolvedLocale,
+        CancellationToken cancellationToken)
+        => Results.Json(
+            new RespondentCardRefusal(
+                NotAcceptingMessage,
+                Reason: null,
+                resolvedLocale,
+                await RespondentContentStore.ResolveAsync(
+                    db, survey, resolvedLocale, RespondentContentKinds.RespondentPayload, cancellationToken)),
+            statusCode: 400);
+
+    /// <summary>
+    /// The locale a respond payload is ACTUALLY in: the title's, so a Spanish-only survey read
+    /// with <c>?lang=en</c> says <c>es</c>. The content map is resolved in this locale and no other.
+    /// </summary>
+    private static string ResolvedLocaleOf(Survey survey, string locale)
+        => LocalizedContent.Resolve(survey.TitleEn, survey.TitleEs, locale, survey.Language).ResolvedLocale ?? locale;
 
     // 402: the company's licence for this survey's service has no seat for this completion (exhausted
     // or suspended). Distinct from NotAccepting's 400 so the admin surface and the client can tell

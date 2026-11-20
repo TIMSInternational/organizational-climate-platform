@@ -1,4 +1,5 @@
 import { getToken } from '../../../auth/token'
+import { respondentContentOf, type RespondentContent, type RespondentContentSource } from './respondentContent'
 
 /**
  * The respondent surface of the survey API (#118): fetch a survey to answer, and
@@ -158,8 +159,9 @@ export interface SurveyRespondView {
    * The client's own words for this survey's screens, in `resolvedLocale`: `key → text`, the
    * EFFECTIVE overrides only (survey → company), plus the display choices
    * (`display.textAlign`). A key that is absent is the catalogue default, so read it through
-   * `effectiveText(view.content, key) ?? t(key)` (`./respondentContent`). Null or absent from an
-   * API that predates it.
+   * `effectiveText(view, locale, key) ?? t(key)` (`./respondentContent`), which also gives the
+   * default when the reader's language is not `resolvedLocale`. Null or absent from an API that
+   * predates it.
    */
   content?: Record<string, string> | null
 }
@@ -262,14 +264,29 @@ export interface SurveySubmissionResult {
  * (403) — instead of rendering one generic failure for all of them. Matching on the
  * server's English message text would be the alternative, and it would break the
  * moment that message was translated.
+ *
+ * `content` and `resolvedLocale` are set on the one refusal a screen draws as a card with no
+ * view loaded — the 400 for a closed survey («Encuesta cerrada»: `closedTitle`, `closedBody`)
+ * — so the card reads the client's words through `effectiveText(error, locale, key)`. Null on
+ * every other status, and always on the 401: that answer is fail-closed and carries nothing.
  */
-export class SurveyRespondError extends Error {
+export class SurveyRespondError extends Error implements RespondentContentSource {
   readonly status: number
 
-  constructor(status: number, message: string) {
+  readonly content: RespondentContent | null
+
+  readonly resolvedLocale: string | null
+
+  constructor(
+    status: number,
+    message: string,
+    card: { content: RespondentContent | null; resolvedLocale: string | null } = { content: null, resolvedLocale: null },
+  ) {
     super(message)
     this.name = 'SurveyRespondError'
     this.status = status
+    this.content = card.content
+    this.resolvedLocale = card.resolvedLocale
   }
 }
 
@@ -376,7 +393,7 @@ async function fail(response: Response): Promise<never> {
     body && typeof body === 'object' && typeof (body as { message?: unknown }).message === 'string'
       ? (body as { message: string }).message
       : ''
-  throw new SurveyRespondError(response.status, message)
+  throw new SurveyRespondError(response.status, message, respondentContentOf(body))
 }
 
 /**

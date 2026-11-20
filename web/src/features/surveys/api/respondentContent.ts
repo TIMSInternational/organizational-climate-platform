@@ -12,14 +12,24 @@ import { ApiError, authFetch } from '../../../api/authFetch'
  * The server resolves the first two (`RespondentContentResolver.cs`) and every respondent
  * payload carries the result as `content`: `SurveyRespondView.content` and
  * `SurveyInvitationTokenDetail.content`, a `key → text` map of the EFFECTIVE overrides in the
- * payload's `resolvedLocale`, plus the display choices. A key that is absent is the product
- * default, so a screen renders
+ * payload's `resolvedLocale`, plus the display choices. The two refusals a screen draws as a
+ * card with no view loaded carry the same pair (`SurveyRespondError` on the closed survey's
+ * 400, `SurveyLinkError` on the invitation's 409 `already_completed`). A key that is absent is
+ * the product default, so a screen renders
  *
- *     effectiveText(view.content, 'demographics.intro') ?? t('demographics.intro')
+ *     const { t, locale } = useTranslation('surveyRespond')
+ *     effectiveText(view, locale, 'demographics.intro') ?? t('demographics.intro')
  *
  * with ONE key: a screen key is its catalogue path inside `useTranslation('surveyRespond')`,
  * without the namespace. `{name}` placeholders in an override are filled the way `t()` fills
  * them; the registry allows only those the default itself uses.
+ *
+ * **The reader's language decides, not the payload's.** `effectiveText` takes the whole payload
+ * and the locale the screen's chrome is drawn in, and gives `null` (the catalogue default, in
+ * the reader's language) whenever the payload's words were resolved in another one — an
+ * es-only survey read by somebody who chose English. An override written in Spanish is never
+ * shown to an English reader (`docs/decisions/editable-respondent-content.md`). There is
+ * deliberately no overload that takes the bare map.
  *
  * ## The editor routes
  *
@@ -41,6 +51,16 @@ export type RespondentContentLevel = 'company' | 'survey'
 
 /** `key → text`. What a respondent payload carries as `content`. */
 export type RespondentContent = Record<string, string>
+
+/**
+ * Anything that carries the client's words for a respondent screen: a respond view, an
+ * invitation landing, or a refusal drawn as a card. `content` is in `resolvedLocale` and no
+ * other language.
+ */
+export interface RespondentContentSource {
+  content?: RespondentContent | null
+  resolvedLocale?: string | null
+}
 
 /** `locale → key → text`, every locale present. */
 export type RespondentContentByLocale = Record<RespondentContentLocale, RespondentContent>
@@ -212,20 +232,52 @@ export function interpolateContent(template: string, params?: Record<string, str
 
 /**
  * The client's own words for `key`, placeholders filled, or `null` for the product default —
- * so a screen writes `effectiveText(view.content, key, params) ?? t(key, params)`. A blank value
- * is treated as absent, exactly as the server does.
+ * so a screen writes `effectiveText(view, locale, key, params) ?? t(key, params)`.
+ *
+ * @param source the payload (or refusal) that carries `content` and its `resolvedLocale`.
+ * @param uiLocale the language the screen's own chrome is in (`useTranslation().locale`). When
+ * it is not the payload's `resolvedLocale` the answer is `null`: the reader gets the default in
+ * their language rather than the client's words in another. A payload with no
+ * `resolvedLocale` (an older API) is treated the same way.
+ *
+ * A blank value is treated as absent, exactly as the server does.
  */
 export function effectiveText(
-  content: RespondentContent | null | undefined,
+  source: RespondentContentSource | null | undefined,
+  uiLocale: string,
   key: string,
   params?: Record<string, string | number>,
 ): string | null {
+  if (!source || source.resolvedLocale !== uiLocale) return null
+  const content = source.content
   const value = content && Object.hasOwn(content, key) ? content[key] : undefined
   if (typeof value !== 'string' || value.trim() === '') return null
   return interpolateContent(value, params)
 }
 
-/** `display.textAlign` from a payload's `content`: `justify` unless the client chose `start`. */
+/**
+ * `display.textAlign` from a payload's `content`: `justify` unless the client chose `start`. A
+ * display choice is locale-independent, so unlike `effectiveText` it reads whatever language
+ * the payload is in.
+ */
 export function textAlignOf(content: RespondentContent | null | undefined): RespondentTextAlign {
   return content?.[TEXT_ALIGN_KEY] === 'start' ? 'start' : 'justify'
+}
+
+/**
+ * `content` and `resolvedLocale` out of a parsed response body, or nulls — for the refusals a
+ * screen draws as a card. Only string values are kept: a body is data from the network.
+ */
+export function respondentContentOf(body: unknown): { content: RespondentContent | null; resolvedLocale: string | null } {
+  if (body === null || typeof body !== 'object') return { content: null, resolvedLocale: null }
+  const raw = (body as Record<string, unknown>).content
+  const locale = (body as Record<string, unknown>).resolvedLocale
+  let content: RespondentContent | null = null
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    content = {}
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof value === 'string') content[key] = value
+    }
+  }
+  return { content, resolvedLocale: typeof locale === 'string' ? locale : null }
 }
