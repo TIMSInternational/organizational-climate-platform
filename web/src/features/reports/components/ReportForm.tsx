@@ -3,6 +3,8 @@ import { useTranslation } from '../../../i18n'
 import { Button, Input, Label, Textarea } from '../../../components/ui'
 import { REPORT_FORMATS } from '../api/reports'
 import { describeApiError } from '../../../api/describeApiError'
+import { EMPTY_REPORT_NOTES, firstNoteTooLong, type ReportNotes } from '../api/reportNotes'
+import ReportNotesFields from './ReportNotesFields'
 
 export interface ReportFormValues {
   title: string
@@ -11,6 +13,8 @@ export interface ReportFormValues {
   format: string
   /** The one survey the report covers, or `''` for every survey of the company. */
   surveyId: string
+  /** «Notas de TIMS»: printed as pages of the PDF, editable later from the row's menu. */
+  notes: ReportNotes
 }
 
 /** A survey the report can be about — the company's distributed ones, oldest first. */
@@ -44,6 +48,7 @@ const EMPTY_VALUES: ReportFormValues = {
   type: 'summary',
   format: 'pdf',
   surveyId: '',
+  notes: EMPTY_REPORT_NOTES,
 }
 
 interface ReportFormProps {
@@ -68,10 +73,16 @@ export default function ReportForm({ onSubmit, surveys }: ReportFormProps) {
   }, [latest, surveyTouched])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
+    if (firstNoteTooLong(values.notes) !== null) {
+      setNotesOpen(true)
+      setError(t('errors.api.codes.report_notes_too_long'))
+      return
+    }
     setSubmitting(true)
     try {
       await onSubmit(values)
@@ -162,6 +173,27 @@ export default function ReportForm({ onSubmit, surveys }: ReportFormProps) {
             </option>
           ))}
         </select>
+      </div>
+
+      <div>
+        <Button
+          type="button"
+          variant="link"
+          aria-expanded={notesOpen}
+          aria-controls="report-notes-section"
+          onClick={() => setNotesOpen((open) => !open)}
+        >
+          {t('reports.notes.title')}
+        </Button>
+        {notesOpen && (
+          <div id="report-notes-section">
+            <ReportNotesFields
+              idPrefix="report-notes-new"
+              value={values.notes}
+              onChange={(notes) => setValues({ ...values, notes })}
+            />
+          </div>
+        )}
       </div>
 
       {error && <p role="alert">{error}</p>}

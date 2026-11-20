@@ -26,6 +26,7 @@ import type { SurveyQuestionResult } from '../../../surveys/api/surveyResults'
 import { calendarDay } from '../../../../lib/calendarDay'
 import { applyNoIndex } from '../../../../lib/noIndex'
 import { getSharedReport, type SharedReport } from '../../api/sharedReports'
+import SharedReportNotes from './SharedReportNotes'
 import type { ReportAIInsight, ReportBenchmarkComparison } from '../../reportDocument'
 import {
   viewOf,
@@ -257,6 +258,8 @@ function ReportBody({ report }: { report: SharedReport }) {
         </div>
       </header>
 
+      <SharedReportNotes notes={report.notes} part="opening" />
+
       {view === null ? (
         <p className="m-0 max-w-prose text-base text-fg-secondary">{t('sharedReport.noDocument')}</p>
       ) : (
@@ -321,6 +324,8 @@ function ReportBody({ report }: { report: SharedReport }) {
           <PrivacyNotes floor={view.floor} hasOpenText={view.hasOpenText} />
         </>
       )}
+
+      <SharedReportNotes notes={report.notes} part="closing" />
     </>
   )
 }

@@ -27,6 +27,7 @@ import { readViewerClaims, useViewerCapabilities } from '../../../auth/viewerCap
 import { calendarDay } from '../../../lib/calendarDay'
 import { cn } from '../../../lib/cn'
 import ReportForm from '../components/ReportForm'
+import ReportNotesDialog from '../components/ReportNotesDialog'
 import ReportSchedulePanel from '../components/ReportSchedulePanel'
 import ReportShareDialog from './ReportShareDialog'
 import {
@@ -83,6 +84,7 @@ export default function ReportsListNextPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [creating, setCreating] = useState(false)
   const [scheduling, setScheduling] = useState<ReportRow | null>(null)
+  const [editingNotes, setEditingNotes] = useState<ReportRow | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -310,6 +312,7 @@ export default function ReportsListNextPage() {
                             onDownload={() => void handleDownload(row)}
                             onShare={() => setShareParam(row.id)}
                             onSchedule={() => setScheduling(row)}
+                            onNotes={() => setEditingNotes(row)}
                           />
                         ))}
                       </tbody>
@@ -357,6 +360,17 @@ export default function ReportsListNextPage() {
           baseUrl={import.meta.env.VITE_API_BASE_URL as string}
           report={{ ...scheduling, companyId }}
           onSaved={state.applySchedule}
+        />
+      )}
+
+      {editingNotes && (
+        <ReportNotesDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditingNotes(null)
+          }}
+          baseUrl={import.meta.env.VITE_API_BASE_URL as string}
+          report={editingNotes}
         />
       )}
 
@@ -410,6 +424,7 @@ function ReportTableRow({
   onDownload,
   onShare,
   onSchedule,
+  onNotes,
 }: {
   row: ReportRow
   t: TranslateFn
@@ -419,6 +434,7 @@ function ReportTableRow({
   onDownload: () => void
   onShare: () => void
   onSchedule: () => void
+  onNotes: () => void
 }) {
   const completed = row.status === 'completed'
   const schedule =
@@ -542,6 +558,7 @@ function ReportTableRow({
                   exist. */}
               {canShareRow && <DropdownMenuItem onSelect={onShare}>{t('reports.share')}</DropdownMenuItem>}
               <DropdownMenuItem onSelect={onSchedule}>{t('reports.schedule')}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onNotes}>{t('reports.notes.title')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

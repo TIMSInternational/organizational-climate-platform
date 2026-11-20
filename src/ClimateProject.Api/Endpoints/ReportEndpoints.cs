@@ -64,6 +64,11 @@ public static class ReportEndpoints
         // them to a list.
         group.MapPut("/{id:guid}/schedule", SetScheduleAsync);
         group.MapDelete("/{id:guid}/schedule", ClearScheduleAsync);
+
+        // «Notas de TIMS» (ruled 2026-11-19): the writer for the six notes columns after the
+        // report exists. A sub-resource like the schedule, and a whole replacement -- the editor
+        // always sends all six, so a blank field clears that note.
+        group.MapPut("/{id:guid}/notes", SetNotesAsync);
     }
 
     private static bool CanAccessCompany(CurrentUser currentUser, Guid companyId)
@@ -101,12 +106,14 @@ public static class ReportEndpoints
         return Results.Ok(reports);
     }
 
-    private static async Task<IResult> CreateAsync(CreateReportRequest request, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> CreateAsync(CreateReportRequest request, string? lang, ClaimsPrincipal principal, ClimateProjectDbContext db, AuditEntry audit, CancellationToken cancellationToken)
     {
         var currentUser = principal.GetCurrentUser();
         if (!CanAccessCompany(currentUser, request.CompanyId)) return Results.Forbid();
 
         if (request.Title is null) return Results.Json(new { message = "Title is required" }, statusCode: 400);
+
+        if (NotesTooLong(request.Notes) is { } notesRefusal) return notesRefusal;
 
         // #210: a bare title lands in the company's language; { "en": ..., "es": ... } is
         // explicit. Never refused -- see AuthoredContent.
@@ -190,8 +197,16 @@ public static class ReportEndpoints
             CreatedAt = now,
             UpdatedAt = now,
         };
+        ReportNotes.Apply(report, request.Notes);
         db.Reports.Add(report);
         await db.SaveChangesAsync(cancellationToken);
+
+        // Filed under the report's company: a TIMS operator's user row may carry none, and the
+        // middleware writes no row it cannot attribute.
+        if (await ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken) is { } creatorId)
+        {
+            audit.AttributeTo(creatorId, report.CompanyId);
+        }
 
         // The document itself -- AI insights (#152), one section of shared aggregation per
         // non-draft survey (#88), suppression carried verbatim -- is computed by
@@ -302,6 +317,8 @@ public static class ReportEndpoints
         context = context with
         {
             Labels = await SurveyExportEndpoints.LoadLabelsAsync(report.CompanyId, context.ChromeLocale, db, cancellationToken),
+            // «Notas de TIMS» in the document's own language, never the other one's.
+            Notes = ReportNotes.For(report, context.ChromeLocale),
         };
 
         var bytes = csv
@@ -442,6 +459,73 @@ public static class ReportEndpoints
         return Results.Ok(ToDetail(report, lang));
     }
 
+    /// <summary>
+    /// Replaces a report's «Notas de TIMS».
+    /// </summary>
+    /// <remarks>
+    /// Any status: the notes are TIMS's commentary on a document already generated, and the
+    /// renderer prints them at download, so editing them never regenerates the numbers. Audited
+    /// by the verb and filed under the report's company; each changed field is recorded
+    /// (truncated by <see cref="AuditEntry.RecordChange"/>).
+    /// </remarks>
+    private static async Task<IResult> SetNotesAsync(
+        Guid id,
+        ReportNotesDto request,
+        string? lang,
+        ClaimsPrincipal principal,
+        ClimateProjectDbContext db,
+        AuditEntry audit,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = principal.GetCurrentUser();
+        var report = await db.Reports.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (report is null) return Results.Json(new { message = "Report not found" }, statusCode: 404);
+        if (!CanAccessCompany(currentUser, report.CompanyId)) return Results.Forbid();
+
+        if (NotesTooLong(request) is { } refusal) return refusal;
+
+        if (await ActingUserResolver.ResolveIdAsync(currentUser, db, cancellationToken) is { } actorId)
+        {
+            audit.AttributeTo(actorId, report.CompanyId);
+        }
+
+        var before = ReportNotes.From(report);
+        ReportNotes.Apply(report, request);
+        var after = ReportNotes.From(report);
+        RecordNoteChanges(audit, before, after);
+
+        report.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(ToDetail(report, lang));
+    }
+
+    /// <summary>The 400 for a note over <see cref="ReportNotes.MaxLength"/>, naming the field.</summary>
+    private static IResult? NotesTooLong(ReportNotesDto? notes)
+    {
+        if (ReportNotes.FirstTooLong(notes) is not { } field) return null;
+
+        return Results.Json(
+            new
+            {
+                message = $"The note '{field}' is longer than {ReportNotes.MaxLength} characters.",
+                code = AdminRefusals.ReportNotesTooLong,
+                field,
+                maxLength = ReportNotes.MaxLength,
+            },
+            statusCode: 400);
+    }
+
+    private static void RecordNoteChanges(AuditEntry audit, ReportNotesDto before, ReportNotesDto after)
+    {
+        audit.RecordChange("notes.introEs", before.IntroEs, after.IntroEs);
+        audit.RecordChange("notes.introEn", before.IntroEn, after.IntroEn);
+        audit.RecordChange("notes.conclusionsEs", before.ConclusionsEs, after.ConclusionsEs);
+        audit.RecordChange("notes.conclusionsEn", before.ConclusionsEn, after.ConclusionsEn);
+        audit.RecordChange("notes.recommendationsEs", before.RecommendationsEs, after.RecommendationsEs);
+        audit.RecordChange("notes.recommendationsEn", before.RecommendationsEn, after.RecommendationsEn);
+    }
+
     private static ReportDetail ToDetail(Report r, string? lang)
     {
         // #210: title and description resolved for the reader, never titleEn/titleEs.
@@ -452,6 +536,6 @@ public static class ReportEndpoints
         return new(
             r.Id, title, description, r.Type, r.CompanyId, r.CreatedBy, r.TemplateId,
             r.Status, r.Format, r.ReportOutput, r.DownloadCount, r.GenerationStartedAt, r.GenerationCompletedAt, r.CreatedAt,
-            r.IsRecurring, r.RecurrencePattern, r.NextGeneration, fallbackFields);
+            r.IsRecurring, r.RecurrencePattern, r.NextGeneration, fallbackFields, ReportNotes.From(r));
     }
 }

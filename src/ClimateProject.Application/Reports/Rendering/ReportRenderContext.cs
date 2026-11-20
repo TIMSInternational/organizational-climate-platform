@@ -20,6 +20,10 @@ namespace ClimateProject.Application.Reports.Rendering;
 /// numbers in the document are true as of -- not "now", which would restamp an old report every
 /// time it was downloaded and make two copies of one document disagree about their own date.
 /// </param>
+/// <param name="Notes">
+/// «Notas de TIMS» in <see cref="ChromeLocale"/>, or null when none is set in it
+/// (<see cref="ReportNotes.For"/>). Printed by the PDF as pages of their own.
+/// </param>
 public sealed record ReportRenderContext(
     Guid ReportId,
     string? Title,
@@ -28,7 +32,8 @@ public sealed record ReportRenderContext(
     DateTimeOffset GeneratedAt,
     ReportOutputDocument? Document,
     ScoreScale Scale = ScoreScale.Mean,
-    SurveyExportLabels? Labels = null)
+    SurveyExportLabels? Labels = null,
+    ReportNotesText? Notes = null)
 {
     /// <summary>
     /// The locale the document's own chrome -- headings, table headers, the privacy notice --
@@ -51,9 +56,15 @@ public sealed record ReportRenderContext(
     /// <see cref="ContentLanguages.FallbackLocale"/>.
     /// </para>
     /// </remarks>
-    public string ChromeLocale
-        => Document?.Surveys.Count > 0
-            ? ContentLanguages.NormaliseLocale(Document.Surveys[0].ResolvedLocale) ?? ContentLanguages.FallbackLocale
+    public string ChromeLocale => LanguageOf(Document);
+
+    /// <summary>
+    /// <see cref="ChromeLocale"/> for a stored document, for a reader that shows the report
+    /// without rendering it -- the shared link prints «Notas de TIMS» in this same language.
+    /// </summary>
+    public static string LanguageOf(ReportOutputDocument? document)
+        => document?.Surveys.Count > 0
+            ? ContentLanguages.NormaliseLocale(document.Surveys[0].ResolvedLocale) ?? ContentLanguages.FallbackLocale
             : ContentLanguages.FallbackLocale;
 }
 

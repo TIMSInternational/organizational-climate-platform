@@ -96,6 +96,9 @@ internal sealed record ReportRenderCopy(
     string Change,
     string ChangeRatio,
     string PriorPeriodStatus,
+    string NotesIntroduction,
+    string NotesConclusions,
+    string NotesRecommendations,
     bool DecimalComma)
 {
     private static readonly Dictionary<string, ReportRenderCopy> ByLocale = new(StringComparer.Ordinal)
@@ -167,6 +170,9 @@ internal sealed record ReportRenderCopy(
             Change: "Change",
             ChangeRatio: "Change (%)",
             PriorPeriodStatus: "Prior period",
+            NotesIntroduction: "Introduction",
+            NotesConclusions: "Conclusions",
+            NotesRecommendations: "Recommendations",
             DecimalComma: false),
 
         [ContentLanguages.Spanish] = new ReportRenderCopy(
@@ -236,6 +242,9 @@ internal sealed record ReportRenderCopy(
             Change: "Variación",
             ChangeRatio: "Variación (%)",
             PriorPeriodStatus: "Periodo anterior",
+            NotesIntroduction: "Introducción",
+            NotesConclusions: "Conclusiones",
+            NotesRecommendations: "Recomendaciones",
             DecimalComma: true),
     };
 

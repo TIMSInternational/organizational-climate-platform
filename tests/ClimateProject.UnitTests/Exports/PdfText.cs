@@ -45,6 +45,23 @@ internal static partial class PdfText
     /// </remarks>
     public static string Prose(PdfDocument document) => string.Join(" ", DrawnStrings(document));
 
+    /// <summary>
+    /// The strings drawn on each page, page by page: one entry per content stream, in page
+    /// order. What lets a test say "this text is on a page of its own" rather than only "this
+    /// text is somewhere in the file".
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<string>> Pages(PdfDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var content = Encoding.Latin1.GetString(document.ToBytes());
+        return
+        [
+            .. StreamPattern().Matches(content).Select(stream =>
+                (IReadOnlyList<string>)[.. TjPattern().Matches(stream.Groups["body"].Value).Select(match => Unescape(match.Groups["literal"].Value))]),
+        ];
+    }
+
     /// <summary>Reverses <c>PdfDocument.LiteralString</c>: the escapes back into characters.</summary>
     public static string Unescape(string literal)
     {
@@ -83,4 +100,7 @@ internal static partial class PdfText
 
     [GeneratedRegex(@"Tm \((?<literal>(?:\\.|[^\\)])*)\) Tj")]
     private static partial Regex TjPattern();
+
+    [GeneratedRegex(@"\nstream\n(?<body>.*?)\nendstream", RegexOptions.Singleline)]
+    private static partial Regex StreamPattern();
 }

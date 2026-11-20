@@ -123,6 +123,7 @@ const CODE_KEYS: Readonly<Record<string, string>> = {
   microclimate_invite_window_closed: 'errors.api.codes.microclimate_invite_window_closed',
   // Reports and the question bank
   report_schedule_start_past: 'errors.api.codes.report_schedule_start_past',
+  report_notes_too_long: 'errors.api.codes.report_notes_too_long',
   question_bank_item_in_use: 'errors.api.codes.question_bank_item_in_use',
   question_bank_item_has_variations: 'errors.api.codes.question_bank_item_has_variations',
   // TIMS operations ruled 2026-11-08: reopen, exclude a response, delete a company

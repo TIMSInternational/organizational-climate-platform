@@ -63,6 +63,10 @@ public record ReportShareSummary(
 /// The company's result bands, read when the link is opened (see <c>ResultBandsDto</c>): two
 /// boundaries and three names, nothing that identifies the tenant.
 /// </param>
+/// <param name="Notes">
+/// «Notas de TIMS» in the report's own language (the PDF's), or null when none is set in it.
+/// TIMS's words, not respondent data: published with the report because they are part of it.
+/// </param>
 /// <param name="ReportOutput">
 /// <c>reports.report_output</c> projected through <see cref="PublicReportProjection"/> -- an
 /// allow-list of the sections an anonymous reader may have, <b>not</b> the stored document.
@@ -83,4 +87,5 @@ public record SharedReportResponse(
     string Type,
     DateTimeOffset? GeneratedAt,
     string? ReportOutput,
-    ResultBandsDto ResultBands);
+    ResultBandsDto ResultBands,
+    ReportNotesText? Notes = null);
