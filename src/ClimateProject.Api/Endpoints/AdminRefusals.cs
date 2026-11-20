@@ -87,6 +87,16 @@ internal static class AdminRefusals
     public const string CompanyHoldsSuperAdmins = "company_holds_super_admins";
     public const string CompanyPeopleReferenced = "company_people_referenced";
 
+    // Paper questionnaires and wording corrections, ruled 2026-11-19 (PaperResponseEndpoints).
+    public const string PaperResponseAlreadyCompleted = "paper_response_already_completed";
+    public const string PaperResponseNotInPopulation = "paper_response_not_in_population";
+    public const string PaperResponseSurveyArchived = "paper_response_survey_archived";
+    public const string PaperResponseNotCollecting = "paper_response_not_collecting";
+    public const string PaperResponseSuperAdminOnly = "paper_response_super_admin_only";
+    public const string SurveyWordingStructureChanged = "survey_wording_structure_changed";
+    public const string SurveyWordingQuestionsMismatch = "survey_wording_questions_mismatch";
+    public const string SurveyWordingSuperAdminOnly = "survey_wording_super_admin_only";
+
     // What a client reads, ruled 2026-11-19 (docs/decisions/editable-respondent-content.md).
     // The PUT's refusals carry `key`, `locale`, `placeholder`, `maxLength` and `allowed` beside
     // the code, so a screen can point at the field; the code's sentence says what kind of problem.

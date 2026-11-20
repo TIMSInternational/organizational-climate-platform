@@ -1814,6 +1814,14 @@
         "company_has_responses": "Esta empresa tiene respuestas, así que no se puede eliminar.",
         "company_holds_super_admins": "En esta empresa hay un super administrador; eliminarla eliminaría su cuenta.",
         "company_people_referenced": "Algo fuera de esta empresa todavía depende de ella o de su gente. No se eliminó nada; avise al equipo de desarrollo.",
+        "paper_response_already_completed": "Esta persona ya completó la encuesta. No se registró nada.",
+        "paper_response_not_in_population": "Esta persona no está en la población de la encuesta. No se registró nada.",
+        "paper_response_survey_archived": "La encuesta está archivada y ya no recibe respuestas, tampoco en papel.",
+        "paper_response_not_collecting": "La encuesta todavía no está abierta. Una respuesta en papel se registra cuando ya se puede responder.",
+        "paper_response_super_admin_only": "Solo un superadministrador de TIMS puede registrar una respuesta en papel.",
+        "survey_wording_structure_changed": "Con respuestas recibidas solo puede cambiar la redacción. El tipo, la escala, la obligatoriedad, la dimensión y las opciones deben quedar iguales.",
+        "survey_wording_questions_mismatch": "Las preguntas cambiaron mientras corregía. Vuelva a abrir el editor e intente de nuevo.",
+        "survey_wording_super_admin_only": "Solo un superadministrador de TIMS puede corregir la redacción de una encuesta con respuestas.",
         "credential_mode_in_use": "La forma de acceso ya no se puede cambiar: esta encuesta ya envió enlaces o códigos con la forma actual y hay personas que los tienen.",
         "personal_link_not_sent": "No se pudo enviar el enlace nuevo por correo. Se conservó el anterior, que sigue funcionando.",
         "personal_link_recipient_inactive": "La cuenta de esta persona ya no está activa en la empresa, así que un enlace no le abriría la encuesta.",
@@ -4532,7 +4540,26 @@
         },
         "keepAtEnd": "Mantener al final",
         "keepAtEndHint": "Se pregunta después de todas las demás, en este orden, aunque la encuesta se presente en orden aleatorio.",
-        "keepAtEndChip": "Al final"
+        "keepAtEndChip": "Al final",
+        "wording": {
+          "action": "Corregir redacción",
+          "title": "Corregir redacción",
+          "body": "Solo cambian las palabras: el texto de cada pregunta, la indicación del comentario y las palabras de la escala y de las opciones. El tipo, la escala, la obligatoriedad, la dimensión y las opciones quedan iguales, para que las respuestas ya recibidas sigan significando lo mismo. Se guarda como una nueva versión y queda en el registro de actividad.",
+          "question": "Pregunta {position}",
+          "text": "Texto de la pregunta",
+          "commentPrompt": "Indicación del comentario",
+          "scaleLabelMin": "Palabra del extremo inferior de la escala",
+          "scaleLabelMax": "Palabra del extremo superior de la escala",
+          "option": "Opción {position}",
+          "inLocale": "{field} ({language})",
+          "languageEs": "español",
+          "languageEn": "inglés",
+          "save": "Guardar corrección",
+          "savedOne": "Redacción corregida en 1 pregunta. Se guardó como versión {version}.",
+          "savedMany": "Redacción corregida en {count} preguntas. Se guardó como versión {version}.",
+          "nothing": "No cambió ninguna palabra; no se guardó nada.",
+          "error": "No se pudo guardar la corrección. Intente de nuevo."
+        }
       },
       "template": {
         "eyebrow": "Plantilla de encuesta · {category}",
@@ -5386,7 +5413,20 @@
         "revokeLinkError": "No se pudo retirar el enlace. Intente de nuevo.",
         "revokeLinkWhyNoLink": "No tiene enlace para esta encuesta: no hay nada que retirar.",
         "revokeLinkWhyAnswered": "Ya contestó esta encuesta. Retirarle el enlace no retira la respuesta.",
-        "revokeRefusedHasResponses": "Esa persona ya contestó esta encuesta. Retirarle el código no retira la respuesta: primero hay que decidir qué pasa con la respuesta."
+        "revokeRefusedHasResponses": "Esa persona ya contestó esta encuesta. Retirarle el código no retira la respuesta: primero hay que decidir qué pasa con la respuesta.",
+        "paper": {
+          "action": "Registrar respuesta en papel",
+          "actionFor": "Registrar la respuesta en papel de {name}",
+          "title": "Respuesta en papel de {name}",
+          "body": "Escriba las respuestas tal como están en el cuestionario en papel. Se guardan como si {name} hubiera respondido: con el anonimato de la encuesta y sin tocar su cuenta, su correo ni su clave. El registro de actividad indica que TIMS ingresó una respuesta en papel.",
+          "anonymous": "Esta encuesta es anónima: la respuesta se guarda sin el nombre de la persona y solo queda registrado que respondió.",
+          "loadError": "No se pudo abrir el cuestionario. Intente de nuevo.",
+          "missing": "Faltan respuestas obligatorias: preguntas {positions}.",
+          "missingComments": "Faltan comentarios obligatorios: preguntas {positions}.",
+          "confirm": "Registrar respuesta",
+          "done": "Respuesta en papel registrada para {name}.",
+          "error": "No se pudo registrar la respuesta. Intente de nuevo."
+        }
       },
       "participation": {
         "title": "Participación",
@@ -8922,6 +8962,8 @@
       "surveys__credentials__delete": "Retiró el código de acceso de una persona",
       "surveys__reopen__create": "Reabrió una encuesta cerrada",
       "surveys__respondent-content__update": "Modificó los textos para quien responde de una encuesta",
+      "surveys__paper-responses__create": "Registró una respuesta en papel",
+      "surveys__wording__update": "Corrigió la redacción de las preguntas de una encuesta",
       "surveys__response-exclusions__create": "Excluyó una respuesta de los resultados",
       "surveys__response-exclusions__restore__create": "Volvió a incluir una respuesta en los resultados",
       "surveys__credentials__reissue__create": "Reenvió el código de acceso de una persona",
